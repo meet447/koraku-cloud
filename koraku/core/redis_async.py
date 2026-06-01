@@ -28,7 +28,12 @@ async def get_client() -> Any | None:
     try:
         from redis import asyncio as aioredis
 
-        client = aioredis.from_url(url, decode_responses=True)
+        client = aioredis.from_url(
+            url,
+            decode_responses=True,
+            socket_timeout=None,
+            retry_on_timeout=True,
+        )
         await client.ping()
         _client = client
     except Exception as e:

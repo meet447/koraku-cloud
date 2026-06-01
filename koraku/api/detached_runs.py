@@ -219,6 +219,22 @@ async def stream_detached_run(
                 yield chunk
         except asyncio.CancelledError:
             raise
+        except TimeoutError as e:
+            logger.warning(
+                "detached run stream interrupted by Redis timeout run_id=%s: %s",
+                run_id,
+                redact_secrets(str(e)),
+            )
+        except Exception as e:
+            logger.exception(
+                "detached run stream failed run_id=%s: %s",
+                run_id,
+                redact_secrets(str(e)),
+            )
+            yield format_sse(
+                {"type": "agent.error", "data": {"error": "Stream interrupted. Reconnect or check run status."}}
+            )
+            yield "event: done\n\n"
 
     return StreamingResponse(
         gen(),

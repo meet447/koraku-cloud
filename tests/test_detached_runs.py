@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import time
 
@@ -130,3 +131,58 @@ async def test_run_buffer_disconnects_slow_subscriber(monkeypatch: pytest.Monkey
     await buf.append("data: two\n\n")
 
     assert q not in buf.subscribers
+
+
+@pytest.mark.asyncio
+async def test_redis_run_buffer_subscribe_recovers_on_pubsub_idle() -> None:
+    """Idle pub/sub polls should catch up from the chunk list instead of crashing."""
+    buf = detached_run_store.RedisRunBuffer("run-1", owner_sub="user-1", owner_org_id=None)
+    meta = {"done": False, "last_event_id": 0, "next_seq": 1}
+    chunks = [
+        json.dumps({"seq": 0, "data": "id: 0\ndata: first\n\n"}, ensure_ascii=False),
+    ]
+
+    class FakePubSub:
+        calls = 0
+
+        async def subscribe(self, _channel: str) -> None:
+            return None
+
+        async def get_message(self, *, ignore_subscribe_messages: bool = False, timeout: float = 0.0):
+            _ = ignore_subscribe_messages, timeout
+            self.calls += 1
+            if self.calls == 1:
+                return None
+            return {"type": "message", "data": detached_run_store._DONE_CHANNEL_MSG}
+
+        async def unsubscribe(self, _channel: str) -> None:
+            return None
+
+        async def aclose(self) -> None:
+            return None
+
+    class FakeClient:
+        pubsub_obj = FakePubSub()
+
+        async def lrange(self, _key: str, _start: int, _end: int) -> list[str]:
+            return list(chunks)
+
+        async def get(self, _key: str) -> str | None:
+            if meta.get("done"):
+                return json.dumps({**meta, "done": True}, ensure_ascii=False)
+            return json.dumps(meta, ensure_ascii=False)
+
+        def pubsub(self) -> FakePubSub:
+            return self.pubsub_obj
+
+    async def fake_client() -> FakeClient:
+        return FakeClient()
+
+    buf._client = fake_client  # type: ignore[method-assign]
+
+    out: list[str] = []
+    async for chunk in buf.subscribe(-1):
+        out.append(chunk)
+
+    assert "data: first" in out[0]
+    assert any("data: first" in c for c in out)

@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 _DETACHED_GC_SEC = float((os.environ.get("KORAKU_DETACHED_RUN_GC_SECONDS") or "600").strip() or "600")
 _MAX_CHUNKS_PER_RUN = 12_000
 _SUBSCRIBER_QUEUE_MAX = max(16, int(settings.detached_run_subscriber_queue_max))
+_PUBSUB_POLL_SEC = 30.0
 _SENTINEL: object = object()
 _DONE_CHANNEL_MSG = "__koraku_detached_done__"
 
@@ -271,10 +272,11 @@ class RedisRunBuffer(DetachedRunBuffer):
             "buffered_chunks": nchunks,
         }
 
-    async def _replay(self, after: int) -> list[str]:
+    async def _replay_after(self, after: int) -> tuple[list[str], int]:
         client = await self._client()
         raw_list = await client.lrange(self._chunks_key(), 0, -1)
         out: list[str] = []
+        cursor = after
         for raw in raw_list:
             try:
                 item = json.loads(str(raw))
@@ -283,11 +285,27 @@ class RedisRunBuffer(DetachedRunBuffer):
             seq = int(item.get("seq", -1))
             if seq > after:
                 out.append(str(item.get("data", "")))
-        return out
+                cursor = max(cursor, seq)
+        return out, cursor
+
+    async def _replay(self, after: int) -> list[str]:
+        chunks, _ = await self._replay_after(after)
+        return chunks
+
+    @staticmethod
+    def _cursor_from_chunk(payload: str, cursor: int) -> int:
+        if not payload.startswith("id: "):
+            return cursor
+        try:
+            seq_line = payload.split("\n", 1)[0].removeprefix("id: ").strip()
+            return max(cursor, int(seq_line))
+        except ValueError:
+            return cursor
 
     async def subscribe(self, after: int) -> AsyncIterator[str]:
-        for w in await self._replay(after):
-            yield w
+        chunks, cursor = await self._replay_after(after)
+        for wrapped in chunks:
+            yield wrapped
         meta = await self._load_meta()
         if meta is None or meta.get("done"):
             return
@@ -295,13 +313,36 @@ class RedisRunBuffer(DetachedRunBuffer):
         pubsub = client.pubsub()
         await pubsub.subscribe(self._channel_key())
         try:
-            async for message in pubsub.listen():
-                if message.get("type") != "message":
+            while True:
+                message = None
+                try:
+                    message = await pubsub.get_message(
+                        ignore_subscribe_messages=True,
+                        timeout=_PUBSUB_POLL_SEC,
+                    )
+                except TimeoutError:
+                    message = None
+
+                if message is not None and message.get("type") == "message":
+                    payload = str(message.get("data", ""))
+                    if payload == _DONE_CHANNEL_MSG:
+                        tail, _ = await self._replay_after(cursor)
+                        for wrapped in tail:
+                            yield wrapped
+                        break
+                    yield payload
+                    cursor = self._cursor_from_chunk(payload, cursor)
                     continue
-                payload = str(message.get("data", ""))
-                if payload == _DONE_CHANNEL_MSG:
+
+                meta = await self._load_meta()
+                if meta is None or meta.get("done"):
+                    tail, _ = await self._replay_after(cursor)
+                    for wrapped in tail:
+                        yield wrapped
                     break
-                yield payload
+                tail, cursor = await self._replay_after(cursor)
+                for wrapped in tail:
+                    yield wrapped
         finally:
             try:
                 await pubsub.unsubscribe(self._channel_key())
