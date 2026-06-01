@@ -87,6 +87,34 @@ def _json_len(value: Any) -> int:
         return len(str(value))
 
 
+_COMPOSIO_SUBAGENT_TOOL_ID_PREFIX = "composio:"
+
+
+def _composio_subagent_payload(event: dict[str, Any]) -> dict[str, Any] | None:
+    sub_raw = event.get("subagent")
+    if isinstance(sub_raw, dict) and sub_raw.get("composio"):
+        return {
+            "composio": True,
+            "toolkits": [str(x) for x in (sub_raw.get("toolkits") or []) if str(x).strip()],
+        }
+    return None
+
+
+def _is_composio_subagent_event(event: dict[str, Any]) -> bool:
+    return _composio_subagent_payload(event) is not None
+
+
+def _scoped_tool_use_id(tool_use_id: str, sub_payload: dict[str, Any] | None) -> str:
+    """Prefix Composio sub-agent tool ids so they never collide with the parent turn."""
+    tid = (tool_use_id or "").strip()
+    if not tid or sub_payload is None:
+        return tid
+    prefix = _COMPOSIO_SUBAGENT_TOOL_ID_PREFIX
+    if tid.startswith(prefix):
+        return tid
+    return f"{prefix}{tid}"
+
+
 def _short_text(value: Any, max_chars: int = 500) -> str:
     if isinstance(value, str):
         text = value
@@ -336,22 +364,17 @@ def map_koraku_stream_events(event: dict[str, Any], state: KorakuStreamState) ->
         tool_use_id = str(data.get("id") or "")
         tool_name = str(data.get("tool") or "tool")
         tool_input = data.get("input")
-        if tool_use_id:
-            state.tool_calls_by_id[tool_use_id] = {"tool": tool_name, "input": tool_input}
+        sub_payload = _composio_subagent_payload(event)
+        scoped_tool_use_id = _scoped_tool_use_id(tool_use_id, sub_payload)
+        if scoped_tool_use_id:
+            state.tool_calls_by_id[scoped_tool_use_id] = {"tool": tool_name, "input": tool_input}
         t_args = _json_len(tool_input) > _TOOL_INPUT_TRUNC_BYTES
-        sub_raw = event.get("subagent")
-        sub_payload: dict[str, Any] | None = None
-        if isinstance(sub_raw, dict) and sub_raw.get("composio"):
-            sub_payload = {
-                "composio": True,
-                "toolkits": [str(x) for x in (sub_raw.get("toolkits") or []) if str(x).strip()],
-            }
         return [
             _tool_event(
                 inner_session_id=state.inner_session_id,
                 run_id=rid,
                 phase="started",
-                tool_use_id=tool_use_id,
+                tool_use_id=scoped_tool_use_id,
                 tool_name=tool_name,
                 tool_input=tool_input,
                 mode=str(data.get("mode") or "") or None,
@@ -367,23 +390,16 @@ def map_koraku_stream_events(event: dict[str, Any], state: KorakuStreamState) ->
         tkl = data.get("toolkits")
         if isinstance(tkl, list):
             out_sub["toolkits"] = [str(x) for x in tkl if str(x).strip()]
-        sub_raw = event.get("subagent")
-        if isinstance(sub_raw, dict) and sub_raw.get("composio"):
+        if _is_composio_subagent_event(event):
             out_sub["composio"] = True
         return [{"type": "koraku.subagent", "data": out_sub}]
     if et == "stream_event":
         raw = event.get("event")
         if not isinstance(raw, dict):
             return []
-        sub_raw = event.get("subagent")
-        if isinstance(sub_raw, dict) and sub_raw.get("composio"):
-            raw = {
-                **raw,
-                "subagent": {
-                    "composio": True,
-                    "toolkits": [str(x) for x in (sub_raw.get("toolkits") or []) if str(x).strip()],
-                },
-            }
+        sub_payload = _composio_subagent_payload(event)
+        if sub_payload is not None:
+            raw = {**raw, "subagent": sub_payload}
         raw_type = str(raw.get("type") or "")
         idx = raw.get("index")
         out: list[dict[str, Any]] = []
@@ -434,23 +450,18 @@ def map_koraku_stream_events(event: dict[str, Any], state: KorakuStreamState) ->
             if not isinstance(block, dict) or block.get("type") != "tool_result":
                 continue
             tool_use_id = str(block.get("tool_use_id") or "")
-            call = state.tool_calls_by_id.pop(tool_use_id, {}) if tool_use_id else {}
+            sub_payload = _composio_subagent_payload(event)
+            scoped_tool_use_id = _scoped_tool_use_id(tool_use_id, sub_payload)
+            call = state.tool_calls_by_id.pop(scoped_tool_use_id, {}) if scoped_tool_use_id else {}
             is_error = bool(block.get("is_error"))
             raw_content = block.get("content")
             summary = _short_text(raw_content, 500)
             t_res = _json_len(raw_content) > 500
-            sub_raw = event.get("subagent")
-            sub_payload: dict[str, Any] | None = None
-            if isinstance(sub_raw, dict) and sub_raw.get("composio"):
-                sub_payload = {
-                    "composio": True,
-                    "toolkits": [str(x) for x in (sub_raw.get("toolkits") or []) if str(x).strip()],
-                }
             out.append(_tool_event(
                 inner_session_id=state.inner_session_id,
                 run_id=rid,
                 phase="failed" if is_error else "completed",
-                tool_use_id=tool_use_id,
+                tool_use_id=scoped_tool_use_id,
                 tool_name=str(call.get("tool") or "tool"),
                 tool_input=call.get("input"),
                 is_error=is_error,
@@ -460,13 +471,19 @@ def map_koraku_stream_events(event: dict[str, Any], state: KorakuStreamState) ->
             ))
         return out
     if et == "agent.completed":
+        if _is_composio_subagent_event(event):
+            return []
         data = event.get("data") if isinstance(event.get("data"), dict) else {}
         return state.completion_sequence(data, failed=False, error=None)
     if et == "agent.cancelled":
+        if _is_composio_subagent_event(event):
+            return []
         data = event.get("data") if isinstance(event.get("data"), dict) else {}
         merged = {**data, "model": data.get("model") or state.resolved_model, "reason": "cancelled"}
         return state.completion_sequence(merged, failed=False, error=None, cancelled=True)
     if et == "agent.error":
+        if _is_composio_subagent_event(event):
+            return []
         err = str((event.get("data") or {}).get("error", "unknown error"))
         return state.completion_sequence(None, failed=True, error=err)
     return []
