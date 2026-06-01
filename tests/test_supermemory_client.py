@@ -54,6 +54,16 @@ def test_extract_last_assistant_text() -> None:
     assert sm.extract_last_assistant_text(session) == "Hello there"
 
 
+def test_save_memory_omits_custom_id_when_unset() -> None:
+    configure(Settings(supermemory_api_key="test-key"))
+    mock_client = MagicMock()
+    with patch.object(sm, "_client", return_value=mock_client):
+        result = sm.save_memory_sync("user-1", "User is starting their 4th year in June.")
+    assert result == "Saved to long-term memory."
+    kwargs = mock_client.add.call_args.kwargs
+    assert "custom_id" not in kwargs
+
+
 def test_ingest_chat_turn_calls_add() -> None:
     configure(Settings(supermemory_api_key="test-key"))
     mock_client = MagicMock()

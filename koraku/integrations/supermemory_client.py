@@ -44,6 +44,27 @@ def _client() -> Any:
     return _CLIENT
 
 
+def _add_memory_kwargs(
+    *,
+    content: str,
+    container_tag: str,
+    metadata: dict[str, str],
+    custom_id: str | None = None,
+    task_type: str = "memory",
+) -> dict[str, Any]:
+    """Supermemory rejects ``customId: null`` — omit the field when unset."""
+    kwargs: dict[str, Any] = {
+        "content": content,
+        "container_tag": container_tag,
+        "metadata": metadata,
+        "task_type": task_type,
+    }
+    cid = (custom_id or "").strip()
+    if cid:
+        kwargs["custom_id"] = cid
+    return kwargs
+
+
 def _format_profile_response(profile: Any, *, max_chars: int) -> str:
     lines: list[str] = []
     prof = getattr(profile, "profile", None)
@@ -177,18 +198,12 @@ def save_memory_sync(
     meta: dict[str, str] = {"source": "koraku_agent", "app": "koraku"}
     if session_id:
         meta["session_id"] = session_id.strip()[:64]
-    custom_id = None
+    custom_id: str | None = None
     if session_id and len(text) < 200:
         custom_id = f"koraku-note-{session_id[:36]}-{abs(hash(text)) % 10_000_000}"
     try:
         c = _client()
-        c.add(
-            content=text,
-            container_tag=tag,
-            metadata=meta,
-            custom_id=custom_id,
-            task_type="memory",
-        )
+        c.add(**_add_memory_kwargs(content=text, container_tag=tag, metadata=meta, custom_id=custom_id))
         return "Saved to long-term memory."
     except Exception as e:
         log.warning("supermemory add failed: %s", e)
@@ -239,17 +254,11 @@ def ingest_chat_turn_sync(
     meta: dict[str, str] = {"source": "koraku_chat_turn", "app": "koraku"}
     if session_id:
         meta["session_id"] = session_id.strip()[:64]
-    custom_id = None
+    custom_id: str | None = None
     if run_id:
         custom_id = f"koraku-turn-{run_id.strip()[:80]}"
     try:
         c = _client()
-        c.add(
-            content=body,
-            container_tag=tag,
-            metadata=meta,
-            custom_id=custom_id,
-            task_type="memory",
-        )
+        c.add(**_add_memory_kwargs(content=body, container_tag=tag, metadata=meta, custom_id=custom_id))
     except Exception as e:
         log.warning("supermemory ingest turn failed: %s", e)
