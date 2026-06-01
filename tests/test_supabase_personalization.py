@@ -28,7 +28,9 @@ def test_build_system_prompt_daily_driver_contract() -> None:
 
     assert "personal daily-driver agent" in s
     assert "## Task modes" in s
-    assert "## Memory behavior" in s
+    assert "## Memory (Personalization + Supermemory)" in s
+    assert "**MemorySearch**" in s
+    assert "## Cloud workspace (Blaxel)" in s
     assert "## External actions and verification" in s
     assert "verify the intended recipient" in s
     assert "Only create an automation when recurrence" in s

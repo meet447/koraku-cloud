@@ -8,9 +8,13 @@ from typing import Any
 import httpx
 
 from koraku.automations.supabase_store import _headers, _require_config, _rest_url
+from koraku.core.config import settings
 from koraku.core.tenant import ORG_ID_HEADER
+from koraku.core.ttl_cache import TtlCache
 
 log = logging.getLogger(__name__)
+
+_ORG_MEMBERSHIP_CACHE: TtlCache[list[str]] = TtlCache(max_size=512)
 
 
 def supabase_tenant_configured() -> bool:
@@ -53,6 +57,11 @@ def _member_org_ids_sync(user_id: str) -> list[str]:
     uid = (user_id or "").strip()
     if not uid:
         return []
+    ttl = max(0.0, float(settings.tenant_org_membership_cache_ttl_seconds))
+    if ttl > 0:
+        cached = _ORG_MEMBERSHIP_CACHE.get(uid, ttl_seconds=ttl)
+        if cached is not None:
+            return list(cached)
     q = f"/koraku_org_member?user_id=eq.{uid}&select=org_id,is_default"
     try:
         with httpx.Client(timeout=20.0) as client:
@@ -76,7 +85,10 @@ def _member_org_ids_sync(user_id: str) -> list[str]:
             default.append(oid)
         else:
             rest.append(oid)
-    return default + rest
+    out = default + rest
+    if ttl > 0:
+        _ORG_MEMBERSHIP_CACHE.set(uid, out)
+    return out
 
 
 def resolve_org_id_sync(user_id: str, requested_org_id: str | None) -> tuple[str | None, str]:

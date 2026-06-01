@@ -390,7 +390,6 @@ def build_system_prompt(
     *,
     cloud_tool_root: str | None = None,
     account_personalization: dict[str, str] | None = None,
-    learned_memory_section: str | None = None,
     composio_section: str | None = None,
 ) -> str:
     ws = os.path.abspath(workspace)
@@ -398,7 +397,6 @@ def build_system_prompt(
 
     memory_section = _format_memory_section(mem, account_personalization, workspace)
     soul_section = _format_soul_section(soul, account_personalization, workspace)
-    learned_section = (learned_memory_section or "").strip()
     workspace_section = _format_workspace_section(ws, cloud_tool_root, account_personalization)
 
     skills = load_skill_catalog(workspace)
@@ -442,21 +440,25 @@ def build_system_prompt(
 {soul_section}
 
 {memory_section}
-{learned_section + chr(10) if learned_section else ""}
 {skills_section}
 
 {comp_section}## Task modes
 - **Quick task:** answer or act directly when the request is simple, local, and low risk. Do not over-plan.
 - **Workflow task:** for multi-step outcomes like “research, create a spreadsheet, then email it,” make a short plan, use tools, verify artifacts, then act.
 - **Research task:** search with multiple angles, fetch primary/canonical pages, compare evidence, and cite uncertainty when facts cannot be verified.
-- **Memory task:** when the user asks to remember something, use **MemorySave** (Supermemory) or direct them to **Personalization** for explicit standing preferences.
+- **Memory task:** when prior preferences or facts may matter, call **MemorySearch** first; when the user asks to remember something durable, use **MemorySave** or direct them to **Personalization** for explicit profile text.
 - **Automation task:** when the user wants recurrence or “when X happens do Y,” create or update an automation instead of only explaining the workflow.
 
-## Memory behavior
-- **Explicit preferences** (Personalization) are user-edited standing instructions; **Learned memory** (Supermemory) is auto-extracted across chats.
-- Do not save one-off task details, temporary research findings, secrets, or unverified guesses as durable memory.
-- If the user says “remember this,” “from now on,” or gives a stable preference, use **MemorySave** (Supermemory) or tell them to add it under **Personalization** for explicit profile text.
-- Use per-run working memory to carry tool findings forward during the current task so you do not repeat work.
+## Memory (Personalization + Supermemory)
+- **Personalization** (app settings): user-edited persona, soul, and standing preferences — already in your context above when present.
+- **Learned memory** (Supermemory): auto-extracted facts across chats — **not** preloaded. Call **MemorySearch** with a focused query when names, preferences, past decisions, or user-specific context may change your answer.
+- **MemorySave**: when the user says “remember this,” “from now on,” or you learn a stable fact they would want recalled later — not one-off task noise, secrets, or unverified guesses.
+- Do not assume you know learned memory without searching; do not save ephemeral research or tool output as durable memory.
+
+## Cloud workspace (Blaxel)
+- File and shell tools (**Read**, **Write**, **Edit**, **Bash**, **Glob**, **Grep**) run in a per-user cloud VM under this chat's session folder when Blaxel is enabled.
+- The VM attaches on the **first** file/shell tool call — you do not need to wait for it before answering conversational or integration-only requests.
+- Use paths relative to the session folder (e.g. `notes.md`, `src/app.ts`).
 
 ## External actions and verification
 - Before sending email/messages, creating calendar events, sharing files, buying anything, deleting data, or changing external services, verify the intended recipient, content, attachment, date/time, and account/tool target.
@@ -561,7 +563,6 @@ class Agent:
         run_context: AgentRunContext | None = None,
         cloud_sandbox: Any | None = None,
         account_personalization: dict[str, str] | None = None,
-        learned_memory_section: str | None = None,
         *,
         run_id: str | None = None,
         cancel_event: asyncio.Event | None = None,
@@ -584,7 +585,6 @@ class Agent:
                     run_context=run_context,
                     cloud_sandbox=cloud_sandbox,
                     account_personalization=account_personalization,
-                    learned_memory_section=learned_memory_section,
                     run_id=run_id,
                     cancel_event=cancel_event,
                 ):
@@ -608,35 +608,42 @@ class Agent:
         run_context: AgentRunContext | None = None,
         cloud_sandbox: Any | None = None,
         account_personalization: dict[str, str] | None = None,
-        learned_memory_section: str | None = None,
         *,
         run_id: str | None = None,
         cancel_event: asyncio.Event | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
+        from koraku.integrations.blaxel_lazy import lazy_blaxel_session_active
+        from koraku.integrations.blaxel_runtime import cloud_blaxel_block_reason
+
         ws = resolve_agent_workspace(workspace, run_context)
         execution_target = resolve_execution_target(run_context)
-        blaxel_active = cloud_sandbox is not None
+        blaxel_lazy = lazy_blaxel_session_active() and cloud_blaxel_block_reason(settings) is None
+        blaxel_active = cloud_sandbox is not None or blaxel_lazy
         env_note: str | None = None
         session_root: str | None = None
-        if cloud_sandbox is not None:
-            try:
-                sname = cloud_sandbox.metadata.name
-            except Exception:
-                sname = "sandbox"
+        if cloud_sandbox is not None or blaxel_lazy:
             session_root = session_workspace_root_posix(
                 effective_cloud_user_id(),
                 session.session_id,
                 settings,
             )
+        if cloud_sandbox is not None:
+            try:
+                sname = cloud_sandbox.metadata.name
+            except Exception:
+                sname = "sandbox"
             env_note = (
                 f"- **Blaxel sandbox `{sname}`** (one VM per user): **Read**, **Write**, **Edit**, **Bash**, "
                 f"**Glob**, and **Grep** run under this chat's folder `{session_root}`. "
                 "Use paths relative to that folder (e.g. `notes.md`, `src/app.ts`)."
             )
-        elif not blaxel_active:
+        elif blaxel_lazy and session_root:
             env_note = (
-                "Cloud sandbox is not ready; file and shell tools are limited until Blaxel provisions."
+                f"- **Blaxel sandbox** (lazy attach): **Read**, **Write**, **Edit**, **Bash**, **Glob**, and **Grep** "
+                f"use this chat's folder `{session_root}`. The VM connects on the first file/shell tool call."
             )
+        elif cloud_blaxel_block_reason(settings):
+            env_note = cloud_blaxel_block_reason(settings)
         with (
             agent_workspace_scope(ws),
             blaxel_sandbox_scope(cloud_sandbox),
@@ -724,9 +731,8 @@ class Agent:
                     client_timezone=client_timezone,
                     client_locale=client_locale,
                     execution_environment_note=env_note,
-                    cloud_tool_root=session_root if cloud_sandbox is not None else None,
+                    cloud_tool_root=session_root if blaxel_active else None,
                     account_personalization=account_personalization,
-                    learned_memory_section=learned_memory_section,
                     composio_section=composio_sec,
                 )
                 working_memory: list[dict[str, Any]] = []

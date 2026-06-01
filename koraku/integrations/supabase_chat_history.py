@@ -238,6 +238,10 @@ async def hydrate_session_messages_from_db(
             return fallback_report
         return report("memory", "missing_auth" if messages_before else "missing_auth_empty", 0, messages_before)
 
+    # Follow-up turns in an active session already carry prior messages in memory/Redis.
+    if messages_before > 0:
+        return report("session", "warm", 0, messages_before)
+
     if not configured:
         fallback_report = apply_client_history("supabase_not_configured")
         if fallback_report is not None:

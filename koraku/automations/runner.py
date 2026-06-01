@@ -7,6 +7,7 @@ import time
 from contextvars import Token
 from typing import TYPE_CHECKING, Any, Callable
 
+from koraku.integrations.blaxel_lazy import clear_lazy_blaxel_session, set_lazy_blaxel_session
 from koraku.agent.runtime_context import AgentRunContext
 from koraku.automations import async_ops
 from koraku.automations.run_context import prepare_automation_agent_context, reset_automation_tenant
@@ -78,8 +79,6 @@ async def _run_agent_session_with_timeout(
     auto: dict[str, Any],
     *,
     account_personalization: dict[str, str] | None = None,
-    learned_memory_section: str | None = None,
-    cloud_sandbox: Any | None = None,
     user_id: str = "",
     org_id: str | None = None,
     run_id: str = "",
@@ -98,9 +97,8 @@ async def _run_agent_session_with_timeout(
             image_parts=None,
             max_steps_override=settings.automation_max_steps,
             run_context=AgentRunContext(),
-            cloud_sandbox=cloud_sandbox,
+            cloud_sandbox=None,
             account_personalization=account_personalization,
-            learned_memory_section=learned_memory_section,
             run_id=run_id or None,
         ):
             if ev.get("type") == "agent.error":
@@ -247,33 +245,33 @@ async def execute_automation(
                 toolkits=auto.get("toolkits"),
             )
 
-            org_id, account_p, learned, cloud_sandbox, tenant_tok = (
-                await prepare_automation_agent_context(
-                    user_id,
-                    session.session_id,
-                    spec_query=auto.get("natural_language_spec"),
-                )
+            org_id, account_p, tenant_tok = await prepare_automation_agent_context(
+                user_id,
+                spec_query=auto.get("natural_language_spec"),
             )
+
+            lazy_tok = set_lazy_blaxel_session(session.session_id)
 
             def _emit(ev: dict[str, Any]) -> None:
                 if emit is not None:
                     emit(ev)
 
             t0 = time.perf_counter()
-            last_error = await _run_agent_session_with_timeout(
-                agent,
-                user_msg,
-                session,
-                _emit,
-                workspace_dir(),
-                auto,
-                account_personalization=account_p,
-                learned_memory_section=learned,
-                cloud_sandbox=cloud_sandbox,
-                user_id=user_id,
-                org_id=org_id,
-                run_id=run_id,
-            )
+            try:
+                last_error = await _run_agent_session_with_timeout(
+                    agent,
+                    user_msg,
+                    session,
+                    _emit,
+                    workspace_dir(),
+                    auto,
+                    account_personalization=account_p,
+                    user_id=user_id,
+                    org_id=org_id,
+                    run_id=run_id,
+                )
+            finally:
+                clear_lazy_blaxel_session(lazy_tok)
 
             finished = utcnow()
             summary = _last_assistant_summary(session)

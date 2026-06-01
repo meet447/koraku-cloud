@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import hashlib
+import hashlib
 import logging
 import re
 from typing import TYPE_CHECKING, Any
 
 from koraku.core.config import settings
+from koraku.core.ttl_cache import TtlCache
 
 if TYPE_CHECKING:
     from koraku.core.models import SessionState
@@ -14,6 +16,15 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 _CLIENT: Any = None
+_LEARNED_CONTEXT_CACHE: TtlCache[str] = TtlCache(max_size=512)
+
+
+def _learned_context_cache_key(user_id: str, org_id: str | None, query: str | None) -> str:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    q = (query or "").strip()
+    q_hash = hashlib.sha256(q.encode("utf-8")).hexdigest()[:16] if q else "-"
+    return f"{oid}:{uid}:{q_hash}"
 
 
 def supermemory_configured() -> bool:
@@ -114,6 +125,12 @@ def fetch_learned_context_sync(
     uid = (user_id or "").strip()
     if not uid:
         return ""
+    ttl = max(0.0, float(settings.learned_memory_cache_ttl_seconds))
+    cache_key = _learned_context_cache_key(uid, org_id, query)
+    if ttl > 0:
+        cached = _LEARNED_CONTEXT_CACHE.get(cache_key, ttl_seconds=ttl)
+        if cached is not None:
+            return cached
     tag = container_tag(uid, org_id)
     q = (query or "").strip()
     try:
@@ -124,13 +141,18 @@ def fetch_learned_context_sync(
             resp = c.profile(container_tag=tag)
         body = _format_profile_response(resp, max_chars=max(500, int(settings.supermemory_context_max_chars)))
         if not body:
+            if ttl > 0:
+                _LEARNED_CONTEXT_CACHE.set(cache_key, "")
             return ""
-        return (
+        out = (
             "## Learned memory (Supermemory — auto-extracted across chats)\n"
             f"{body}\n\n"
             "Use **MemorySearch** to recall more, **MemorySave** when the user asks you to remember something durable.\n"
             "Do not duplicate explicit preferences from **Persona** / **Explicit preferences** above.\n"
         )
+        if ttl > 0:
+            _LEARNED_CONTEXT_CACHE.set(cache_key, out)
+        return out
     except Exception as e:
         log.warning("supermemory profile failed tag=%s: %s", tag[:32], e)
         return ""

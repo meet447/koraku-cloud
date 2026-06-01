@@ -8,7 +8,7 @@ import shlex
 import time
 from typing import TYPE_CHECKING, Any
 
-from koraku.core.config import Settings
+from koraku.core.config import Settings, settings
 from koraku.integrations.cloud_user import effective_cloud_user_id
 
 if TYPE_CHECKING:
@@ -203,3 +203,21 @@ async def ensure_chat_sandbox(
     root = session_workspace_root_posix(uid, session_id, settings)
     await _mkdir_p_in_sandbox(sb, root, settings)
     return sb
+
+
+def get_cached_user_sandbox(user_id: str | None = None) -> Any | None:
+    """Return a warm Blaxel VM handle for this user, if still within the cache TTL."""
+    uid = (user_id or effective_cloud_user_id()).strip() or effective_cloud_user_id()
+    name = user_sandbox_name(uid)
+    cached = _sandbox_cache.get(name)
+    if cached is None:
+        return None
+    ttl = max(60.0, float(getattr(settings, "blaxel_sandbox_cache_ttl_seconds", 600.0)))
+    if (time.monotonic() - cached[1]) >= ttl:
+        _sandbox_cache.pop(name, None)
+        return None
+    return cached[0]
+
+
+def user_sandbox_is_cached(user_id: str | None = None) -> bool:
+    return get_cached_user_sandbox(user_id) is not None

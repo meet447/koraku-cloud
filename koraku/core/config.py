@@ -234,6 +234,36 @@ class Settings(BaseSettings):
             "supermemory_context_max_chars",
         ),
     )
+    # Chat turn startup: cache slow Supabase / Supermemory lookups (seconds).
+    personalization_cache_ttl_seconds: float = Field(
+        default=300.0,
+        validation_alias=AliasChoices(
+            "PERSONALIZATION_CACHE_TTL_SECONDS",
+            "personalization_cache_ttl_seconds",
+        ),
+    )
+    learned_memory_cache_ttl_seconds: float = Field(
+        default=90.0,
+        validation_alias=AliasChoices(
+            "LEARNED_MEMORY_CACHE_TTL_SECONDS",
+            "learned_memory_cache_ttl_seconds",
+        ),
+    )
+    # Max wait for Supermemory before starting the agent (empty context if slower).
+    chat_learned_memory_timeout_seconds: float = Field(
+        default=4.0,
+        validation_alias=AliasChoices(
+            "CHAT_LEARNED_MEMORY_TIMEOUT_SECONDS",
+            "chat_learned_memory_timeout_seconds",
+        ),
+    )
+    tenant_org_membership_cache_ttl_seconds: float = Field(
+        default=120.0,
+        validation_alias=AliasChoices(
+            "TENANT_ORG_MEMBERSHIP_CACHE_TTL_SECONDS",
+            "tenant_org_membership_cache_ttl_seconds",
+        ),
+    )
 
     @field_validator("supabase_jwt_secret", mode="before")
     @classmethod

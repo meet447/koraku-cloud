@@ -90,6 +90,30 @@ def test_client_history_rows_to_agent_messages_visible_text_only() -> None:
 
 
 @pytest.mark.asyncio
+async def test_hydrate_skips_db_when_session_is_warm(monkeypatch) -> None:
+    session = SessionState(session_id="94994f06-10d1-47d4-ad13-e98b0baf06d2")
+    session.add_message("user", [{"type": "text", "text": "prior"}])
+    session.add_message("assistant", [{"type": "text", "text": "answer"}])
+
+    def fail_fetch(*_args, **_kwargs):
+        raise AssertionError("DB fetch should be skipped for warm sessions")
+
+    monkeypatch.setattr(
+        "koraku.integrations.supabase_chat_history.fetch_thread_messages_sync",
+        fail_fetch,
+    )
+    report = await hydrate_session_messages_from_db(
+        session,
+        incoming_user_text="follow up",
+        auth_sub="11111111-1111-4111-8111-111111111111",
+    )
+    assert report.source == "session"
+    assert report.reason == "warm"
+    assert report.messages_loaded == 2
+    assert len(session.messages) == 2
+
+
+@pytest.mark.asyncio
 async def test_hydrate_uses_client_history_when_auth_missing() -> None:
     session = SessionState(session_id="94994f06-10d1-47d4-ad13-e98b0baf06d2")
     report = await hydrate_session_messages_from_db(

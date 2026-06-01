@@ -15,7 +15,6 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from koraku.api.chat_latency import should_defer_blaxel_provision
 from koraku.agent import _step_budget, get_or_create_chat_session
 from koraku.agent.runtime_context import AgentRunContext
 from koraku.agent.unconfigured import run_unconfigured
@@ -25,11 +24,15 @@ from koraku.core.request_auth import resolve_request_auth
 from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
 from koraku.core.redact import redact_secrets
 from koraku.integrations import composio as composio_runtime
-from koraku.integrations.blaxel_lazy import clear_lazy_blaxel_session, set_lazy_blaxel_session
+from koraku.integrations.blaxel_lazy import (
+    clear_lazy_blaxel_session,
+    set_lazy_blaxel_session,
+    warm_blaxel_session_background,
+)
 from koraku.integrations.blaxel_runtime import (
     cloud_blaxel_block_reason,
-    ensure_chat_sandbox,
     session_workspace_root_posix,
+    user_sandbox_is_cached,
 )
 from koraku.integrations.cloud_user import (
     effective_cloud_user_id,
@@ -43,7 +46,6 @@ from koraku.integrations.supabase_personalization import (
 )
 from koraku.integrations.supermemory_client import (
     extract_last_assistant_text,
-    fetch_learned_context_sync,
     ingest_chat_turn_sync,
     supermemory_configured,
 )
@@ -124,32 +126,6 @@ async def _yield_error_events(error_msg: str, stream_state: KorakuStreamState) -
         await asyncio.sleep(0)
 
 
-async def _provision_cloud_sandbox(session_id: str) -> tuple[Any | None, str | None]:
-    block = cloud_blaxel_block_reason(settings)
-    if block:
-        return None, block
-    try:
-        ready_timeout = max(5.0, float(settings.blaxel_sandbox_ready_timeout_seconds))
-        cloud_sandbox = await asyncio.wait_for(
-            ensure_chat_sandbox(
-                session_id,
-                settings,
-                user_id=effective_cloud_user_id(),
-            ),
-            timeout=ready_timeout,
-        )
-        return cloud_sandbox, None
-    except asyncio.TimeoutError:
-        t = int(ready_timeout)
-        err = (
-            f"Blaxel sandbox did not become ready within {t}s. "
-            "Check BL_WORKSPACE, BL_API_KEY, and Blaxel service status."
-        )
-        return None, err
-    except Exception as e:
-        return None, f"Blaxel sandbox: {redact_secrets(str(e))}"
-
-
 async def _yield_sse_events_from_queue(
     queue: asyncio.Queue[dict | None],
     task: asyncio.Task,
@@ -199,10 +175,7 @@ async def _stream_agent_sse(
     )
     eff_provider, resolved_model = resolve_provider_and_model(provider, model)
     budget = msg.strip() or ("[images]" if images else "")
-    defer_blaxel = bool(settings.chat_defer_blaxel_provision) and should_defer_blaxel_provision(
-        message=budget,
-        has_images=bool(images),
-    )
+    blaxel_lazy = cloud_blaxel_block_reason(settings) is None
 
     stream_state = KorakuStreamState()
     if stream_run_id and str(stream_run_id).strip():
@@ -248,16 +221,6 @@ async def _stream_agent_sse(
         personalization_task = asyncio.create_task(
             asyncio.to_thread(fetch_personalization_sync, auth_sub)
         )
-    learned_memory_task: asyncio.Task[str] | None = None
-    if auth_sub and supermemory_configured():
-        learned_memory_task = asyncio.create_task(
-            asyncio.to_thread(
-                fetch_learned_context_sync,
-                auth_sub,
-                org_id=auth_org_id,
-                query=msg.strip() or None,
-            )
-        )
     hydration_task = asyncio.create_task(
         hydrate_session_messages_from_db(
             session,
@@ -267,41 +230,42 @@ async def _stream_agent_sse(
             client_history=[p.model_dump() for p in (client_history or [])],
         )
     )
-    sandbox_task: asyncio.Task | None = None
-    if not defer_blaxel:
-        sandbox_task = asyncio.create_task(_provision_cloud_sandbox(session.session_id))
-    elif cloud_blaxel_block_reason(settings):
-        err = cloud_blaxel_block_reason(settings)
-        async for chunk in _yield_error_events(err, stream_state):
-            yield chunk
-        await _stop_disconnect_watch()
-        yield "event: done\n\n"
-        return
 
-    hydration = await hydration_task
+    pending: list[asyncio.Task] = [hydration_task]
+    if personalization_task is not None:
+        pending.append(personalization_task)
+    core_results = await asyncio.gather(*pending, return_exceptions=True)
+
+    idx = 0
+    hydration = core_results[idx]
+    idx += 1
+    if isinstance(hydration, BaseException):
+        log.warning("chat history hydration failed: %s", hydration)
+        from koraku.integrations.supabase_chat_history import ChatHistoryHydration
+
+        hydration = ChatHistoryHydration(
+            session_id=session.session_id,
+            source="memory",
+            reason="hydration_error",
+            auth_present=bool(auth_sub),
+            supabase_configured=True,
+            rows_fetched=0,
+            messages_loaded=len(session.messages),
+            messages_before=len(session.messages),
+        )
+
     account_p: dict[str, str] | None = None
     if personalization_task is not None:
-        fetched = await personalization_task
-        account_p = fetched if fetched is not None else {"agent_name": "", "memory": "", "soul": ""}
-    learned_memory_section: str | None = None
-    if learned_memory_task is not None:
-        learned_memory_section = (await learned_memory_task).strip() or None
-
-    cloud_sandbox: Any | None = None
-    err: str | None = None
-    if sandbox_task is not None:
-        cloud_sandbox, err = await sandbox_task
-    if err:
-        async for chunk in _yield_error_events(err, stream_state):
-            yield chunk
-        await _stop_disconnect_watch()
-        yield "event: done\n\n"
-        return
+        fetched = core_results[idx]
+        if not isinstance(fetched, BaseException):
+            account_p = fetched if fetched is not None else {"agent_name": "", "memory": "", "soul": ""}
+        else:
+            log.warning("personalization fetch failed: %s", fetched)
 
     mode_hint, max_steps_hint = _step_budget(budget)
     tz = _normalize_client_hint(client_tz)
     loc = _normalize_client_hint(client_locale)
-    blaxel_on = cloud_sandbox is not None
+    blaxel_on = blaxel_lazy
     koraku_boot = {
         "workspace_session_id": session.session_id,
         "runId": stream_state.run_id,
@@ -310,6 +274,8 @@ async def _stream_agent_sse(
         "max_steps": max_steps_hint,
         "execution_target": "cloud",
         "blaxel_sandbox": blaxel_on,
+        "blaxel_lazy": blaxel_lazy,
+        "blaxel_cached": user_sandbox_is_cached(effective_cloud_user_id()) if blaxel_lazy else False,
         "tool_names": [
             t.name for t in tools_for_execution_target("cloud", blaxel_sandbox_active=blaxel_on)
         ],
@@ -319,7 +285,7 @@ async def _stream_agent_sse(
         "client_locale": loc,
     }
     init_cwd = workspace_dir()
-    if cloud_sandbox is not None:
+    if blaxel_lazy:
         init_cwd = session_workspace_root_posix(
             effective_cloud_user_id(),
             session.session_id,
@@ -344,7 +310,10 @@ async def _stream_agent_sse(
                 eff_cancel.set()
 
     async def run_agent() -> None:
-        lazy_tok = set_lazy_blaxel_session(session.session_id) if defer_blaxel else None
+        lazy_tok = set_lazy_blaxel_session(session.session_id) if blaxel_lazy else None
+        warm_task: asyncio.Task[None] | None = None
+        if blaxel_lazy and user_sandbox_is_cached(effective_cloud_user_id()):
+            warm_task = asyncio.create_task(warm_blaxel_session_background())
         try:
             img_payload = [{"media_type": p.media_type, "data": p.data} for p in images]
             agent_iter = (
@@ -360,9 +329,8 @@ async def _stream_agent_sse(
                     client_locale=loc,
                     image_parts=img_payload,
                     run_context=AgentRunContext(),
-                    cloud_sandbox=cloud_sandbox,
+                    cloud_sandbox=None,
                     account_personalization=account_p,
-                    learned_memory_section=learned_memory_section,
                     run_id=stream_state.run_id,
                     cancel_event=eff_cancel,
                 )
@@ -372,6 +340,10 @@ async def _stream_agent_sse(
         except Exception as e:
             emit({"type": "agent.error", "data": {"error": redact_secrets(str(e))}})
         finally:
+            if warm_task is not None and not warm_task.done():
+                warm_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await warm_task
             if auth_sub and supermemory_configured():
                 assistant_text = extract_last_assistant_text(session)
                 if msg.strip() or assistant_text:

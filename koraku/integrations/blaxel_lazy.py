@@ -34,6 +34,10 @@ def clear_lazy_blaxel_session(token: contextvars.Token[str | None] | None) -> No
         _lazy_session_id.reset(token)
 
 
+def lazy_blaxel_session_active() -> bool:
+    return bool((_lazy_session_id.get() or "").strip())
+
+
 def _lock_for_user() -> asyncio.Lock:
     key = effective_cloud_user_id()
     lock = _ensure_locks.get(key)
@@ -41,6 +45,20 @@ def _lock_for_user() -> asyncio.Lock:
         lock = asyncio.Lock()
         _ensure_locks[key] = lock
     return lock
+
+
+async def warm_blaxel_session_background() -> None:
+    """If this user already has a cached VM, attach it without blocking chat startup."""
+    if cloud_blaxel_block_reason(settings):
+        return
+    if get_active_blaxel_sandbox() is not None:
+        return
+    if not (_lazy_session_id.get() or "").strip():
+        return
+    try:
+        await ensure_blaxel_for_file_tool()
+    except Exception as e:
+        log.debug("background Blaxel warm skipped: %s", e)
 
 
 async def ensure_blaxel_for_file_tool() -> bool:

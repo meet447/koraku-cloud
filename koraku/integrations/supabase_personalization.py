@@ -9,9 +9,13 @@ from typing import Any
 import httpx
 
 from koraku.core.config import settings
+from koraku.core.ttl_cache import TtlCache
 from koraku.integrations.supabase_tenant import ensure_personal_org_sync
 
 log = logging.getLogger(__name__)
+
+_PERSONALIZATION_CACHE: TtlCache[dict[str, str]] = TtlCache(max_size=256)
+_EMPTY_PERSONALIZATION = {"agent_name": "", "memory": "", "soul": ""}
 
 
 def supabase_personalization_configured() -> bool:
@@ -50,6 +54,12 @@ def _valid_uuid(s: str) -> bool:
     return True
 
 
+def invalidate_personalization_cache(user_sub: str | None) -> None:
+    uid = (user_sub or "").strip()
+    if uid:
+        _PERSONALIZATION_CACHE.invalidate(uid)
+
+
 def fetch_personalization_sync(user_sub: str) -> dict[str, str] | None:
     """Return ``agent_name``, ``memory``, ``soul`` for ``user_sub``, or ``None`` on transport/HTTP error.
 
@@ -60,6 +70,11 @@ def fetch_personalization_sync(user_sub: str) -> dict[str, str] | None:
         return None
     if not supabase_personalization_configured():
         return None
+    ttl = max(0.0, float(settings.personalization_cache_ttl_seconds))
+    if ttl > 0:
+        cached = _PERSONALIZATION_CACHE.get(uid, ttl_seconds=ttl)
+        if cached is not None:
+            return dict(cached)
     try:
         with httpx.Client(timeout=30.0) as client:
             q = f"/koraku_personalization?user_id=eq.{uid}&select=agent_name,memory,soul&limit=1"
@@ -69,15 +84,20 @@ def fetch_personalization_sync(user_sub: str) -> dict[str, str] | None:
             if not isinstance(rows, list):
                 return None
             if len(rows) == 0:
-                return {"agent_name": "", "memory": "", "soul": ""}
-            row = rows[0]
-            if not isinstance(row, dict):
-                return {"agent_name": "", "memory": "", "soul": ""}
-            return {
-                "agent_name": str(row.get("agent_name") or ""),
-                "memory": str(row.get("memory") or ""),
-                "soul": str(row.get("soul") or ""),
-            }
+                out = dict(_EMPTY_PERSONALIZATION)
+            else:
+                row = rows[0]
+                if not isinstance(row, dict):
+                    out = dict(_EMPTY_PERSONALIZATION)
+                else:
+                    out = {
+                        "agent_name": str(row.get("agent_name") or ""),
+                        "memory": str(row.get("memory") or ""),
+                        "soul": str(row.get("soul") or ""),
+                    }
+            if ttl > 0:
+                _PERSONALIZATION_CACHE.set(uid, out)
+            return out
     except Exception as e:
         log.warning("supabase personalization fetch failed: %s", e)
         return None
@@ -114,3 +134,4 @@ def upsert_personalization_sync(
             json=payload,
         )
         r.raise_for_status()
+    invalidate_personalization_cache(uid)

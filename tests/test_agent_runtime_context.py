@@ -66,7 +66,8 @@ def test_stream_chat_body_accepts_client_history() -> None:
     assert b.client_history[1].role == "assistant"
 
 
-def test_stream_cloud_blaxel_blocked_sse_has_completed_and_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_stream_cloud_blaxel_blocked_still_completes_conversational_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Blaxel misconfiguration must not block chat startup; file tools fail lazily."""
     from fastapi.testclient import TestClient
 
     import koraku.api.chat_routes as chat_routes
@@ -80,7 +81,7 @@ def test_stream_cloud_blaxel_blocked_sse_has_completed_and_error(monkeypatch: py
         body = "".join(r.iter_text())
     assert "koraku.started" in body
     assert "koraku.completed" in body
-    assert "blocked-for-test" in body
+    assert "blocked-for-test" not in body
     assert "event: done" in body
 
 
