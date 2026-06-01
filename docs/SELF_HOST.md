@@ -67,7 +67,8 @@ python main.py        # :8000
 
 # Web (second terminal) — Node 22 LTS recommended (see `.nvmrc`; avoid Node 23)
 cd packages/koraku-client && npm install && npm run build
-cd ../web && npm install && cp ../.env.example .env.local
+cd ../web && bash ../scripts/install-web.sh && cp ../.env.example .env.local
+# Or: `nvm use` (reads `.nvmrc` → Node 22) then `npm install` in web/
 # Do not run `npm audit fix --force` in web/ — it downgrades Next to 9.x and breaks React 19.
 npm run dev             # :3000
 ```
