@@ -327,8 +327,7 @@ def _format_memory_section(mem: str, account_personalization: dict[str, str] | N
             if mem.strip()
             else (
                 "## Explicit preferences (Personalization)\n"
-                "No saved preferences in **Personalization** yet. The user can add standing instructions there; "
-                "use **MemorySave** for facts learned in chat (Supermemory).\n"
+                "No saved preferences yet — the user can add them under **Personalization** in the app.\n"
             )
         )
     return (
@@ -344,11 +343,11 @@ def _format_memory_section(mem: str, account_personalization: dict[str, str] | N
 def _format_soul_section(soul: str, account_personalization: dict[str, str] | None, workspace: str) -> str:
     if account_personalization is not None:
         return (
-            f"## Persona / soul (from Koraku account profile)\n{soul}\n"
+            f"## Persona (from Koraku account profile)\n{soul}\n"
             if soul.strip()
             else (
-                "## Persona / soul\n"
-                "No saved persona text in this user's Koraku profile. They can add it under **Personalization**.\n"
+                "## Persona\n"
+                "No saved persona text — optional tone can be set under **Personalization**.\n"
             )
         )
     return (

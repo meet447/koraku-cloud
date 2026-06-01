@@ -30,7 +30,7 @@ const nav = [
   { href: `${APP_BASE}/memory`, label: "Memory", icon: Network },
   { href: `${APP_BASE}/connections`, label: "Connections", icon: Plug },
   { href: `${APP_BASE}/automations`, label: "Automations", icon: Wand2 },
-  { href: `${APP_BASE}/personalization`, label: "Personalization", icon: SlidersHorizontal },
+  { href: `${APP_BASE}/personalization`, label: "Profile", icon: SlidersHorizontal },
   { href: `${APP_BASE}/models`, label: "Models", icon: Cpu },
 ];
 

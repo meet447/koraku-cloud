@@ -52,7 +52,7 @@ export default function OnboardingPage() {
       .join("\n");
     const starterPrompts = [
       "Remember that I want Koraku to help with: " + goals.join(", "),
-      "Create a second-brain note for my current priorities.",
+      "What do you already know about me from my profile?",
       automationIdea.trim()
         ? `Turn this into a safe automation plan: ${automationIdea.trim()}`
         : "Suggest three useful starter automations for me.",
