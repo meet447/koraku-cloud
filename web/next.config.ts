@@ -6,7 +6,6 @@ const nextConfig: NextConfig = {
   output: "standalone",
   async redirects() {
     return [
-      { source: "/models", destination: "/app/models", permanent: false },
       { source: "/automations", destination: "/app/automations", permanent: false },
       { source: "/connections", destination: "/app/connections", permanent: false },
       { source: "/personalization", destination: "/app/personalization", permanent: false },

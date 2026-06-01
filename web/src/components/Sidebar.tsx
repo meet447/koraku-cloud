@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   Network,
-  Cpu,
   Loader2,
   PanelLeftClose,
   PanelLeft,
@@ -31,7 +30,6 @@ const nav = [
   { href: `${APP_BASE}/connections`, label: "Connections", icon: Plug },
   { href: `${APP_BASE}/automations`, label: "Automations", icon: Wand2 },
   { href: `${APP_BASE}/personalization`, label: "Profile", icon: SlidersHorizontal },
-  { href: `${APP_BASE}/models`, label: "Models", icon: Cpu },
 ];
 
 const CHAT_SKELETON_KEYS = ["a", "b", "c", "d", "e", "f"] as const;

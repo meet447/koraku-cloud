@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -8,11 +7,9 @@ import {
   Cpu,
   Flame,
   Globe,
-  Settings,
   Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
-import { APP_BASE } from "@/lib/app-path";
 
 const STORAGE_KEY = "koraku_provider_model";
 
@@ -132,7 +129,6 @@ export function ModelSelect({
   /** Third arg is a short display label for the footer (matches old select label). */
   onReady?: (provider: string, model: string, displayLabel: string) => void;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
   const [options, setOptions] = useState<ModelOption[]>([]);
@@ -331,20 +327,6 @@ export function ModelSelect({
               );
             })}
           </div>
-          <div className="mx-2 my-1.5 border-t border-neutral-100" />
-          <button
-            type="button"
-            className="mx-1 flex w-[calc(100%-0.5rem)] items-center gap-3 rounded-xl px-2 py-2 text-left text-sm font-semibold text-neutral-600 hover:bg-neutral-50"
-            onClick={() => {
-              setOpen(false);
-              router.push(`${APP_BASE}/models`);
-            }}
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500">
-              <Settings className="h-4 w-4" />
-            </span>
-            Configure
-          </button>
         </div>
       ) : null}
     </div>
