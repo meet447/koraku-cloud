@@ -125,7 +125,13 @@ function ChatMessageRow({
         <AgentBusyRow startedAtMs={m.run.streamStartedAt!} />
       ) : null}
       {!m.run.assistantMarkdown.trim() && !busy && isLastAssistant ? (
-        <p className="mt-2 text-sm text-neutral-400">No assistant text was returned.</p>
+        <p className="mt-2 text-sm text-neutral-400">
+          {m.run.statusText?.includes("Reconnect") ||
+          m.run.statusText?.includes("Subscribe") ||
+          m.run.error
+            ? "This reply was interrupted (for example after a page refresh). Use Retry or send your message again."
+            : "No assistant text was returned."}
+        </p>
       ) : null}
       {m.run.error ? (
         <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">

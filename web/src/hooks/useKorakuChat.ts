@@ -42,26 +42,34 @@ const CLIENT_HISTORY_MAX_TEXT_CHARS = 8_000;
  * Detached streaming (``POST /runs`` + ``GET /runs/:id/stream``) for tab-close resume on the same API worker.
  *
  * ``NEXT_PUBLIC_KORAKU_DETACHED_CHAT``:
- * - ``off`` / empty — inline ``POST /stream`` only (lowest latency).
+ * - ``off`` / ``0`` — inline ``POST /stream`` only (lowest latency; refresh aborts the turn).
  * - ``1`` / ``true`` / ``always`` — every chat turn uses detached runs.
  * - ``heavy`` / ``long`` / ``auto`` — detached only for long text (≥3200 chars) or any inline images.
+ * - empty (default) — detached for signed-in persisted chats; inline for local-only guests.
  */
 type DetachedChatMode = "off" | "always" | "heavy";
 
 function detachedChatMode(): DetachedChatMode {
   const v = (process.env.NEXT_PUBLIC_KORAKU_DETACHED_CHAT ?? "").trim().toLowerCase();
+  if (v === "off" || v === "0" || v === "false") return "off";
   if (v === "1" || v === "true" || v === "yes" || v === "always") return "always";
   if (v === "heavy" || v === "long" || v === "auto") return "heavy";
   return "off";
 }
 
-function shouldUseDetachedStreamingForPayload(textLen: number, imageCount: number): boolean {
+function shouldUseDetachedStreamingForPayload(
+  textLen: number,
+  imageCount: number,
+  persistenceEnabled: boolean,
+): boolean {
   const mode = detachedChatMode();
   if (mode === "always") return true;
   if (mode === "heavy") {
     return textLen >= 3200 || imageCount > 0;
   }
-  return false;
+  if (mode === "off") return false;
+  // Default: persisted (signed-in) chats use detached runs so refresh can reconnect.
+  return persistenceEnabled;
 }
 
 async function fetchDetachedRunStatusJson(
@@ -404,6 +412,14 @@ function apiRowToChatMessage(row: {
   return null;
 }
 
+/** Omit in-flight assistant placeholders so refresh does not show an empty reply. */
+function messagesReadyToPersist(msgs: ChatMessage[]): ChatMessage[] {
+  return msgs.filter((m) => {
+    if (m.role !== "assistant") return true;
+    return Boolean(m.run.assistantMarkdown.trim() || m.run.error?.trim());
+  });
+}
+
 function chatMessageToApiRow(m: ChatMessage): {
   id: string;
   role: string;
@@ -567,7 +583,17 @@ export function useKorakuChat() {
         if (cancelled) return;
         persistenceEnabledRef.current = true;
         const sessList = list.map((t) => ({ id: t.id, title: t.title || "New chat" }));
-        const firstId = sessList[0]!.id;
+        let focusId = sessList[0]!.id;
+        const pendingDetached =
+          typeof window !== "undefined" ? loadDetachedPending() : [];
+        if (pendingDetached.length > 0) {
+          const latest = pendingDetached.reduce((a, b) =>
+            (a.startedAt ?? 0) >= (b.startedAt ?? 0) ? a : b,
+          );
+          if (sessList.some((s) => s.id === latest.threadId)) {
+            focusId = latest.threadId;
+          }
+        }
         for (const s of sessList) {
           serverChatSessionRef.current[s.id] = s.id;
         }
@@ -575,7 +601,7 @@ export function useKorakuChat() {
         const msgMap: Record<string, ChatMessage[]> = Object.fromEntries(
           sessList.map((s) => [s.id, [] as ChatMessage[]]),
         );
-        const mr = await fetch(`/api/chat/threads/${firstId}/messages`, {
+        const mr = await fetch(`/api/chat/threads/${focusId}/messages`, {
           credentials: "include",
         });
         if (cancelled) return;
@@ -583,13 +609,13 @@ export function useKorakuChat() {
           const mp = (await mr.json()) as {
             messages?: { id: string; role: string; contentJson: unknown }[];
           };
-          msgMap[firstId] = (mp.messages ?? [])
+          msgMap[focusId] = (mp.messages ?? [])
             .map(apiRowToChatMessage)
             .filter((m): m is ChatMessage => m != null);
         }
-        messagesLoadedForThreadRef.current = new Set([firstId]);
+        messagesLoadedForThreadRef.current = new Set([focusId]);
         setSessions(sessList);
-        setActiveId(firstId);
+        setActiveId(focusId);
         setMessagesBySession(msgMap);
         setHydrated(true);
       } catch {
@@ -642,7 +668,7 @@ export function useKorakuChat() {
 
   const persistThreadToServer = useCallback(async (threadId: string) => {
     if (!persistenceEnabledRef.current) return;
-    const msgs = messagesBySessionRef.current[threadId] ?? [];
+    const msgs = messagesReadyToPersist(messagesBySessionRef.current[threadId] ?? []);
     if (msgs.length === 0) return;
     const title =
       sessionsRef.current.find((s) => s.id === threadId)?.title?.trim() || "New chat";
@@ -810,7 +836,13 @@ export function useKorakuChat() {
           }
 
           let streamRes: Response;
-          if (shouldUseDetachedStreamingForPayload(trimmed.length, imgs.length)) {
+          if (
+            shouldUseDetachedStreamingForPayload(
+              trimmed.length,
+              imgs.length,
+              persistenceEnabledRef.current,
+            )
+          ) {
             const startRes = await fetch("/koraku-api/runs", {
               method: "POST",
               headers: {
@@ -994,12 +1026,21 @@ export function useKorakuChat() {
               const mp = (await mr.json()) as {
                 messages?: { id: string; role: string; contentJson: unknown }[];
               };
-              const list = (mp.messages ?? [])
+              let list = (mp.messages ?? [])
                 .map(apiRowToChatMessage)
                 .filter((m): m is ChatMessage => m != null);
               if (!list.some((m) => m.id === p.assistantMsgId)) {
-                removeDetachedPendingRunId(p.runId);
-                return;
+                list = [
+                  ...list,
+                  {
+                    id: p.assistantMsgId,
+                    role: "assistant" as const,
+                    run: {
+                      ...initialRunState(),
+                      streamStartedAt: p.startedAt ?? Date.now(),
+                    },
+                  },
+                ];
               }
               setMessagesBySession((prev) => ({ ...prev, [p.threadId]: list }));
               messagesLoadedForThreadRef.current.add(p.threadId);
