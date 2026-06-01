@@ -1140,6 +1140,17 @@ class Agent:
         tool_input = tool_use["input"]
         tool_id = tool_use["id"]
 
+        if isinstance(tool_input, dict) and "_partial_json" in tool_input:
+            return {
+                "type": "tool_result",
+                "tool_use_id": tool_id,
+                "content": (
+                    f"Error: Tool '{tool_name}' arguments were truncated (incomplete JSON). "
+                    "Retry with a shorter payload or split large writes into smaller chunks."
+                ),
+                "is_error": True,
+            }
+
         tool = _resolve_tool_from_active(tool_name, active_tools)
         if tool is None:
             return {

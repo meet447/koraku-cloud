@@ -140,6 +140,12 @@ class Settings(BaseSettings):
         default=True,
         validation_alias=AliasChoices("CHAT_COMPACT_TOOL_CONTEXT", "chat_compact_tool_context"),
     )
+    # OpenAI-compatible providers (Fireworks, Groq, …): send native ``tools`` + ``tool_choice``
+    # instead of compact inline JSON in the system prompt. Set false for legacy local endpoints.
+    chat_openai_native_tools: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("CHAT_OPENAI_NATIVE_TOOLS", "chat_openai_native_tools"),
+    )
 
     # LLM provider: "anthropic" | "fireworks" | named OpenAI-compatible ids (see LLM_OPENAI_COMPAT_IDS)
     llm_provider: str = "fireworks"

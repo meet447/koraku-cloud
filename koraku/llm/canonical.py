@@ -30,13 +30,32 @@ def anthropic_tool_definitions(tool_schemas: list[Any]) -> list[dict[str, Any]]:
     return out
 
 
+def openai_tool_definitions(tool_schemas: list[Any]) -> list[dict[str, Any]]:
+    """OpenAI Chat Completions ``tools`` array (function calling)."""
+    out: list[dict[str, Any]] = []
+    for t in tool_schemas or []:
+        if hasattr(t, "to_openai_schema"):
+            out.append(t.to_openai_schema())
+        elif isinstance(t, dict) and "name" in t and "input_schema" in t:
+            out.append({
+                "type": "function",
+                "function": {
+                    "name": t["name"],
+                    "description": t.get("description", ""),
+                    "parameters": t["input_schema"],
+                },
+            })
+    return out
+
+
 def build_compact_tool_prompt(tools: list[Any]) -> str:
-    """Ultra-compact tool prompt for small / non-native-tool models."""
+    """Ultra-compact tool prompt for endpoints without native function calling."""
     lines = [
         "",
         "TOOLS: Emit exactly one JSON object per call (double quotes, colons — not Ruby ``=>``):",
         "{\"tool\":\"Name\",\"parameters\":{...}}",
-        "Do not use [TOOL_CALL] tags or ``tool =>`` syntax.",
+        "Do not use [TOOL_CALL] tags, ``[Call ToolName]:`` prose, ``tool =>`` syntax, or XML tags.",
+        "Never paste tool JSON inside your user-facing answer — only emit the JSON tool object.",
         "",
     ]
     for tool in tools:
@@ -49,6 +68,13 @@ def build_compact_tool_prompt(tools: list[Any]) -> str:
         lines.append("")
     lines.append("Call tools when needed. Provide final answer when done.")
     return "\n".join(lines)
+
+
+def _openai_native_tool_hint() -> str:
+    return (
+        "\n\nTools are bound via function calling. Invoke tools through the API tool channel only — "
+        "never embed ``{\"tool\":...}``, ``[Call ToolName]:``, or similar JSON in plain assistant text."
+    )
 
 
 def _openai_user_multimodal_parts(blocks: list[Any]) -> list[dict[str, Any]]:
@@ -66,15 +92,6 @@ def _openai_user_multimodal_parts(blocks: list[Any]) -> list[dict[str, Any]]:
                 parts.append({"type": "image_url", "image_url": {"url": f"data:{mt};base64,{b64}"}})
         elif t == "text":
             parts.append({"type": "text", "text": str(block.get("text", ""))})
-        elif t == "tool_result":
-            tid = block.get("tool_use_id", "?")
-            content = block.get("content", "")
-            parts.append({"type": "text", "text": f"[Result {tid}]:\n{content}"})
-        elif t == "tool_use":
-            parts.append({
-                "type": "text",
-                "text": f"[Call {block.get('name', '?')}]:\n{json.dumps(block.get('input', {}))}",
-            })
         else:
             parts.append({"type": "text", "text": json.dumps(block)})
     return parts
@@ -87,32 +104,98 @@ def _user_blocks_have_image(blocks: list[Any]) -> bool:
     return False
 
 
+def _assistant_openai_message(blocks: list[Any]) -> dict[str, Any]:
+    text_parts: list[str] = []
+    tool_calls: list[dict[str, Any]] = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            text_parts.append(str(block))
+            continue
+        t = block.get("type")
+        if t == "text":
+            text_parts.append(str(block.get("text", "")))
+        elif t == "tool_use":
+            tid = str(block.get("id") or f"tool_{len(tool_calls)}")
+            tool_input = block.get("input") if isinstance(block.get("input"), dict) else {}
+            tool_calls.append({
+                "id": tid,
+                "type": "function",
+                "function": {
+                    "name": str(block.get("name") or ""),
+                    "arguments": json.dumps(tool_input, ensure_ascii=False),
+                },
+            })
+        else:
+            text_parts.append(json.dumps(block))
+
+    content_text = "\n".join(part for part in text_parts if part).strip()
+    msg: dict[str, Any] = {"role": "assistant"}
+    if tool_calls:
+        msg["tool_calls"] = tool_calls
+        msg["content"] = content_text or None
+    else:
+        msg["content"] = content_text
+    return msg
+
+
+def _user_openai_messages(blocks: list[Any]) -> list[dict[str, Any]]:
+    text_parts: list[str] = []
+    tool_results: list[dict[str, Any]] = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            text_parts.append(str(block))
+            continue
+        t = block.get("type")
+        if t == "tool_result":
+            tool_results.append(block)
+        elif t == "text":
+            text_parts.append(str(block.get("text", "")))
+        else:
+            text_parts.append(json.dumps(block))
+
+    out: list[dict[str, Any]] = []
+    user_text = "\n".join(part for part in text_parts if part).strip()
+    if user_text:
+        out.append({"role": "user", "content": user_text})
+    for tr in tool_results:
+        out.append({
+            "role": "tool",
+            "tool_call_id": str(tr.get("tool_use_id") or ""),
+            "content": str(tr.get("content") or ""),
+        })
+    return out
+
+
 def openai_chat_messages_from_agent_messages(messages: list[AgentMessage]) -> list[dict[str, Any]]:
     """Map internal :class:`AgentMessage` list to OpenAI ``messages`` JSON objects."""
     openai_msgs: list[dict[str, Any]] = []
     for msg in messages:
         if isinstance(msg.content, str):
             openai_msgs.append({"role": msg.role, "content": msg.content})
-        elif msg.role == "user" and _user_blocks_have_image(msg.content):
+            continue
+
+        if msg.role == "user" and _user_blocks_have_image(msg.content):
             openai_msgs.append({
                 "role": "user",
                 "content": _openai_user_multimodal_parts(msg.content),
             })
-        else:
-            parts: list[str] = []
-            for block in msg.content:
-                if isinstance(block, dict):
-                    if block.get("type") == "tool_result":
-                        parts.append(f"[Result {block.get('tool_use_id', '?')}]:\n{block.get('content', '')}")
-                    elif block.get("type") == "tool_use":
-                        parts.append(f"[Call {block.get('name', '?')}]:\n{json.dumps(block.get('input', {}))}")
-                    elif block.get("type") == "text":
-                        parts.append(block.get("text", ""))
-                    else:
-                        parts.append(json.dumps(block))
-                else:
-                    parts.append(str(block))
-            openai_msgs.append({"role": msg.role, "content": "\n".join(parts)})
+            continue
+
+        if msg.role == "assistant":
+            openai_msgs.append(_assistant_openai_message(msg.content))
+            continue
+
+        if msg.role == "user":
+            openai_msgs.extend(_user_openai_messages(msg.content))
+            continue
+
+        parts: list[str] = []
+        for block in msg.content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+            else:
+                parts.append(json.dumps(block) if isinstance(block, dict) else str(block))
+        openai_msgs.append({"role": msg.role, "content": "\n".join(parts)})
     return openai_msgs
 
 
@@ -177,7 +260,14 @@ class CanonicalChatRequest:
         top_p = self.top_p if self.top_p is not None else settings.top_p
         top_k = self.top_k if self.top_k is not None else settings.top_k
 
-        if self.tool_schemas:
+        native_tools = (
+            openai_tool_definitions(self.tool_schemas)
+            if settings.chat_openai_native_tools and self.tool_schemas
+            else []
+        )
+        if native_tools:
+            full_system = (self.system_prompt or "") + _openai_native_tool_hint()
+        elif self.tool_schemas:
             tool_prompt = build_compact_tool_prompt(self.tool_schemas)
             full_system = (self.system_prompt or "") + tool_prompt
         else:
@@ -188,7 +278,7 @@ class CanonicalChatRequest:
             openai_messages.append({"role": "system", "content": full_system})
         openai_messages.extend(openai_chat_messages_from_agent_messages(self.messages))
 
-        return {
+        body: dict[str, Any] = {
             "model": self.model_id,
             "messages": openai_messages,
             "stream": True,
@@ -197,6 +287,10 @@ class CanonicalChatRequest:
             "top_p": top_p,
             "top_k": top_k,
         }
+        if native_tools:
+            body["tools"] = native_tools
+            body["tool_choice"] = "auto"
+        return body
 
 
 __all__ = [
@@ -205,4 +299,5 @@ __all__ = [
     "anthropic_tool_definitions",
     "build_compact_tool_prompt",
     "openai_chat_messages_from_agent_messages",
+    "openai_tool_definitions",
 ]

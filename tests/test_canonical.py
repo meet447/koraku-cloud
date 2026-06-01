@@ -6,6 +6,7 @@ from koraku.llm.canonical import (
     CanonicalChatRequest,
 )
 from koraku.core.models import AgentMessage
+import json
 
 class DummyTool:
     def to_anthropic_schema(self):
@@ -79,11 +80,13 @@ def test_openai_chat_messages_from_agent_messages():
     assert res[0] == {"role": "user", "content": "Hello"}
 
     assert res[1]["role"] == "assistant"
-    assert "[Call my_tool]:\n{\"x\": 1}" in res[1]["content"]
-    assert "Sure!" in res[1]["content"]
+    assert res[1]["content"] == "Sure!"
+    assert res[1]["tool_calls"][0]["function"]["name"] == "my_tool"
+    assert json.loads(res[1]["tool_calls"][0]["function"]["arguments"]) == {"x": 1}
 
-    assert res[2]["role"] == "user"
-    assert "[Result call_123]:\nResult 1" in res[2]["content"]
+    assert res[2]["role"] == "tool"
+    assert res[2]["tool_call_id"] == "call_123"
+    assert res[2]["content"] == "Result 1"
 
     assert res[3]["role"] == "user"
     assert isinstance(res[3]["content"], list)
@@ -119,5 +122,5 @@ def test_canonical_chat_request():
     openai_body = req.openai_chat_completions_body()
     assert openai_body["model"] == "my-model"
     assert openai_body["messages"][0]["role"] == "system"
-    assert "TOOLS: Emit exactly one JSON object" in openai_body["messages"][0]["content"]
+    assert "function calling" in openai_body["messages"][0]["content"].lower()
     assert openai_body["messages"][1]["role"] == "user"

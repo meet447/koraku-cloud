@@ -31,6 +31,16 @@ class Tool:
             "input_schema": self.input_schema,
         }
 
+    def to_openai_schema(self) -> dict[str, Any]:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.input_schema,
+            },
+        }
+
     def to_compact_prompt(self) -> str:
         """Ultra-compact prompt format for small models."""
         lines = [f"{self.name}: {self.description}"]
