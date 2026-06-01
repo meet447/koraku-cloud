@@ -8,10 +8,12 @@ import pytest
 
 from koraku.integrations import blaxel_runtime as br
 from koraku.integrations.cloud_user import (
+    effective_auth_user_sub,
     effective_cloud_user_id,
     reset_cloud_user_id,
     set_cloud_user_id,
 )
+from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
 
 
 def test_cloud_blaxel_block_reason_requires_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -36,6 +38,33 @@ def test_effective_cloud_user_id_from_request_context() -> None:
     try:
         assert effective_cloud_user_id() == "jwt-sub-uuid"
     finally:
+        reset_cloud_user_id(t)
+
+
+def test_effective_auth_user_sub_ignores_org_storage_scope() -> None:
+    """Supabase rows use auth sub; Blaxel paths use org/user — do not mix them."""
+    t = set_cloud_user_id("9c77f10c-fc6a-402f-8749-e3e65779b688")
+    org_t = set_tenant_org_id("21ccb3a7-6567-49ea-9885-094673275af2")
+    try:
+        assert (
+            effective_cloud_user_id()
+            == "21ccb3a7-6567-49ea-9885-094673275af2/9c77f10c-fc6a-402f-8749-e3e65779b688"
+        )
+        assert effective_auth_user_sub() == "9c77f10c-fc6a-402f-8749-e3e65779b688"
+    finally:
+        reset_tenant_org_id(org_t)
+        reset_cloud_user_id(t)
+
+
+def test_automation_agent_tools_uid_uses_auth_sub() -> None:
+    from koraku.automations import agent_tools
+
+    t = set_cloud_user_id("user-uuid")
+    org_t = set_tenant_org_id("org-uuid")
+    try:
+        assert agent_tools._uid() == "user-uuid"
+    finally:
+        reset_tenant_org_id(org_t)
         reset_cloud_user_id(t)
 
 

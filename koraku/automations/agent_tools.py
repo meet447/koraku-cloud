@@ -9,11 +9,11 @@ from koraku.automations import async_ops, scheduler
 from koraku.automations.present import enrich_automation_row, enrich_automation_rows
 from koraku.automations.supabase_store import supabase_automations_configured
 from koraku.automations.validation import validate_cron_expression, validate_timezone_iana
-from koraku.integrations.cloud_user import effective_cloud_user_id
+from koraku.integrations.cloud_user import effective_auth_user_sub
 
 
 def _uid() -> str:
-    return effective_cloud_user_id()
+    return effective_auth_user_sub()
 
 
 def _normalize_toolkits(toolkits: Any) -> list[str]:

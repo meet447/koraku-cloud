@@ -20,7 +20,7 @@ from koraku.core.auth import auth_error_detail, verify_request_auth
 from koraku.core.config import settings
 from koraku.core.rate_limit import RateLimit, enforce_rate_limit, rate_limit_key
 from koraku.integrations.cloud_user import (
-    effective_cloud_user_id,
+    effective_auth_user_sub,
     reset_cloud_user_id,
     set_cloud_user_id,
 )
@@ -77,7 +77,7 @@ async def _automations_request_scope(
 
 
 def _user_id() -> str:
-    return effective_cloud_user_id()
+    return effective_auth_user_sub()
 
 
 class AutomationCreate(BaseModel):
