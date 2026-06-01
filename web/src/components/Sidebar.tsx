@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
-  BookOpenText,
+  Network,
   Cpu,
   Loader2,
   PanelLeftClose,
@@ -27,7 +27,7 @@ const iconStroke = 1.5;
 
 const nav = [
   { label: "New chat", icon: Plus, accent: true },
-  { href: `${APP_BASE}/brain`, label: "Brain", icon: BookOpenText },
+  { href: `${APP_BASE}/memory`, label: "Memory", icon: Network },
   { href: `${APP_BASE}/connections`, label: "Connections", icon: Plug },
   { href: `${APP_BASE}/automations`, label: "Automations", icon: Wand2 },
   { href: `${APP_BASE}/personalization`, label: "Personalization", icon: SlidersHorizontal },

@@ -66,27 +66,6 @@ function ChatMessageRow({
   const showWorkspaceAttachments =
     m.role === "assistant" && !(busy && isLastAssistant);
 
-  function saveAssistantToBrain(markdown: string) {
-    try {
-      const key = "koraku_brain_notes";
-      const existing = JSON.parse(window.localStorage.getItem(key) || "[]");
-      const list = Array.isArray(existing) ? existing : [];
-      const title = markdown.split("\n").find((line) => line.trim())?.replace(/^#+\s*/, "").slice(0, 80) || "Saved Koraku note";
-      const next = [
-        {
-          id: crypto.randomUUID(),
-          title,
-          body: markdown,
-          createdAt: new Date().toISOString(),
-        },
-        ...list,
-      ].slice(0, 100);
-      window.localStorage.setItem(key, JSON.stringify(next));
-    } catch {
-      /* Local beta note storage is best-effort. */
-    }
-  }
-
   return m.role === "user" ? (
     <div className="mb-6 flex justify-end">
       <div className="max-w-[85%] space-y-2 rounded-3xl bg-neutral-100 px-4 py-3 text-[15px] font-medium text-koraku-ink">
@@ -131,19 +110,10 @@ function ChatMessageRow({
         </p>
       ) : null}
       {showFullAssistantMarkdown ? (
-        <>
-          <MarkdownBody
-            source={m.run.assistantMarkdown}
-            deferHeavyParse={busy && isLastAssistant}
-          />
-          <button
-            type="button"
-            onClick={() => saveAssistantToBrain(m.run.assistantMarkdown)}
-            className="mt-3 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-bold text-neutral-500 transition hover:border-neutral-300 hover:text-neutral-900"
-          >
-            Save to brain
-          </button>
-        </>
+        <MarkdownBody
+          source={m.run.assistantMarkdown}
+          deferHeavyParse={busy && isLastAssistant}
+        />
       ) : null}
       {showWorkspaceAttachments ? (
         <RunWorkspaceAttachments

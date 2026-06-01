@@ -1,4 +1,4 @@
-"""Brain UI: memory graph data from Supermemory (+ explicit personalization)."""
+"""Memory UI: graph data from Supermemory (+ explicit personalization fallback)."""
 from __future__ import annotations
 
 import asyncio
@@ -7,14 +7,14 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from koraku.core.auth import auth_error_detail
 from koraku.core.request_auth import resolve_request_auth
-from koraku.integrations.brain_graph import fetch_brain_graph_sync
+from koraku.integrations.brain_graph import fetch_memory_graph_sync
 from koraku.integrations.supermemory_client import supermemory_configured
 from koraku.integrations.supabase_personalization import (
     fetch_personalization_sync,
     supabase_personalization_configured,
 )
 
-router = APIRouter(prefix="/api/brain", tags=["brain"])
+router = APIRouter(prefix="/api/memory", tags=["memory"])
 
 
 def _auth_401(reason: str) -> HTTPException:
@@ -22,12 +22,12 @@ def _auth_401(reason: str) -> HTTPException:
 
 
 @router.get("/graph")
-async def brain_graph(
+async def memory_graph(
     request: Request,
     page: int = Query(1, ge=1, le=500),
     limit: int = Query(100, ge=1, le=200),
 ):
-    """Memory graph nodes for the signed-in user (Supermemory documents + profile fallback)."""
+    """Memory graph nodes for the signed-in user."""
     resolved = resolve_request_auth(request)
     if not resolved.auth_ok:
         raise _auth_401(resolved.auth.reason)
@@ -44,7 +44,7 @@ async def brain_graph(
             explicit_soul = row.get("soul") or ""
 
     payload = await asyncio.to_thread(
-        fetch_brain_graph_sync,
+        fetch_memory_graph_sync,
         resolved.sub,
         org_id=resolved.org_id,
         page=page,

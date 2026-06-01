@@ -29,7 +29,7 @@ def test_synthetic_from_explicit_memory() -> None:
     assert any("dark mode" in m["memory"] for d in docs for m in d["memories"])
 
 
-def test_fetch_brain_graph_uses_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fetch_memory_graph_uses_documents(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_docs = [
         {
             "id": "doc-1",
@@ -45,19 +45,19 @@ def test_fetch_brain_graph_uses_documents(monkeypatch: pytest.MonkeyPatch) -> No
         return fake_docs, {"currentPage": 1, "limit": limit, "totalItems": 1, "totalPages": 1}
 
     monkeypatch.setattr(bg, "_fetch_supermemory_documents", _fake_fetch)
-    out = bg.fetch_brain_graph_sync("user-1", org_id="org-1")
+    out = bg.fetch_memory_graph_sync("user-1", org_id="org-1")
     assert out["source"] == "supermemory"
     assert len(out["documents"]) == 1
     assert out["documents"][0]["memories"][0]["memory"] == "User likes TypeScript"
 
 
-def test_fetch_brain_graph_profile_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fetch_memory_graph_profile_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(bg, "_fetch_supermemory_documents", lambda *a, **k: ([], {"currentPage": 1, "limit": 100, "totalItems": 0, "totalPages": 0}))
     profile = SimpleNamespace(
         profile=SimpleNamespace(static=["Senior engineer"], dynamic=["Building Koraku"]),
     )
     with patch.object(bg, "_client") as mock_client:
         mock_client.return_value.profile.return_value = profile
-        out = bg.fetch_brain_graph_sync("user-1")
+        out = bg.fetch_memory_graph_sync("user-1")
     assert out["source"] == "profile_fallback"
     assert len(out["documents"]) >= 1

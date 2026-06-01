@@ -12,13 +12,8 @@ type GraphResponse = {
     totalItems: number;
     totalPages: number;
   };
-  containerTag?: string;
   supermemoryConfigured?: boolean;
   source?: string;
-};
-
-type BrainMemoryGraphProps = {
-  searchQuery?: string;
 };
 
 function toGraphDocuments(docs: DocumentWithMemories[]): GraphApiDocument[] {
@@ -51,22 +46,24 @@ function toGraphDocuments(docs: DocumentWithMemories[]): GraphApiDocument[] {
   }));
 }
 
-export default function BrainMemoryGraph({ searchQuery = "" }: BrainMemoryGraphProps) {
+type MemoryGraphPanelProps = {
+  searchQuery?: string;
+};
+
+export default function MemoryGraphPanel({ searchQuery = "" }: MemoryGraphPanelProps) {
   const [documents, setDocuments] = useState<DocumentWithMemories[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [source, setSource] = useState<string | null>(null);
-
   const fetchPage = useCallback(async (pageNum: number, append: boolean) => {
     if (pageNum === 1) setIsLoading(true);
     else setIsLoadingMore(true);
     setError(null);
     try {
       const res = await fetch(
-        `/koraku-api/api/brain/graph?page=${pageNum}&limit=80`,
+        `/koraku-api/api/memory/graph?page=${pageNum}&limit=80`,
         { cache: "no-store", credentials: "include" },
       );
       if (!res.ok) {
@@ -74,7 +71,6 @@ export default function BrainMemoryGraph({ searchQuery = "" }: BrainMemoryGraphP
         throw new Error(body || `Graph load failed (${res.status})`);
       }
       const data = (await res.json()) as GraphResponse;
-      setSource(data.source ?? null);
       setDocuments((prev) =>
         append ? [...prev, ...(data.documents ?? [])] : (data.documents ?? []),
       );
@@ -124,38 +120,28 @@ export default function BrainMemoryGraph({ searchQuery = "" }: BrainMemoryGraphP
     [filteredDocuments, searchQuery],
   );
 
-  const statusLine = useMemo(() => {
-    if (isLoading) return "Loading your memory graph…";
-    if (error) return null;
-    if (source === "profile_fallback") {
-      return "Showing learned profile facts — chat more to grow the live graph.";
-    }
-    if (source === "personalization_only") {
-      return "Showing explicit preferences — enable Supermemory for auto-learned links.";
-    }
-    if (filteredDocuments.length === 0) {
-      return "No memories yet. Chat with Koraku or add preferences under Personalization.";
-    }
-    return "Pan, zoom, and click nodes. Rectangles are sources; hexagons are memories.";
-  }, [error, filteredDocuments.length, isLoading, source]);
+  if (error && !isLoading) {
+    return (
+      <section className="rounded-3xl border border-red-200 bg-red-50 px-6 py-8 text-center">
+        <p className="text-sm font-semibold text-red-900">Could not load memory</p>
+        <p className="mt-2 text-sm font-medium text-red-800">{error.message}</p>
+      </section>
+    );
+  }
 
   return (
-    <section className="overflow-hidden rounded-[32px] bg-neutral-950 ring-1 ring-neutral-800">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-        <div>
-          <h2 className="text-lg font-bold text-white">Memory graph</h2>
-          {statusLine ? (
-            <p className="mt-1 text-xs font-medium text-white/55">{statusLine}</p>
-          ) : null}
-        </div>
+    <section className="overflow-hidden rounded-3xl bg-neutral-950 ring-1 ring-neutral-800">
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-3">
+        <p className="text-xs font-semibold text-white/50">
+          Learned memory · pan & zoom · click nodes for detail
+        </p>
         {!isLoading && !error ? (
-          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/80">
-            {filteredDocuments.length} document
-            {filteredDocuments.length === 1 ? "" : "s"}
+          <span className="text-xs font-semibold text-white/40">
+            {filteredDocuments.length} source{filteredDocuments.length === 1 ? "" : "s"}
           </span>
         ) : null}
       </div>
-      <div className="relative h-[min(52vh,520px)] min-h-[320px] w-full bg-[#0c0c0c]">
+      <div className="relative h-[min(60vh,560px)] min-h-[360px] w-full bg-[#0a0a0a]">
         <MemoryGraph
           documents={filteredDocuments}
           isLoading={isLoading}
@@ -170,10 +156,9 @@ export default function BrainMemoryGraph({ searchQuery = "" }: BrainMemoryGraphP
           highlightsVisible={highlightIds.length > 0}
         >
           <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-            <p className="text-sm font-semibold text-white/70">No memories to visualize yet</p>
+            <p className="text-sm font-semibold text-white/70">No learned memories yet</p>
             <p className="max-w-sm text-xs font-medium text-white/45">
-              Koraku builds this graph from Supermemory as you chat. Save explicit preferences
-              under Personalization to seed the graph.
+              Chat with Koraku to build memory, or add standing preferences in Personalization.
             </p>
           </div>
         </MemoryGraph>

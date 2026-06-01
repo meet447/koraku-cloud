@@ -450,7 +450,7 @@ def build_system_prompt(
 - **Quick task:** answer or act directly when the request is simple, local, and low risk. Do not over-plan.
 - **Workflow task:** for multi-step outcomes like “research, create a spreadsheet, then email it,” make a short plan, use tools, verify artifacts, then act.
 - **Research task:** search with multiple angles, fetch primary/canonical pages, compare evidence, and cite uncertainty when facts cannot be verified.
-- **Second-brain task:** organize notes, preferences, decisions, and reusable knowledge into files or saved profile memory when the user asks to remember them.
+- **Memory task:** when the user asks to remember something, use **MemorySave** (Supermemory) or direct them to **Personalization** for explicit standing preferences.
 - **Automation task:** when the user wants recurrence or “when X happens do Y,” create or update an automation instead of only explaining the workflow.
 
 ## Memory behavior

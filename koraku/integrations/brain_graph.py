@@ -1,4 +1,4 @@
-"""Build Memory Graph payloads for the Brain UI (Supermemory documents + fallbacks)."""
+"""Build memory graph payloads for the Memory UI (Supermemory documents + fallbacks)."""
 from __future__ import annotations
 
 import logging
@@ -212,7 +212,7 @@ def _fetch_supermemory_documents(
     return documents, normalized_pagination
 
 
-def fetch_brain_graph_sync(
+def fetch_memory_graph_sync(
     user_id: str,
     *,
     org_id: str | None = None,

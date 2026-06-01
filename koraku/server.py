@@ -14,7 +14,7 @@ from koraku.api.chat_routes import router as chat_router
 from koraku.api.detached_runs import router as detached_runs_router
 from koraku.api.composio_routes import router as composio_router
 from koraku.api.health_routes import router as health_router
-from koraku.api.brain_routes import router as brain_router
+from koraku.api.memory_routes import router as memory_router
 from koraku.api.personalization_routes import router as personalization_router
 from koraku.api.workspace_routes import router as workspace_router
 from koraku.automations import scheduler as automation_scheduler
@@ -175,7 +175,7 @@ app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(detached_runs_router)
 app.include_router(personalization_router)
-app.include_router(brain_router)
+app.include_router(memory_router)
 app.include_router(composio_router)
 app.include_router(automations_router)
 app.include_router(workspace_router)

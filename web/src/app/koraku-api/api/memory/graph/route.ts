@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const search = req.nextUrl.search || "";
-  const url = `${backend}/api/brain/graph${search}`;
+  const url = `${backend}/api/memory/graph${search}`;
   const headers = new Headers();
   const skip = new Set([
     "connection",
