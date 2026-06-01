@@ -142,10 +142,8 @@ export default function AutomationsPage() {
   const [formTitle, setFormTitle] = useState("");
   const [formHeadline, setFormHeadline] = useState("");
   const [formSpec, setFormSpec] = useState("");
-  const [formMode, setFormMode] = useState<"scheduled" | "event">("scheduled");
   const [formTz, setFormTz] = useState("UTC");
   const [formCron, setFormCron] = useState("0 9 * * *");
-  const [formEventLabel, setFormEventLabel] = useState("");
   const [formToolkits, setFormToolkits] = useState("");
 
   const loadList = useCallback(async () => {
@@ -242,12 +240,12 @@ export default function AutomationsPage() {
     () =>
       [
         `Title: ${formTitle.trim() || "Untitled automation"}`,
-        `Trigger: ${formMode === "scheduled" ? `${formCron.trim()} (${formTz.trim()})` : formEventLabel.trim() || "event placeholder"}`,
+        `Trigger: ${formCron.trim()} (${formTz.trim()})`,
         formToolkits.trim() ? `Connected apps: ${formToolkits.trim()}` : "Connected apps: none specified",
         "",
         "Koraku will run this in the background. It should still ask for confirmation before high-impact external actions.",
       ].join("\n"),
-    [formTitle, formMode, formCron, formTz, formEventLabel, formToolkits],
+    [formTitle, formCron, formTz, formToolkits],
   );
 
   async function createAutomation() {
@@ -260,27 +258,16 @@ export default function AutomationsPage() {
         .map((s) => s.trim())
         .filter(Boolean)
         .map((s) => s.toUpperCase());
-      const body =
-        formMode === "scheduled"
-          ? {
-              title: formTitle.trim() || "Untitled automation",
-              headline: formHeadline.trim(),
-              natural_language_spec: formSpec.trim(),
-              trigger_mode: "scheduled",
-              status: "active",
-              timezone: formTz.trim(),
-              cron_expression: formCron.trim(),
-              toolkits,
-            }
-          : {
-              title: formTitle.trim() || "Untitled automation",
-              headline: formHeadline.trim(),
-              natural_language_spec: formSpec.trim(),
-              trigger_mode: "event",
-              status: "active",
-              event_display: formEventLabel.trim(),
-              toolkits,
-            };
+      const body = {
+        title: formTitle.trim() || "Untitled automation",
+        headline: formHeadline.trim(),
+        natural_language_spec: formSpec.trim(),
+        trigger_mode: "scheduled",
+        status: "active",
+        timezone: formTz.trim(),
+        cron_expression: formCron.trim(),
+        toolkits,
+      };
       const r = await fetch("/koraku-api/api/automations", {
         method: "POST",
         headers: {
@@ -420,8 +407,7 @@ export default function AutomationsPage() {
           <div className="shrink-0 border-b border-neutral-200/60 bg-neutral-50/80 px-6 py-5">
             <p className="text-sm font-semibold text-neutral-900">New automation</p>
             <p className="mt-1 max-w-2xl text-xs font-medium text-neutral-500">
-              Automations run in the background on your schedule or when an event fires. Koraku uses your connections
-              where needed.
+              Automations run in the background on a schedule you define. Koraku uses your connections where needed.
             </p>
             <div className="mt-4 flex max-w-4xl flex-wrap gap-2">
               {AUTOMATION_TEMPLATES.map((template) => (
@@ -432,7 +418,6 @@ export default function AutomationsPage() {
                     setFormTitle(template.title);
                     setFormHeadline(template.headline);
                     setFormSpec(template.spec);
-                    setFormMode("scheduled");
                     setFormCron(template.cron);
                     setFormToolkits(template.toolkits);
                   }}
@@ -472,49 +457,26 @@ export default function AutomationsPage() {
                 placeholder="Describe the steps, timing, and what “done” looks like."
               />
             </label>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Trigger</span>
-              <select
-                value={formMode}
-                onChange={(e) => setFormMode(e.target.value as "scheduled" | "event")}
-                className="rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-900"
-              >
-                <option value="scheduled">On a schedule</option>
-                <option value="event">When something happens</option>
-              </select>
-            </div>
-            {formMode === "scheduled" ? (
-              <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
-                <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Timezone
-                  <input
-                    value={formTz}
-                    onChange={(e) => setFormTz(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-                    placeholder="e.g. America/New_York"
-                  />
-                </label>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Schedule (cron)
-                  <input
-                    value={formCron}
-                    onChange={(e) => setFormCron(e.target.value)}
-                    className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-                    placeholder="minute hour day month weekday"
-                  />
-                </label>
-              </div>
-            ) : (
-              <label className="mt-3 block max-w-xl text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                How it appears in the list
+            <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Timezone
                 <input
-                  value={formEventLabel}
-                  onChange={(e) => setFormEventLabel(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-                  placeholder="e.g. New lead created"
+                  value={formTz}
+                  onChange={(e) => setFormTz(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+                  placeholder="e.g. America/New_York"
                 />
               </label>
-            )}
+              <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Schedule (cron)
+                <input
+                  value={formCron}
+                  onChange={(e) => setFormCron(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+                  placeholder="minute hour day month weekday"
+                />
+              </label>
+            </div>
             <label className="mt-3 block max-w-xl text-xs font-semibold uppercase tracking-wide text-neutral-500">
               Linked apps (optional)
               <input
@@ -673,7 +635,7 @@ export default function AutomationsPage() {
                     ) : null}
                     {selected.trigger_mode === "event" ? (
                       <p className="mt-2 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200/80">
-                        Event automations are beta placeholders unless the connected app trigger is configured server-side.
+                        Event triggers are not available yet. Use Run now or recreate this automation on a schedule.
                       </p>
                     ) : null}
                   </div>

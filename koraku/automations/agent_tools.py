@@ -8,7 +8,11 @@ from typing import Any
 from koraku.automations import async_ops, scheduler
 from koraku.automations.present import enrich_automation_row, enrich_automation_rows
 from koraku.automations.supabase_store import supabase_automations_configured
-from koraku.automations.validation import validate_cron_expression, validate_timezone_iana
+from koraku.automations.validation import (
+    EVENT_TRIGGER_UNAVAILABLE,
+    validate_cron_expression,
+    validate_timezone_iana,
+)
 from koraku.integrations.cloud_user import effective_auth_user_sub
 
 
@@ -53,9 +57,11 @@ async def _automations_create(**kwargs: Any) -> str:
     status = str(kwargs.get("status") or "active").strip()
     uid = _uid()
     tm = trigger_mode.lower()
-    if tm not in ("scheduled", "event"):
+    if tm == "event":
+        return f"Error: {EVENT_TRIGGER_UNAVAILABLE}"
+    if tm != "scheduled":
         return (
-            f"Error: trigger_mode must be 'scheduled' or 'event', got {trigger_mode!r}."
+            f"Error: trigger_mode must be 'scheduled', got {trigger_mode!r}."
         )
     st = status.lower()
     if st not in ("active", "paused"):
@@ -71,13 +77,6 @@ async def _automations_create(**kwargs: Any) -> str:
                 )
             validate_timezone_iana(tz_s)
             validate_cron_expression(cr_s)
-        else:
-            ev_s = str(event_display).strip() if event_display is not None else ""
-            if not ev_s:
-                return (
-                    "Error: event automations require event_display "
-                    "(human-readable, e.g. 'Gmail: New email')."
-                )
     except ValueError as e:
         return f"Error: {e}"
 
@@ -85,7 +84,7 @@ async def _automations_create(**kwargs: Any) -> str:
     cr_out = (
         str(cron_expression).strip() if cron_expression is not None else None
     ) or None
-    ev_out = (str(event_display).strip() if event_display is not None else None) or None
+    ev_out = None
     row = await async_ops.insert_automation(
         uid,
         title=title,
@@ -186,7 +185,7 @@ def _build_automations_list_tool():
     return Tool(
         name="AutomationsList",
         description=(
-            "List all saved Koraku automations (id, title, trigger_mode, cron/timezone or event label, "
+            "List all saved Koraku automations (id, title, trigger_mode, cron/timezone, "
             "status, toolkits). Use first to find automation_id before update/delete."
         ),
         input_schema={
@@ -206,8 +205,8 @@ def _build_automations_create_tool():
         name="AutomationsCreate",
         description=(
             "Create a saved automation shown in the Automations app. "
-            "trigger_mode 'scheduled' needs timezone (IANA) and cron_expression (5 cron fields). "
-            "trigger_mode 'event' needs event_display (e.g. 'Gmail: New email'). "
+            "Use trigger_mode 'scheduled' with timezone (IANA) and cron_expression (5 cron fields). "
+            "Event triggers are not available yet. "
             "natural_language_spec is the full user intent (what to do when the automation runs)."
         ),
         input_schema={
@@ -223,7 +222,7 @@ def _build_automations_create_tool():
                 },
                 "trigger_mode": {
                     "type": "string",
-                    "description": "Either 'scheduled' or 'event'",
+                    "description": "Must be 'scheduled' (event triggers are not available yet)",
                 },
                 "timezone": {
                     "type": "string",
@@ -235,7 +234,7 @@ def _build_automations_create_tool():
                 },
                 "event_display": {
                     "type": "string",
-                    "description": "Human trigger label; required when trigger_mode is event",
+                    "description": "Ignored; event triggers are not available yet",
                 },
                 "headline": {
                     "type": "string",

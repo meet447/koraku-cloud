@@ -7,11 +7,18 @@ import time
 from contextvars import Token
 from typing import TYPE_CHECKING, Any, Callable
 
+from koraku.agent.runtime_context import AgentRunContext
 from koraku.automations import async_ops
+from koraku.automations.run_context import prepare_automation_agent_context, reset_automation_tenant
 from koraku.core.config import settings
 from koraku.core.models import SessionState, utcnow
 from koraku.integrations import composio as composio_runtime
 from koraku.integrations.cloud_user import reset_cloud_user_id, set_cloud_user_id
+from koraku.integrations.supermemory_client import (
+    extract_last_assistant_text,
+    ingest_chat_turn_sync,
+    supermemory_configured,
+)
 from koraku.workspace.paths import workspace_dir
 
 if TYPE_CHECKING:
@@ -54,6 +61,14 @@ def _last_assistant_summary(session: SessionState, max_chars: int = 2000) -> str
     return ""
 
 
+def _normalize_toolkits(raw: Any) -> list[str]:
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [str(x).strip().upper() for x in raw if str(x).strip()]
+    return []
+
+
 async def _run_agent_session_with_timeout(
     agent: Agent,
     user_msg: str,
@@ -61,6 +76,13 @@ async def _run_agent_session_with_timeout(
     _emit: Callable[[dict[str, Any]], None],
     agent_workspace: str,
     auto: dict[str, Any],
+    *,
+    account_personalization: dict[str, str] | None = None,
+    learned_memory_section: str | None = None,
+    cloud_sandbox: Any | None = None,
+    user_id: str = "",
+    org_id: str | None = None,
+    run_id: str = "",
 ) -> str | None:
     last_error: str | None = None
 
@@ -75,6 +97,11 @@ async def _run_agent_session_with_timeout(
             client_locale=None,
             image_parts=None,
             max_steps_override=settings.automation_max_steps,
+            run_context=AgentRunContext(),
+            cloud_sandbox=cloud_sandbox,
+            account_personalization=account_personalization,
+            learned_memory_section=learned_memory_section,
+            run_id=run_id or None,
         ):
             if ev.get("type") == "agent.error":
                 d = ev.get("data") or {}
@@ -91,6 +118,19 @@ async def _run_agent_session_with_timeout(
         )
     except Exception as e:
         last_error = str(e)
+    finally:
+        if user_id and supermemory_configured():
+            assistant_text = extract_last_assistant_text(session)
+            if user_msg.strip() or assistant_text:
+                await asyncio.to_thread(
+                    ingest_chat_turn_sync,
+                    user_id,
+                    user_text=user_msg.strip(),
+                    assistant_text=assistant_text,
+                    org_id=org_id,
+                    session_id=session.session_id,
+                    run_id=run_id or None,
+                )
 
     return last_error
 
@@ -147,12 +187,21 @@ def build_automation_user_message(
     title: str,
     natural_language_spec: str,
     trigger_summary: str,
+    toolkits: list[str] | None = None,
 ) -> str:
+    tk = _normalize_toolkits(toolkits or [])
+    toolkit_line = ""
+    if tk:
+        toolkit_line = (
+            f"\n**Preferred integrations:** When you need external apps, call **ComposioRun** "
+            f"with these ACTIVE toolkit slugs where relevant: {', '.join(tk)}.\n"
+        )
     return (
         "You are executing a saved Koraku automation (automated run).\n\n"
         f"**Automation title:** {title}\n\n"
         f"**What the user wants:**\n{natural_language_spec.strip()}\n\n"
-        f"**Trigger context:**\n{trigger_summary.strip()}\n\n"
+        f"**Trigger context:**\n{trigger_summary.strip()}\n"
+        f"{toolkit_line}\n"
         "Follow the instructions completely. Prefer concrete actions (tools) when needed. "
         "End with a short summary of what you did."
     )
@@ -172,6 +221,7 @@ async def execute_automation(
     async with lock:
         cloud_tok: Token | None = None
         comp_tok: Token | None = None
+        tenant_tok: Any | None = None
         try:
             cloud_tok = set_cloud_user_id(user_id)
             comp_tok = composio_runtime.set_composio_request_user(user_id)
@@ -194,6 +244,15 @@ async def execute_automation(
                 title=auto["title"],
                 natural_language_spec=auto["natural_language_spec"],
                 trigger_summary=trigger_summary,
+                toolkits=auto.get("toolkits"),
+            )
+
+            org_id, account_p, learned, cloud_sandbox, tenant_tok = (
+                await prepare_automation_agent_context(
+                    user_id,
+                    session.session_id,
+                    spec_query=auto.get("natural_language_spec"),
+                )
             )
 
             def _emit(ev: dict[str, Any]) -> None:
@@ -202,19 +261,30 @@ async def execute_automation(
 
             t0 = time.perf_counter()
             last_error = await _run_agent_session_with_timeout(
-                agent, user_msg, session, _emit, workspace_dir(), auto
+                agent,
+                user_msg,
+                session,
+                _emit,
+                workspace_dir(),
+                auto,
+                account_personalization=account_p,
+                learned_memory_section=learned,
+                cloud_sandbox=cloud_sandbox,
+                user_id=user_id,
+                org_id=org_id,
+                run_id=run_id,
             )
 
             finished = utcnow()
             summary = _last_assistant_summary(session)
-            if summary:
+            if summary and not last_error:
                 status = "success"
                 err = None
                 res = summary
             else:
                 status = "failed"
                 err = last_error or "No assistant output captured."
-                res = None
+                res = summary or None
 
             await _finalize_automation_run(
                 user_id, automation_id, run_id, status, err, res, started, finished
@@ -237,5 +307,6 @@ async def execute_automation(
                 "result_summary": res,
             }
         finally:
+            reset_automation_tenant(tenant_tok)
             composio_runtime.reset_composio_request_user(comp_tok)
             reset_cloud_user_id(cloud_tok)

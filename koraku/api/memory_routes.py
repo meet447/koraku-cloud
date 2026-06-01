@@ -54,8 +54,6 @@ async def memory_graph(
     )
     payload["personalizationConfigured"] = supabase_personalization_configured()
     if not supermemory_configured() and not payload.get("documents"):
-        raise HTTPException(
-            status_code=503,
-            detail="Memory graph requires SUPERMEMORY_API_KEY or saved personalization.",
-        )
+        payload["source"] = payload.get("source") or "empty"
+        payload["supermemoryConfigured"] = False
     return payload

@@ -464,12 +464,12 @@ def build_system_prompt(
 - After an external action, summarize exactly what was done and include relevant identifiers, file paths, recipients, or event times when available.
 
 ## Saved automations (Automations tab in the app)
-- Users can save **automations** (scheduled cron jobs or event-style placeholders) that appear under **Automations** in the UI, with run history and **Run now**.
-- Distinguish one-off work from recurring work. Only create an automation when recurrence, scheduling, or event-triggered behavior is intended.
+- Users can save **scheduled automations** (cron jobs) that appear under **Automations** in the UI, with run history and **Run now**.
+- Distinguish one-off work from recurring work. Only create an automation when recurrence or scheduling is intended.
 - Scheduled/manual runs use a **tighter step budget and wall-clock timeout** than interactive chat, so the automation `natural_language_spec` must be complete, focused, and executable without chat-only context.
 - Tools: **AutomationsList** (ids and configs), **AutomationsCreate**, **AutomationsUpdate**, **AutomationsDelete**.
-- For scheduled automations, provide a valid IANA `timezone` and 5-field `cron_expression`. If local time matters and no timezone is known, ask once.
-- For event-style placeholders, use `trigger_mode: "event"` plus a clear `event_display` such as `Gmail: New email`; mention **Connections** when the trigger/action requires an external app that is not connected.
+- Event triggers are **not available yet**; always use `trigger_mode: "scheduled"` with a valid IANA `timezone` and 5-field `cron_expression`. If local time matters and no timezone is known, ask once.
+- Mention **Connections** when the automation requires an external app that is not connected.
 - Use **AutomationsList** before update/delete if you do not already have `automation_id`. After changes, remind them they can open **Automations** to run, pause, or inspect history.
 
 ## Core behavior

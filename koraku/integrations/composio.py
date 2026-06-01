@@ -11,8 +11,10 @@ from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import Any, Callable, Coroutine
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from koraku.core.config import settings
-from koraku.integrations.composio_curated_toolkits import CURATED_TOOLKITS
+from koraku.integrations.composio_curated_toolkits import CURATED_TOOLKITS, CURATED_TOOLKIT_SLUGS
 from koraku.tools.tool_def import Tool
 
 _TOOLKIT_SLUG_SAFE = re.compile(r"^[A-Z0-9][A-Z0-9_]{1,63}$")
@@ -28,10 +30,26 @@ _connections_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _CACHE_TTL = 15.0
 _CONNECTIONS_CACHE_MAX_SIZE = 2000
 
-_search_cache: dict[tuple[str, int], tuple[float, list[dict[str, str]]]] = {}
 _TOOLKITS_CACHE_TTL = 300.0
-_SEARCH_CACHE_MAX_SIZE = 1000
 _curated_toolkits_cache: tuple[float, list[dict[str, str]]] | None = None
+
+
+def _resolve_curated_toolkit(c: Any, meta: dict[str, str]) -> dict[str, str] | None:
+    slug = meta["slug"]
+    try:
+        tk = c.toolkits.get(slug)
+    except Exception:
+        logger.debug("Curated toolkit %s not available in Composio", slug, exc_info=True)
+        return None
+    composio_desc = ""
+    tk_meta = getattr(tk, "meta", None)
+    if tk_meta is not None:
+        composio_desc = str(getattr(tk_meta, "description", "") or "")
+    return _curated_row_from_meta(
+        dict(meta),
+        composio_name=str(getattr(tk, "name", "") or ""),
+        composio_desc=composio_desc,
+    )
 
 # Composio's toolkit listing is capped and tends to return many low-level actions first (e.g. ACL_*),
 # so high-value tools (calendar events, Gmail send/draft) never appear. Always fetch these by slug first.
@@ -222,64 +240,23 @@ def list_curated_toolkits(*, query: str = "") -> list[dict[str, str]]:
 
     c = _client()
     resolved: list[dict[str, str]] = []
-    for meta in CURATED_TOOLKITS:
-        slug = meta["slug"]
-        try:
-            tk = c.toolkits.get(slug)
-        except Exception:
-            logger.debug("Curated toolkit %s not available in Composio", slug, exc_info=True)
-            continue
-        composio_desc = ""
-        tk_meta = getattr(tk, "meta", None)
-        if tk_meta is not None:
-            composio_desc = str(getattr(tk_meta, "description", "") or "")
-        resolved.append(
-            _curated_row_from_meta(
-                dict(meta),
-                composio_name=str(getattr(tk, "name", "") or ""),
-                composio_desc=composio_desc,
-            )
-        )
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {
+            pool.submit(_resolve_curated_toolkit, c, dict(meta)): meta["slug"]
+            for meta in CURATED_TOOLKITS
+        }
+        for fut in as_completed(futures):
+            row = fut.result()
+            if row is not None:
+                resolved.append(row)
+    resolved.sort(
+        key=lambda r: CURATED_TOOLKIT_SLUGS.index(r["slug"])
+        if r["slug"] in CURATED_TOOLKIT_SLUGS
+        else 999
+    )
 
     _curated_toolkits_cache = (now, resolved)
     return _filter_curated_toolkits([dict(r) for r in resolved], query=query)
-
-
-def search_toolkits(query: str | None, *, limit: int = 48) -> list[dict[str, str]]:
-    if not is_configured():
-        return []
-
-    q = (query or "").strip()
-    lim_val = min(max(limit, 1), 50)
-    cache_key = (q, lim_val)
-    now = time.monotonic()
-
-    if cache_key in _search_cache:
-        cache_time, cached_data = _search_cache[cache_key]
-        if (now - cache_time) < _TOOLKITS_CACHE_TTL:
-            return [dict(r) for r in cached_data]
-
-    c = _client()
-    params: dict[str, Any] = {"limit": float(lim_val)}
-    if q:
-        params["search"] = q
-    items = c.toolkits.get(query=params)
-    out: list[dict[str, str]] = []
-    for it in items:
-        meta = getattr(it, "meta", None)
-        desc = ""
-        if meta is not None:
-            desc = str(getattr(meta, "description", "") or "")
-        out.append({
-            "slug": it.slug,
-            "name": it.name,
-            "description": desc[:240],
-        })
-
-    if len(_search_cache) >= _SEARCH_CACHE_MAX_SIZE:
-        _search_cache.clear()
-    _search_cache[cache_key] = (now, out)
-    return [dict(r) for r in out]
 
 
 def _normalize_input_schema(raw: dict[str, Any]) -> dict[str, Any]:
@@ -526,15 +503,23 @@ def composio_system_prompt_section() -> str:
 
 
 def composio_dispatcher_prompt_section_quick() -> str:
-    """Light Composio hint without calling the Composio API (fast path for short chat)."""
+    """Light Composio hint for quick chat — still lists ACTIVE toolkits."""
     if not is_configured():
         return ""
-    return (
-        "## Connected integrations (Composio)\n"
+    lines = [
+        "## Connected integrations (Composio)",
         "- For Gmail, Calendar, Drive, Slack, and similar tasks, call **ComposioRun** with ACTIVE "
-        "toolkit slugs and a concrete `goal`.\n"
-        "- If the user has not connected an app, suggest the **Connections** page.\n\n"
-    )
+        "toolkit slugs and a concrete `goal`.",
+        "- If the user has not connected an app, suggest the **Connections** page.",
+    ]
+    active = active_toolkit_slugs()
+    if active:
+        lines.append(f"- **ACTIVE** toolkits: {', '.join(active)}.")
+    else:
+        lines.append(
+            "- No integrations are **ACTIVE** yet. Suggest **Connections** in the app."
+        )
+    return "\n".join(lines) + "\n\n"
 
 
 def composio_dispatcher_prompt_section() -> str:

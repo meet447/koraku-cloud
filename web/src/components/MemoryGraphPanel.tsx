@@ -125,6 +125,13 @@ export default function MemoryGraphPanel({ searchQuery = "" }: MemoryGraphPanelP
       <section className="rounded-3xl border border-red-200 bg-red-50 px-6 py-8 text-center">
         <p className="text-sm font-semibold text-red-900">Could not load memory</p>
         <p className="mt-2 text-sm font-medium text-red-800">{error.message}</p>
+        <button
+          type="button"
+          onClick={() => void fetchPage(1, false)}
+          className="mt-4 rounded-full border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-900 hover:bg-red-50"
+        >
+          Retry
+        </button>
       </section>
     );
   }

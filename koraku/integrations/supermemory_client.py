@@ -1,6 +1,7 @@
 """Supermemory: learned user context (profile + search). Supabase stays explicit identity/soul."""
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 from typing import TYPE_CHECKING, Any
@@ -200,7 +201,8 @@ def save_memory_sync(
         meta["session_id"] = session_id.strip()[:64]
     custom_id: str | None = None
     if session_id and len(text) < 200:
-        custom_id = f"koraku-note-{session_id[:36]}-{abs(hash(text)) % 10_000_000}"
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+        custom_id = f"koraku-note-{session_id[:36]}-{digest}"
     try:
         c = _client()
         c.add(**_add_memory_kwargs(content=text, container_tag=tag, metadata=meta, custom_id=custom_id))

@@ -15,7 +15,11 @@ from koraku.automations import (
 )
 from koraku.automations.present import enrich_automation_row, enrich_automation_rows
 from koraku.automations.supabase_store import supabase_automations_configured
-from koraku.automations.validation import validate_cron_expression, validate_timezone_iana
+from koraku.automations.validation import (
+    EVENT_TRIGGER_UNAVAILABLE,
+    validate_cron_expression,
+    validate_timezone_iana,
+)
 from koraku.core.auth import auth_error_detail, verify_request_auth
 from koraku.core.config import settings
 from koraku.core.rate_limit import RateLimit, enforce_rate_limit, rate_limit_key
@@ -52,7 +56,7 @@ async def _release_manual_run_slot(uid: str) -> None:
 async def _automations_request_scope(
     authorization: str | None = Header(None),
 ) -> AsyncGenerator[None, None]:
-    """Require Supabase JWT and backend Supabase REST credentials; bind tenant id via ``effective_cloud_user_id``."""
+    """Require Supabase JWT and backend Supabase REST credentials; bind auth ``sub`` for row scope."""
     if not supabase_automations_configured():
         raise HTTPException(
             status_code=503,
@@ -93,6 +97,8 @@ class AutomationCreate(BaseModel):
 
     @model_validator(mode="after")
     def check_trigger_fields(self) -> "AutomationCreate":
+        if self.trigger_mode == "event":
+            raise ValueError(EVENT_TRIGGER_UNAVAILABLE)
         if self.trigger_mode == "scheduled":
             if (
                 not (self.timezone or "").strip()
@@ -103,11 +109,6 @@ class AutomationCreate(BaseModel):
                 )
             validate_timezone_iana(self.timezone or "")
             validate_cron_expression(self.cron_expression or "")
-        else:
-            if not (self.event_display or "").strip():
-                raise ValueError(
-                    "event automations require event_display (e.g. 'Gmail: New email')"
-                )
         return self
 
 

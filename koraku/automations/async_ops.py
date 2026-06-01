@@ -9,11 +9,6 @@ from koraku.automations import supabase_store
 from koraku.automations.supabase_store import AutomationStatus, TriggerMode
 
 
-async def init_db(_user_id: str) -> None:
-    """Legacy no-op (SQLite init removed)."""
-    return
-
-
 async def list_automations(user_id: str) -> list[dict[str, Any]]:
     return await asyncio.to_thread(supabase_store.list_automations, user_id)
 

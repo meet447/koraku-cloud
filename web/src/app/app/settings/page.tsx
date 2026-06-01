@@ -113,7 +113,7 @@ export default function SettingsPage() {
           <ConfirmDialog
             open={confirmDeleteOpen}
             title="Delete Koraku app data?"
-            message="This removes chat history, personalization, automations, and automation runs stored in Koraku. It does not delete your Supabase auth account or provider-side data."
+            message="This removes chat history, personalization, automations, and automation runs stored in Koraku. Learned memory in Supermemory may be retained separately and is not deleted by this action. It does not delete your Supabase auth account or provider-side data."
             confirmLabel="Delete"
             destructive
             onConfirm={() => void deleteData()}
