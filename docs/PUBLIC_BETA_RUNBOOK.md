@@ -6,7 +6,7 @@ This is the minimum operational checklist before inviting public users.
 
 - Run the Python API as a long-lived VM/container process. Automations use an in-process scheduler, so a serverless-only Python API will not run scheduled jobs reliably.
 - Keep the Python API private behind the Next.js app when possible. If it is public, set `CORS_ALLOWED_ORIGINS` to the production web origin and keep `REQUIRE_AUTH_FOR_CHAT=true`.
-- Use one Python worker for small 1 GB instances. For multiple workers, configure sticky routing for `/stream`, `/runs`, and `/runs/*` because active sessions and detached buffers are in memory.
+- Use one Python worker for small 1 GB instances. For multiple workers, set `REDIS_URL` and `SESSION_STORE_BACKEND=redis` (default). Detached runs use Redis automatically when `DETACHED_RUN_STORE_BACKEND=auto` (default); without Redis, configure sticky routing for `/runs` and `/runs/*`.
 
 ## Required production env
 
@@ -31,6 +31,6 @@ This is the minimum operational checklist before inviting public users.
 
 ## Manual recovery
 
-- Stuck detached run: ask the user to start a new chat; buffers are in-process and expire.
+- Stuck detached run: check `GET /runs/{id}/status`; buffers expire after `KORAKU_DETACHED_RUN_GC_SECONDS` (default 600). Without Redis, the subscribe worker must match the worker that started the run.
 - Failed automation: inspect the automation run row, verify required connections, then use Run now after fixing credentials or spec.
 - Account/data request: export Supabase chat, personalization, automations, automation runs, and any exposed workspace/brain files; delete those records before removing the auth user.

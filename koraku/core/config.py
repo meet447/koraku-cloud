@@ -84,6 +84,14 @@ class Settings(BaseSettings):
             "session_store_backend",
         ),
     )
+    # Detached runs: ``memory`` (single worker), ``redis`` (multi-worker), or ``auto`` (redis when REDIS_URL works).
+    detached_run_store_backend: str = Field(
+        default="auto",
+        validation_alias=AliasChoices(
+            "DETACHED_RUN_STORE_BACKEND",
+            "detached_run_store_backend",
+        ),
+    )
     chat_rate_limit_per_minute: int = Field(
         default=12,
         validation_alias=AliasChoices("CHAT_RATE_LIMIT_PER_MINUTE", "chat_rate_limit_per_minute"),
