@@ -80,6 +80,43 @@ def _wrap_stream_event(
     return _koraku_envelope_event(inner)
 
 
+def _tool_started_events(
+    state: KorakuStreamState,
+    *,
+    inner_session_id: str,
+    run_id: str,
+    tool_use_id: str,
+    tool_name: str,
+    tool_input: Any = None,
+    mode: str | None = None,
+    subagent: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Emit one ``tool_event`` ``started`` per tool_use_id (updates input if already started)."""
+    scoped_tool_use_id = (tool_use_id or "").strip()
+    tool_name = (tool_name or "tool").strip() or "tool"
+    if not scoped_tool_use_id:
+        return []
+    state.tool_calls_by_id[scoped_tool_use_id] = {
+        "tool": tool_name,
+        "input": tool_input,
+    }
+    state.started_tool_use_ids.add(scoped_tool_use_id)
+    t_args = _json_len(tool_input) > _TOOL_INPUT_TRUNC_BYTES
+    return [
+        _tool_event(
+            inner_session_id=inner_session_id,
+            run_id=run_id,
+            phase="started",
+            tool_use_id=scoped_tool_use_id,
+            tool_name=tool_name,
+            tool_input=tool_input,
+            mode=mode,
+            truncated={"args": t_args} if t_args else None,
+            subagent=subagent,
+        )
+    ]
+
+
 def _json_len(value: Any) -> int:
     try:
         return len(json.dumps(value, ensure_ascii=False, default=str))
@@ -278,6 +315,7 @@ class KorakuStreamState:
     eff_provider: str = ""
     suppressed_tool_block_indexes: set[int] = field(default_factory=set)
     tool_calls_by_id: dict[str, dict[str, Any]] = field(default_factory=dict)
+    started_tool_use_ids: set[str] = field(default_factory=set)
 
     def started_payload(self, model: str, *, chat_session_id: str | None = None) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -366,22 +404,16 @@ def map_koraku_stream_events(event: dict[str, Any], state: KorakuStreamState) ->
         tool_input = data.get("input")
         sub_payload = _composio_subagent_payload(event)
         scoped_tool_use_id = _scoped_tool_use_id(tool_use_id, sub_payload)
-        if scoped_tool_use_id:
-            state.tool_calls_by_id[scoped_tool_use_id] = {"tool": tool_name, "input": tool_input}
-        t_args = _json_len(tool_input) > _TOOL_INPUT_TRUNC_BYTES
-        return [
-            _tool_event(
-                inner_session_id=state.inner_session_id,
-                run_id=rid,
-                phase="started",
-                tool_use_id=scoped_tool_use_id,
-                tool_name=tool_name,
-                tool_input=tool_input,
-                mode=str(data.get("mode") or "") or None,
-                truncated={"args": t_args} if t_args else None,
-                subagent=sub_payload,
-            )
-        ]
+        return _tool_started_events(
+            state,
+            inner_session_id=state.inner_session_id,
+            run_id=rid,
+            tool_use_id=scoped_tool_use_id,
+            tool_name=tool_name,
+            tool_input=tool_input,
+            mode=str(data.get("mode") or "") or None,
+            subagent=sub_payload,
+        )
     if et == "agent.memory":
         return [_koraku_trace("memory", event.get("data") or {}, state.inner_session_id, rid)]
     if et == "agent.subagent":
@@ -418,10 +450,34 @@ def map_koraku_stream_events(event: dict[str, Any], state: KorakuStreamState) ->
                         "cache_read_input_tokens": int(u.get("cache_read_input_tokens") or 0),
                     },
                 })
+        if raw_type == "tool_use_pending":
+            pending = raw if isinstance(raw, dict) else {}
+            sub_payload = _composio_subagent_payload(event)
+            scoped_tool_use_id = _scoped_tool_use_id(str(pending.get("tool_use_id") or ""), sub_payload)
+            return _tool_started_events(
+                state,
+                inner_session_id=state.inner_session_id,
+                run_id=rid,
+                tool_use_id=scoped_tool_use_id,
+                tool_name=str(pending.get("name") or "tool"),
+                tool_input=pending.get("input"),
+                subagent=sub_payload,
+            )
         if raw_type == "content_block_start":
             block = raw.get("content_block")
             if isinstance(idx, int) and isinstance(block, dict) and block.get("type") == "tool_use":
                 state.suppressed_tool_block_indexes.add(idx)
+                sub_payload = _composio_subagent_payload(event)
+                scoped_tool_use_id = _scoped_tool_use_id(str(block.get("id") or ""), sub_payload)
+                out.extend(_tool_started_events(
+                    state,
+                    inner_session_id=state.inner_session_id,
+                    run_id=rid,
+                    tool_use_id=scoped_tool_use_id,
+                    tool_name=str(block.get("name") or "tool"),
+                    tool_input=block.get("input") if isinstance(block.get("input"), dict) else {},
+                    subagent=sub_payload,
+                ))
                 return out
         if raw_type == "content_block_delta":
             delta = raw.get("delta")

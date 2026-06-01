@@ -44,9 +44,26 @@ function useRotatingPhrase(): string {
 }
 
 /** Shown while the assistant stream is active for the current turn. */
-export function AgentBusyRow({ startedAtMs }: { startedAtMs: number }) {
+export function AgentBusyRow({
+  startedAtMs,
+  statusText,
+}: {
+  startedAtMs: number;
+  /** When set (e.g. "Reading file…"), shown instead of rotating generic phrases. */
+  statusText?: string;
+}) {
   const elapsed = useElapsedSince(startedAtMs);
   const phrase = useRotatingPhrase();
+  const activeLabel =
+    statusText &&
+    !statusText.includes("Reconnect") &&
+    !statusText.includes("Subscribe") &&
+    !statusText.includes("Thinking… ·") &&
+    statusText !== "Connecting…" &&
+    statusText !== "Done" &&
+    !statusText.includes(" steps")
+      ? statusText.replace(/…+$/, "")
+      : null;
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-neutral-500">
@@ -55,7 +72,9 @@ export function AgentBusyRow({ startedAtMs }: { startedAtMs: number }) {
           className="inline-flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-koraku-accent"
           aria-hidden
         />
-        <span className="text-neutral-600">{phrase}…</span>
+        <span className="text-neutral-600">
+          {activeLabel ? `${activeLabel}…` : `${phrase}…`}
+        </span>
       </span>
       <span
         className="font-mono text-xs font-semibold tabular-nums text-neutral-400"

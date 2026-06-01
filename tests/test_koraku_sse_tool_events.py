@@ -51,7 +51,7 @@ def _inner(payload: dict) -> dict:
 def test_tool_use_stream_chunks_are_not_forwarded() -> None:
     state = KorakuStreamState()
 
-    assert map_koraku_stream_events(
+    started = map_koraku_stream_events(
         {
             "type": "stream_event",
             "event": {
@@ -61,7 +61,14 @@ def test_tool_use_stream_chunks_are_not_forwarded() -> None:
             },
         },
         state,
-    ) == []
+    )
+    assert len(started) == 1
+    inner = _inner(started[0])
+    assert inner["type"] == "tool_event"
+    assert inner["phase"] == "started"
+    assert inner["tool_name"] == "WebSearch"
+    assert inner["tool_use_id"] == "t1"
+
     assert map_koraku_stream_events(
         {
             "type": "stream_event",
@@ -77,6 +84,28 @@ def test_tool_use_stream_chunks_are_not_forwarded() -> None:
         {"type": "stream_event", "event": {"type": "content_block_stop", "index": 1}},
         state,
     ) == []
+
+
+def test_tool_use_pending_emits_started_tool_event() -> None:
+    state = KorakuStreamState()
+    rows = map_koraku_stream_events(
+        {
+            "type": "stream_event",
+            "event": {
+                "type": "tool_use_pending",
+                "tool_use_id": "call_write_1",
+                "name": "Write",
+                "input": {"file_path": "notes.md"},
+            },
+        },
+        state,
+    )
+    assert len(rows) == 1
+    inner = _inner(rows[0])
+    assert inner["phase"] == "started"
+    assert inner["tool_name"] == "Write"
+    assert inner["tool_use_id"] == "call_write_1"
+    assert inner["tool_input"] == {"file_path": "notes.md"}
 
 
 def test_tool_execution_and_result_become_tool_events() -> None:

@@ -122,7 +122,10 @@ function ChatMessageRow({
         />
       ) : null}
       {busy && isLastAssistant ? (
-        <AgentBusyRow startedAtMs={m.run.streamStartedAt!} />
+        <AgentBusyRow
+          startedAtMs={m.run.streamStartedAt!}
+          statusText={m.run.statusText}
+        />
       ) : null}
       {!m.run.assistantMarkdown.trim() && !busy && isLastAssistant ? (
         <p className="mt-2 text-sm text-neutral-400">

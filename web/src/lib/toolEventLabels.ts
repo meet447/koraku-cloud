@@ -53,6 +53,8 @@ function fallbackLabel(tool: string): string {
 
 export type PagePhase = "pending" | "done" | "error";
 
+export type ToolPhase = "pending" | "done";
+
 /** Labels for WebPage / WebFetch / Firecrawl / FirecrawlMap rows (including pending). */
 export function pageToolLine(
   tool: string,
@@ -95,8 +97,18 @@ export function filePathFromToolInput(tool: string, input: unknown): string | un
 export function humanizeToolExecution(
   tool: string,
   input: unknown,
+  phase: ToolPhase = "done",
 ): { label: string; detail?: string } {
+  const pending = phase === "pending";
   if (!input || typeof input !== "object") {
+    if (pending) {
+      if (tool === "Read") return { label: "Reading file" };
+      if (tool === "Write") return { label: "Writing file" };
+      if (tool === "Edit") return { label: "Editing file" };
+      if (tool === "Bash") return { label: "Running shell command" };
+      if (tool === "WebSearch") return { label: "Searching the web" };
+      if (tool === "ComposioRun") return { label: "Running integration worker" };
+    }
     return { label: fallbackLabel(tool) };
   }
   const o = input as Record<string, unknown>;
@@ -105,14 +117,20 @@ export function humanizeToolExecution(
     case "WebSearch": {
       const q = s(o.query);
       return q
-        ? { label: "Web search", detail: trunc(q, 140) }
-        : { label: "Web search" };
+        ? {
+            label: pending ? "Searching the web" : "Web search",
+            detail: trunc(q, 140),
+          }
+        : { label: pending ? "Searching the web" : "Web search" };
     }
     case "ExaSearch": {
       const q = s(o.query);
       return q
-        ? { label: "Neural search", detail: trunc(q, 140) }
-        : { label: "Neural search" };
+        ? {
+            label: pending ? "Searching the web" : "Neural search",
+            detail: trunc(q, 140),
+          }
+        : { label: pending ? "Searching the web" : "Neural search" };
     }
     case "Glob": {
       const pattern = s(o.pattern) ?? "*";
@@ -138,26 +156,38 @@ export function humanizeToolExecution(
     case "Read": {
       const path = s(o.file_path) ?? s(o.path);
       return path
-        ? { label: "Read file", detail: trunc(path, 160) }
-        : { label: "Read file" };
+        ? {
+            label: pending ? "Reading file" : "Read file",
+            detail: trunc(path, 160),
+          }
+        : { label: pending ? "Reading file" : "Read file" };
     }
     case "Write": {
       const path = s(o.file_path) ?? s(o.path);
       return path
-        ? { label: "Writing file", detail: trunc(path, 160) }
-        : { label: "Writing file" };
+        ? {
+            label: pending ? "Writing file" : "Wrote file",
+            detail: trunc(path, 160),
+          }
+        : { label: pending ? "Writing file" : "Wrote file" };
     }
     case "Edit": {
       const path = s(o.file_path) ?? s(o.path);
       return path
-        ? { label: "Editing file", detail: trunc(path, 160) }
-        : { label: "Editing file" };
+        ? {
+            label: pending ? "Editing file" : "Edited file",
+            detail: trunc(path, 160),
+          }
+        : { label: pending ? "Editing file" : "Edited file" };
     }
     case "Bash": {
       const cmd = s(o.command);
       return cmd
-        ? { label: "Shell command", detail: trunc(cmd, 140) }
-        : { label: "Shell command" };
+        ? {
+            label: pending ? "Running shell command" : "Shell command",
+            detail: trunc(cmd, 140),
+          }
+        : { label: pending ? "Running shell command" : "Shell command" };
     }
     case "TodoWrite": {
       const todos = o.todos;

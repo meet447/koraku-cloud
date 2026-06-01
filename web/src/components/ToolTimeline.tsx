@@ -203,23 +203,36 @@ function SubagentGroup({
 function ToolLine({ row }: { row: Extract<TimelineRow, { kind: "tool" }> }) {
   const Icon = iconFor(row);
   const failed = row.ok === false;
+  const running = Boolean(row.callId);
   return (
     <div className="text-[13px] leading-snug">
       <div className="flex gap-2.5">
-        <Icon
-          className={clsx(
-            "mt-0.5 h-4 w-4 shrink-0",
-            failed ? "text-red-500" : "text-neutral-400",
-          )}
-        />
+        {running ? (
+          <span
+            className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center"
+            aria-hidden
+          >
+            <span className="inline-flex h-2 w-2 animate-pulse rounded-full bg-koraku-accent" />
+          </span>
+        ) : (
+          <Icon
+            className={clsx(
+              "mt-0.5 h-4 w-4 shrink-0",
+              failed ? "text-red-500" : "text-neutral-400",
+            )}
+          />
+        )}
         <div className="min-w-0 flex-1">
           <p
             className={clsx(
-              "font-medium text-neutral-700",
-              failed && "text-red-700",
+              "font-medium",
+              failed ? "text-red-700" : running ? "text-koraku-ink" : "text-neutral-700",
             )}
           >
-            <span>{row.label}</span>
+            <span>
+              {row.label}
+              {running ? "…" : null}
+            </span>
             {row.detail ? (
               <>
                 <br />
@@ -269,15 +282,20 @@ export function ToolTimeline({
   }, [activeThought, tick]);
 
   const nTools = toolCallCount;
+  const hasRunningTool = rows.some(
+    (row) => row.kind === "tool" && Boolean(row.callId),
+  );
   const hasTree =
     rows.length > 0 || activeThought != null || nTools > 0;
 
   if (!hasTree) return null;
 
   const header =
-    nTools > 0
-      ? `Called ${nTools} tool${nTools === 1 ? "" : "s"}`
-      : "Agent activity";
+    hasRunningTool
+      ? "Running tools"
+      : nTools > 0
+        ? `Called ${nTools} tool${nTools === 1 ? "" : "s"}`
+        : "Agent activity";
 
   const entries: { key: string; node: React.ReactNode }[] = [];
 

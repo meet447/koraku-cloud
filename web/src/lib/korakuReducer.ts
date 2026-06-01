@@ -18,7 +18,7 @@ export type TimelineRow =
       label: string;
       detail?: string;
       ok?: boolean;
-      /** Present while this row tracks an in-flight page fetch */
+      /** Present while this tool call is in-flight (page fetch or any tool). */
       callId?: string;
       /** Read / Write / Edit workspace-relative path (full, for downloads). */
       fileRelPath?: string;
@@ -445,17 +445,31 @@ function handleToolEvent(s: RunState, event: Record<string, unknown>): RunState 
   const meta = _metaFromSubagentPayload(event.subagent);
 
   if (phase === "started") {
-    const rowId = rid();
-    const line = isPageTool(tool)
+    const pendingLine = isPageTool(tool)
       ? pageToolLine(tool, input, "pending")
-      : humanizeToolExecution(tool, input);
+      : humanizeToolExecution(tool, input, "pending");
+    const existing = id ? s.pendingToolByUseId[id] : undefined;
+    if (existing) {
+      const fileRelPath = filePathFromToolInput(tool, input);
+      return {
+        ...s,
+        statusText: `${pendingLine.label}…`,
+        timeline: _mapTimelineForToolRow(s.timeline, existing.timelineRowId, (r) => ({
+          ...r,
+          label: pendingLine.label,
+          detail: pendingLine.detail ?? r.detail,
+          ...(fileRelPath ? { fileRelPath } : {}),
+        })),
+      };
+    }
+    const rowId = rid();
     const fileRelPath = filePathFromToolInput(tool, input);
     const row: TimelineRow = {
       id: rowId,
       kind: "tool",
       tool,
-      label: line.label,
-      detail: line.detail,
+      label: pendingLine.label,
+      detail: pendingLine.detail,
       ok: true,
       callId: id || undefined,
       ...(fileRelPath ? { fileRelPath } : {}),
@@ -470,7 +484,7 @@ function handleToolEvent(s: RunState, event: Record<string, unknown>): RunState 
           }
         : withRow.pendingToolByUseId,
       toolInvocations: withRow.toolInvocations + 1,
-      statusText: `${line.label}…`,
+      statusText: `${pendingLine.label}…`,
     };
   }
 
@@ -680,7 +694,7 @@ function handleStreamEvent(s: RunState, ev: Record<string, unknown>): RunState {
       return s;
     }
     if (hasToolUse && !text.trim()) {
-      return { ...next, sawToolUseThisTurn: true };
+      return { ...next, sawToolUseThisTurn: true, statusText: next.statusText || "Preparing tools…" };
     }
 
     // Intermediate react step: prose before ``tool_use`` is step status — one line, not a
@@ -872,57 +886,13 @@ export function applyKorakuSseEvent(
         return { ...next, toolsBadges: tools };
       }
       if (trace === "tool_execution") {
-        const tool = String(data.tool || "tool");
-        const input = data.input;
-        const callId = String(data.id || "");
-        const pageTools = new Set([
-          "WebPage",
-          "WebFetch",
-          "Firecrawl",
-          "FirecrawlMap",
-        ]);
-        if (callId && pageTools.has(tool)) {
-          const rowId = rid();
-          const line = pageToolLine(tool, input, "pending");
-          const pendingRow: TimelineRow = {
-            id: rowId,
-            kind: "tool",
-            tool,
-            label: line.label,
-            detail: line.detail,
-            ok: true,
-            callId,
-          };
-          const meta = _metaFromSubagentPayload(data.composio_subagent);
-          const withRow = _appendTimelineRow(next, pendingRow, meta);
-          return {
-            ...withRow,
-            pendingToolByUseId: {
-              ...withRow.pendingToolByUseId,
-              [callId]: { tool, input, timelineRowId: rowId },
-            },
-            toolInvocations: withRow.toolInvocations + 1,
-            statusText: `${tool}…`,
-          };
-        }
-        const { label, detail } = humanizeToolExecution(tool, input);
-        const fr = filePathFromToolInput(tool, input);
-        const row: TimelineRow = {
-          id: rid(),
-          kind: "tool",
-          tool,
-          label,
-          detail,
-          ok: true,
-          ...(fr ? { fileRelPath: fr } : {}),
-        };
-        const meta = _metaFromSubagentPayload(data.composio_subagent);
-        const withRow = _appendTimelineRow(next, row, meta);
-        return {
-          ...withRow,
-          toolInvocations: withRow.toolInvocations + 1,
-          statusText: `${label}…`,
-        };
+        return handleToolEvent(next, {
+          phase: "started",
+          tool_use_id: String(data.id || ""),
+          tool_name: String(data.tool || "tool"),
+          tool_input: data.input,
+          subagent: data.composio_subagent,
+        });
       }
       return next;
     }

@@ -32,6 +32,7 @@ class _OpenAIStreamHandler:
         self.message_id = ""
         self.visible_tool_filter = VisibleToolJsonFilter()
         self.native_tool_slots: dict[int, dict[str, str]] = {}
+        self.emitted_pending_tool_indexes: set[int] = set()
         self.text_block_started = False
         self.thinking_idx = 0
         self.thinking_started = False
@@ -66,6 +67,33 @@ class _OpenAIStreamHandler:
         if self.text_stream_index is None:
             self.text_stream_index = 1 if self.thinking_started else 0
         return self.text_stream_index
+
+    def _emit_pending_native_tool_events(self) -> Iterator[dict[str, Any]]:
+        """Surface tool names as soon as the provider streams native ``tool_calls`` deltas."""
+        for idx in sorted(self.native_tool_slots.keys()):
+            if idx in self.emitted_pending_tool_indexes:
+                continue
+            slot = self.native_tool_slots[idx]
+            name = (slot.get("name") or "").strip()
+            if not name:
+                continue
+            self.emitted_pending_tool_indexes.add(idx)
+            tid = (slot.get("id") or "").strip() or f"tool_{idx}"
+            raw_args = slot.get("arguments") or ""
+            tool_input: dict[str, Any] = {}
+            if raw_args.strip():
+                try:
+                    parsed = json.loads(raw_args)
+                    if isinstance(parsed, dict):
+                        tool_input = parsed
+                except json.JSONDecodeError:
+                    tool_input = {}
+            yield {
+                "type": "tool_use_pending",
+                "tool_use_id": tid,
+                "name": name,
+                "input": tool_input,
+            }
 
     def iter_text_stream(self, chunk: str) -> Iterator[dict[str, Any]]:
         if not chunk:
@@ -111,10 +139,12 @@ class _OpenAIStreamHandler:
             mtc = msg_obj.get("tool_calls")
             if isinstance(mtc, list) and mtc:
                 _accumulate_openai_tool_call_deltas(self.native_tool_slots, mtc)
+                yield from self._emit_pending_native_tool_events()
 
         raw_tcs = delta.get("tool_calls")
         if isinstance(raw_tcs, list) and raw_tcs:
             _accumulate_openai_tool_call_deltas(self.native_tool_slots, raw_tcs)
+            yield from self._emit_pending_native_tool_events()
 
         reasoning_raw = delta.get("reasoning_content")
         if not isinstance(reasoning_raw, str) or not reasoning_raw:
