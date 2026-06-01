@@ -16,6 +16,7 @@ import {
   initialRunState,
   parseKorakuEventInner,
   type RunState,
+  type TurnStreamStatus,
 } from "@/lib/korakuReducer";
 import type { ComposerImage } from "@/components/Composer";
 import type { QueuedMessagePreview } from "@/components/MessageQueueBar";
@@ -33,8 +34,6 @@ export type ChatMessage =
 /** Max agent streams open at once across all sidebar threads. */
 export const MAX_CONCURRENT_CHAT_STREAMS = 3;
 
-/** Skip the stream-start persist when the thread already has this many rows (prior turns are on server). */
-const PERSIST_SKIP_START_MESSAGE_COUNT = 28;
 const CLIENT_HISTORY_MAX_MESSAGES = 24;
 const CLIENT_HISTORY_MAX_TEXT_CHARS = 8_000;
 
@@ -118,93 +117,41 @@ function parseSseBlock(raw: string): { event: string; data: string; id?: string 
   return { event, data: dataLines.join("\n"), id };
 }
 
-const DETACHED_RUNS_LS_KEY = "koraku.detachedRuns.v1";
-
-type PendingDetachedRun = {
-  runId: string;
+type StreamingTurn = {
   threadId: string;
   assistantMsgId: string;
+  turnId: string;
   after: number;
-  /** Epoch ms when the run was started (for future UI / TTL hints). */
-  startedAt?: number;
 };
 
-function loadDetachedPending(): PendingDetachedRun[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(DETACHED_RUNS_LS_KEY);
-    if (!raw) return [];
-    const v = JSON.parse(raw) as unknown;
-    if (!Array.isArray(v)) return [];
-    return v.filter(
-      (x): x is PendingDetachedRun =>
-        !!x &&
-        typeof x === "object" &&
-        typeof (x as PendingDetachedRun).runId === "string" &&
-        typeof (x as PendingDetachedRun).threadId === "string" &&
-        typeof (x as PendingDetachedRun).assistantMsgId === "string" &&
-        typeof (x as PendingDetachedRun).after === "number" &&
-        ((x as PendingDetachedRun).startedAt === undefined ||
-          typeof (x as PendingDetachedRun).startedAt === "number"),
-    );
-  } catch {
-    return [];
-  }
-}
-
-function saveDetachedPending(list: PendingDetachedRun[]) {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(DETACHED_RUNS_LS_KEY, JSON.stringify(list));
-  } catch {
-    /* quota / private mode */
-  }
-}
-
-function addDetachedPending(p: PendingDetachedRun) {
-  const cur = loadDetachedPending().filter((x) => x.runId !== p.runId);
-  cur.push(p);
-  saveDetachedPending(cur);
-}
-
-/** Batched cursor updates: one localStorage read/write per animation frame max. */
-const detachedAfterByRunId = new Map<string, number>();
-let detachedAfterFlushRaf: number | null = null;
-
-function flushDetachedRunAfterCursorQueue() {
-  if (detachedAfterFlushRaf != null) {
-    cancelAnimationFrame(detachedAfterFlushRaf);
-    detachedAfterFlushRaf = null;
-  }
-  if (detachedAfterByRunId.size === 0) return;
-  const cur = loadDetachedPending();
-  let changed = false;
-  for (const [rid, a] of detachedAfterByRunId) {
-    const i = cur.findIndex((x) => x.runId === rid);
-    if (i !== -1) {
-      cur[i] = { ...cur[i]!, after: a };
-      changed = true;
+/** In-flight detached turns persisted on assistant rows (``streamStatus: streaming``). */
+function collectStreamingTurns(
+  sessionList: { id: string }[],
+  messagesBySession: Record<string, ChatMessage[]>,
+): StreamingTurn[] {
+  const out: StreamingTurn[] = [];
+  const seen = new Set<string>();
+  for (const s of sessionList) {
+    for (const m of messagesBySession[s.id] ?? []) {
+      if (m.role !== "assistant") continue;
+      if (m.run.streamStatus !== "streaming") continue;
+      const turnId = (m.run.turnId || m.run.runId || m.id).trim();
+      if (!turnId || seen.has(turnId)) continue;
+      seen.add(turnId);
+      out.push({
+        threadId: s.id,
+        assistantMsgId: m.id,
+        turnId,
+        after: typeof m.run.sseAfter === "number" ? m.run.sseAfter : -1,
+      });
     }
   }
-  detachedAfterByRunId.clear();
-  if (changed) saveDetachedPending(cur);
+  return out;
 }
 
-function queueDetachedRunAfterCursor(runId: string, after: number) {
-  detachedAfterByRunId.set(runId, after);
-  if (detachedAfterFlushRaf != null) return;
-  detachedAfterFlushRaf = requestAnimationFrame(() => {
-    detachedAfterFlushRaf = null;
-    flushDetachedRunAfterCursorQueue();
-  });
-}
-
-function removeDetachedPendingRunId(runId: string) {
-  saveDetachedPending(loadDetachedPending().filter((x) => x.runId !== runId));
-}
-
-function removeDetachedPendingForThread(threadId: string) {
-  saveDetachedPending(loadDetachedPending().filter((x) => x.threadId !== threadId));
+function finalizeTurnStreamStatus(error: string | null, completed: boolean): TurnStreamStatus {
+  if (!completed) return "streaming";
+  return error?.trim() ? "failed" : "completed";
 }
 
 /** Read SSE chunks from a detached-run subscribe response and apply Koraku payloads. */
@@ -221,6 +168,7 @@ async function ingestKorakuSseFromReader(
       assistantMessageId: string,
       updater: (r: RunState) => RunState,
     ) => void;
+    onSseAfter?: (after: number) => void;
   },
 ): Promise<boolean> {
   const decoder = new TextDecoder();
@@ -233,6 +181,7 @@ async function ingestKorakuSseFromReader(
     serverChatSessionRef,
     setServerChatSessionByUi,
     updateAssistantRun,
+    onSseAfter,
   } = opts;
 
   while (true) {
@@ -264,7 +213,7 @@ async function ingestKorakuSseFromReader(
       }
       if (event === "ping") continue;
       if (runId && id && /^\d+$/.test(id)) {
-        queueDetachedRunAfterCursor(runId, Number(id));
+        onSseAfter?.(Number(id));
       }
       if (!data) continue;
       try {
@@ -291,11 +240,9 @@ async function ingestKorakuSseFromReader(
       );
     }
     if (sawStreamDone) {
-      flushDetachedRunAfterCursorQueue();
       return true;
     }
   }
-  flushDetachedRunAfterCursorQueue();
   return sawDoneEvent;
 }
 
@@ -373,6 +320,14 @@ function deserializeRunState(raw: unknown): RunState {
         ? o.assistantBubbleMode
         : b.assistantBubbleMode,
     stepCaption: typeof o.stepCaption === "string" ? o.stepCaption : b.stepCaption,
+    turnId: typeof o.turnId === "string" ? o.turnId : b.turnId,
+    streamStatus:
+      o.streamStatus === "streaming" ||
+      o.streamStatus === "completed" ||
+      o.streamStatus === "failed"
+        ? o.streamStatus
+        : b.streamStatus,
+    sseAfter: typeof o.sseAfter === "number" ? o.sseAfter : b.sseAfter,
   };
 }
 
@@ -407,15 +362,23 @@ function apiRowToChatMessage(row: {
       c && typeof c === "object" && "run" in (c as object)
         ? (c as { run: unknown }).run
         : c;
-    return { id: row.id, role: "assistant", run: deserializeRunState(runRaw) };
+    const run = deserializeRunState(runRaw);
+    if (!run.turnId) {
+      run.turnId = run.runId || row.id;
+    }
+    if (!run.runId && run.turnId) {
+      run.runId = run.turnId;
+    }
+    return { id: row.id, role: "assistant", run };
   }
   return null;
 }
 
-/** Omit in-flight assistant placeholders so refresh does not show an empty reply. */
+/** Omit empty completed assistant rows; keep in-flight turns for DB resume. */
 function messagesReadyToPersist(msgs: ChatMessage[]): ChatMessage[] {
   return msgs.filter((m) => {
     if (m.role !== "assistant") return true;
+    if (m.run.streamStatus === "streaming") return true;
     return Boolean(m.run.assistantMarkdown.trim() || m.run.error?.trim());
   });
 }
@@ -498,6 +461,8 @@ export function useKorakuChat() {
   const newChatInFlightRef = useRef(false);
   /** Dedupe detached-run resume side-effects (Strict Mode / re-renders). */
   const detachResumeStartedRef = useRef<Set<string>>(new Set());
+  const persistDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const resumeStreamingTurnsRef = useRef<() => void>(() => {});
 
   const messages = messagesBySession[activeId] ?? EMPTY_THREAD_MESSAGES;
   const busy = streamingSessionIds.includes(activeId);
@@ -583,24 +548,14 @@ export function useKorakuChat() {
         if (cancelled) return;
         persistenceEnabledRef.current = true;
         const sessList = list.map((t) => ({ id: t.id, title: t.title || "New chat" }));
+        const msgMap: Record<string, ChatMessage[]> = Object.fromEntries(
+          sessList.map((s) => [s.id, [] as ChatMessage[]]),
+        );
         let focusId = sessList[0]!.id;
-        const pendingDetached =
-          typeof window !== "undefined" ? loadDetachedPending() : [];
-        if (pendingDetached.length > 0) {
-          const latest = pendingDetached.reduce((a, b) =>
-            (a.startedAt ?? 0) >= (b.startedAt ?? 0) ? a : b,
-          );
-          if (sessList.some((s) => s.id === latest.threadId)) {
-            focusId = latest.threadId;
-          }
-        }
         for (const s of sessList) {
           serverChatSessionRef.current[s.id] = s.id;
         }
         setServerChatSessionByUi(Object.fromEntries(sessList.map((s) => [s.id, s.id])));
-        const msgMap: Record<string, ChatMessage[]> = Object.fromEntries(
-          sessList.map((s) => [s.id, [] as ChatMessage[]]),
-        );
         const mr = await fetch(`/api/chat/threads/${focusId}/messages`, {
           credentials: "include",
         });
@@ -612,6 +567,26 @@ export function useKorakuChat() {
           msgMap[focusId] = (mp.messages ?? [])
             .map(apiRowToChatMessage)
             .filter((m): m is ChatMessage => m != null);
+        }
+        const streaming = collectStreamingTurns(sessList, msgMap);
+        if (streaming.length > 0) {
+          const latest = streaming.reduce((a, b) =>
+            a.after >= b.after ? a : b,
+          );
+          focusId = latest.threadId;
+          if (focusId !== sessList[0]!.id && msgMap[focusId]?.length === 0) {
+            const mr2 = await fetch(`/api/chat/threads/${focusId}/messages`, {
+              credentials: "include",
+            });
+            if (!cancelled && mr2.ok) {
+              const mp2 = (await mr2.json()) as {
+                messages?: { id: string; role: string; contentJson: unknown }[];
+              };
+              msgMap[focusId] = (mp2.messages ?? [])
+                .map(apiRowToChatMessage)
+                .filter((m): m is ChatMessage => m != null);
+            }
+          }
         }
         messagesLoadedForThreadRef.current = new Set([focusId]);
         setSessions(sessList);
@@ -687,6 +662,19 @@ export function useKorakuChat() {
     }
   }, []);
 
+  const schedulePersistThread = useCallback(
+    (threadId: string, delayMs = 400) => {
+      if (!persistenceEnabledRef.current) return;
+      const prev = persistDebounceRef.current[threadId];
+      if (prev) clearTimeout(prev);
+      persistDebounceRef.current[threadId] = setTimeout(() => {
+        delete persistDebounceRef.current[threadId];
+        void persistThreadToServer(threadId);
+      }, delayMs);
+    },
+    [persistThreadToServer],
+  );
+
   const syncQueueUi = useCallback((sid: string) => {
     const q = queuesRef.current[sid] ?? [];
     if (sid === activeIdRef.current) {
@@ -737,7 +725,13 @@ export function useKorakuChat() {
         (job.dropdownModelLabel || "").trim() || (job.model || "").trim() || "";
 
       const userMsgId = uid();
-      const assistantMsgId = uid();
+      const turnId = uid();
+      const assistantMsgId = turnId;
+      const useDetached = shouldUseDetachedStreamingForPayload(
+        trimmed.length,
+        imgs.length,
+        persistenceEnabledRef.current,
+      );
       const userImages =
         imgs.length > 0
           ? imgs.map((i) => ({
@@ -757,6 +751,10 @@ export function useKorakuChat() {
             role: "assistant",
             run: {
               ...initialRunState(),
+              turnId,
+              runId: turnId,
+              streamStatus: useDetached ? "streaming" : "",
+              sseAfter: -1,
               dropdownModelLabel: label,
               streamStartedAt: Date.now(),
             },
@@ -812,17 +810,17 @@ export function useKorakuChat() {
       const clientHistory = chatMessagesToClientHistory(priorMessages);
       if (clientHistory.length > 0) body.client_history = clientHistory;
       if (serverSid) body.session_id = serverSid;
+      if (useDetached) body.turn_id = turnId;
 
       void (async () => {
-        let detachedRunId: string | null = null;
+        let detachedRunId: string | null = useDetached ? turnId : null;
         let sawDone = false;
         try {
-          setTimeout(() => {
-            const n = messagesBySessionRef.current[sid]?.length ?? 0;
-            if (n <= PERSIST_SKIP_START_MESSAGE_COUNT) {
+          if (persistenceEnabledRef.current) {
+            setTimeout(() => {
               void persistThreadToServer(sid);
-            }
-          }, 0);
+            }, 0);
+          }
 
           const authHeaders: Record<string, string> = {};
           try {
@@ -836,13 +834,7 @@ export function useKorakuChat() {
           }
 
           let streamRes: Response;
-          if (
-            shouldUseDetachedStreamingForPayload(
-              trimmed.length,
-              imgs.length,
-              persistenceEnabledRef.current,
-            )
-          ) {
+          if (useDetached) {
             const startRes = await fetch("/koraku-api/runs", {
               method: "POST",
               headers: {
@@ -876,14 +868,12 @@ export function useKorakuChat() {
             }
 
             detachedRunId = runId;
-            if (persistenceEnabledRef.current) {
-              addDetachedPending({
+            if (runId !== turnId) {
+              updateAssistantRun(sid, assistantMsgId, (r) => ({
+                ...r,
+                turnId,
                 runId,
-                threadId: sid,
-                assistantMsgId,
-                after: -1,
-                startedAt: Date.now(),
-              });
+              }));
             }
 
             streamRes = await fetch(
@@ -946,6 +936,14 @@ export function useKorakuChat() {
             serverChatSessionRef,
             setServerChatSessionByUi,
             updateAssistantRun,
+            onSseAfter: detachedRunId
+              ? (after) => {
+                  updateAssistantRun(sid, assistantMsgId, (r) =>
+                    r.sseAfter === after ? r : { ...r, sseAfter: after },
+                  );
+                  schedulePersistThread(sid);
+                }
+              : undefined,
           });
         } catch (e) {
           if ((e as Error)?.name === "AbortError") return;
@@ -955,9 +953,13 @@ export function useKorakuChat() {
             statusText: "Connection error",
           }));
         } finally {
-          flushDetachedRunAfterCursorQueue();
-          if (detachedRunId && sawDone) {
-            removeDetachedPendingRunId(detachedRunId);
+          if (detachedRunId) {
+            updateAssistantRun(sid, assistantMsgId, (r) => ({
+              ...r,
+              streamStatus: sawDone
+                ? finalizeTurnStreamStatus(r.error, true)
+                : r.streamStatus,
+            }));
           }
           if (abortBySessionRef.current[sid] === controller) {
             delete abortBySessionRef.current[sid];
@@ -984,6 +986,7 @@ export function useKorakuChat() {
       markStreamEnd,
       markStreamStart,
       persistThreadToServer,
+      schedulePersistThread,
       syncQueueUi,
       updateAssistantRun,
     ],
@@ -992,21 +995,22 @@ export function useKorakuChat() {
   runOutboundJobRef.current = runOutboundJob;
   tryDrainGlobalQueueRef.current = tryDrainGlobalQueue;
 
-  useEffect(() => {
+  const resumeStreamingTurns = useCallback(() => {
     if (!hydrated || typeof window === "undefined") return;
     if (!persistenceEnabledRef.current) return;
-    const sessionIds = new Set(sessions.map((s) => s.id));
-    const pending = loadDetachedPending();
+
+    const sessionIds = new Set(sessionsRef.current.map((s) => s.id));
+    const pending = collectStreamingTurns(
+      sessionsRef.current,
+      messagesBySessionRef.current,
+    );
 
     for (const p of pending) {
-      if (!sessionIds.has(p.threadId)) {
-        removeDetachedPendingRunId(p.runId);
-        continue;
-      }
-      if (detachResumeStartedRef.current.has(p.runId)) continue;
+      if (!sessionIds.has(p.threadId)) continue;
+      if (detachResumeStartedRef.current.has(p.turnId)) continue;
       if (streamingSidsRef.current.has(p.threadId)) continue;
 
-      detachResumeStartedRef.current.add(p.runId);
+      detachResumeStartedRef.current.add(p.turnId);
       if (activeIdRef.current !== p.threadId) {
         setActiveId(p.threadId);
       }
@@ -1016,40 +1020,28 @@ export function useKorakuChat() {
         let controller: AbortController | null = null;
         let sawDone = false;
         try {
-          let msgs = messagesBySessionRef.current[p.threadId] ?? [];
-          if (!msgs.some((m) => m.id === p.assistantMsgId)) {
+          if (!messagesBySessionRef.current[p.threadId]?.some((m) => m.id === p.assistantMsgId)) {
             try {
               const mr = await fetch(`/api/chat/threads/${p.threadId}/messages`, {
                 credentials: "include",
               });
               if (!mr.ok) {
-                removeDetachedPendingRunId(p.runId);
+                updateAssistantRun(p.threadId, p.assistantMsgId, (r) => ({
+                  ...r,
+                  streamStatus: "failed",
+                  error: r.error || "Could not load thread for resume",
+                }));
                 return;
               }
               const mp = (await mr.json()) as {
                 messages?: { id: string; role: string; contentJson: unknown }[];
               };
-              let list = (mp.messages ?? [])
+              const list = (mp.messages ?? [])
                 .map(apiRowToChatMessage)
                 .filter((m): m is ChatMessage => m != null);
-              if (!list.some((m) => m.id === p.assistantMsgId)) {
-                list = [
-                  ...list,
-                  {
-                    id: p.assistantMsgId,
-                    role: "assistant" as const,
-                    run: {
-                      ...initialRunState(),
-                      streamStartedAt: p.startedAt ?? Date.now(),
-                    },
-                  },
-                ];
-              }
               setMessagesBySession((prev) => ({ ...prev, [p.threadId]: list }));
               messagesLoadedForThreadRef.current.add(p.threadId);
-              msgs = list;
             } catch {
-              removeDetachedPendingRunId(p.runId);
               return;
             }
           }
@@ -1074,10 +1066,11 @@ export function useKorakuChat() {
             ...r,
             statusText: "Reconnecting…",
             error: null,
+            streamStatus: "streaming",
           }));
 
           const streamRes = await fetch(
-            `/koraku-api/runs/${encodeURIComponent(p.runId)}/stream?after=${encodeURIComponent(String(p.after))}`,
+            `/koraku-api/runs/${encodeURIComponent(p.turnId)}/stream?after=${encodeURIComponent(String(p.after))}`,
             {
               method: "GET",
               headers: { Accept: "text/event-stream", ...authHeaders },
@@ -1088,13 +1081,14 @@ export function useKorakuChat() {
           if (!streamRes.ok) {
             let extra = "";
             if (streamRes.status === 404) {
-              const st = await fetchDetachedRunStatusJson(p.runId, authHeaders);
+              const st = await fetchDetachedRunStatusJson(p.turnId, authHeaders);
               if (st?.state === "not_found" && st.hint) {
                 extra = ` ${st.hint}`;
               }
             }
             updateAssistantRun(p.threadId, p.assistantMsgId, (r) => ({
               ...r,
+              streamStatus: "failed",
               error:
                 r.error ||
                 `Reconnect HTTP ${streamRes.status}${extra}`.trim(),
@@ -1107,6 +1101,7 @@ export function useKorakuChat() {
           if (!reader) {
             updateAssistantRun(p.threadId, p.assistantMsgId, (r) => ({
               ...r,
+              streamStatus: "failed",
               error: r.error || "No response body",
               statusText: "Stream error",
             }));
@@ -1116,25 +1111,34 @@ export function useKorakuChat() {
           sawDone = await ingestKorakuSseFromReader(reader, {
             sessionId: p.threadId,
             assistantMsgId: p.assistantMsgId,
-            runId: p.runId,
+            runId: p.turnId,
             serverChatSessionRef,
             setServerChatSessionByUi,
             updateAssistantRun,
+            onSseAfter: (after) => {
+              updateAssistantRun(p.threadId, p.assistantMsgId, (r) =>
+                r.sseAfter === after ? r : { ...r, sseAfter: after },
+              );
+              schedulePersistThread(p.threadId);
+            },
           });
         } catch (e) {
           if ((e as Error)?.name !== "AbortError") {
             updateAssistantRun(p.threadId, p.assistantMsgId, (r) => ({
               ...r,
+              streamStatus: "failed",
               error: r.error || String((e as Error)?.message || e),
               statusText: "Reconnect error",
             }));
           }
         } finally {
-          flushDetachedRunAfterCursorQueue();
-          if (sawDone) {
-            removeDetachedPendingRunId(p.runId);
-          }
-          detachResumeStartedRef.current.delete(p.runId);
+          updateAssistantRun(p.threadId, p.assistantMsgId, (r) => ({
+            ...r,
+            streamStatus: sawDone
+              ? finalizeTurnStreamStatus(r.error, true)
+              : r.streamStatus,
+          }));
+          detachResumeStartedRef.current.delete(p.turnId);
           if (streamMarked) {
             if (controller && abortBySessionRef.current[p.threadId] === controller) {
               delete abortBySessionRef.current[p.threadId];
@@ -1148,13 +1152,23 @@ export function useKorakuChat() {
         }
       })();
     }
+  }, [
+    hydrated,
+    markStreamEnd,
+    markStreamStart,
+    persistThreadToServer,
+    schedulePersistThread,
+    updateAssistantRun,
+  ]);
 
+  resumeStreamingTurnsRef.current = resumeStreamingTurns;
+
+  useEffect(() => {
+    resumeStreamingTurns();
     return () => {
-      for (const p of pending) {
-        detachResumeStartedRef.current.delete(p.runId);
-      }
+      detachResumeStartedRef.current.clear();
     };
-  }, [hydrated, sessions, markStreamEnd, markStreamStart, persistThreadToServer, updateAssistantRun]);
+  }, [hydrated, sessions, resumeStreamingTurns]);
 
   const send = useCallback(
     (
@@ -1258,7 +1272,10 @@ export function useKorakuChat() {
     setQueuedMessages(q.map((j) => ({ id: j.id, text: jobPreviewText(j) })));
 
     if (!persistenceEnabledRef.current) return;
-    if (messagesLoadedForThreadRef.current.has(id)) return;
+    if (messagesLoadedForThreadRef.current.has(id)) {
+      setTimeout(() => resumeStreamingTurnsRef.current(), 0);
+      return;
+    }
     if (messagesLoadInflightRef.current.has(id)) return;
     messagesLoadInflightRef.current.add(id);
     setMessagesLoadingSessionIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
@@ -1277,8 +1294,13 @@ export function useKorakuChat() {
         const list = (body.messages ?? [])
           .map(apiRowToChatMessage)
           .filter((m): m is ChatMessage => m != null);
-        setMessagesBySession((prev) => ({ ...prev, [id]: list }));
+        setMessagesBySession((prev) => {
+          const next = { ...prev, [id]: list };
+          messagesBySessionRef.current = next;
+          return next;
+        });
         messagesLoadedForThreadRef.current.add(id);
+        setTimeout(() => resumeStreamingTurnsRef.current(), 0);
       } catch {
         /* not marked loaded */
       } finally {
@@ -1305,7 +1327,6 @@ export function useKorakuChat() {
         delete queuesRef.current[id];
         delete serverChatSessionRef.current[id];
         messagesLoadedForThreadRef.current.delete(id);
-        removeDetachedPendingForThread(id);
 
         if (persistenceEnabledRef.current) {
           try {

@@ -38,11 +38,23 @@ export type TimelineRow =
 /** Composio integration worker stream (nested under a ``ComposioRun`` tool). */
 export type ComposioSubagentMeta = { composio: true; toolkits: string[] };
 
+/** Persisted turn lifecycle for detached-run resume (stored in Supabase ``content_json.run``). */
+export type TurnStreamStatus = "" | "streaming" | "completed" | "failed";
+
 export type RunState = {
   /** Client epoch ms when this assistant turn began (stable across sidebar remounts). */
   streamStartedAt: number | null;
-  /** Per-turn server run id from ``koraku.started`` (optional; for logs / support). */
+  /**
+   * Canonical turn id — client UUID, sent as ``turn_id`` / detached ``run_id``.
+   * Same value as ``runId`` once the stream starts.
+   */
+  turnId: string;
+  /** Per-turn server run id from ``koraku.started`` (mirrors ``turnId`` for detached runs). */
   runId: string;
+  /** ``streaming`` while detached run is active; persisted for cross-device resume. */
+  streamStatus: TurnStreamStatus;
+  /** Last detached SSE ``id`` seen (resume cursor); -1 before first event. */
+  sseAfter: number;
   statusText: string;
   error: string | null;
   assistantMarkdown: string;
@@ -87,7 +99,10 @@ function rid(): string {
 export function initialRunState(): RunState {
   return {
     streamStartedAt: null,
+    turnId: "",
     runId: "",
+    streamStatus: "",
+    sseAfter: -1,
     statusText: "",
     error: null,
     assistantMarkdown: "",
@@ -740,7 +755,7 @@ export function applyKorakuSseEvent(
       sawToolUseThisTurn: false,
       assistantBubbleMode: "final",
       stepCaption: null,
-      ...(rid ? { runId: rid } : {}),
+      ...(rid ? { runId: rid, turnId: next.turnId || rid } : {}),
       ...(d && typeof d.model === "string"
         ? { metaModel: d.model, statusText: "Connecting…" }
         : {}),

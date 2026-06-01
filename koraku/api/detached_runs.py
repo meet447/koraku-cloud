@@ -38,6 +38,17 @@ router = APIRouter(tags=["chat"])
 _DETACHED_GC_SEC = detached_gc_seconds()
 
 
+def _resolve_run_id(raw_turn_id: str) -> str:
+    """Use client ``turn_id`` as detached ``run_id`` when provided (production resume key)."""
+    tid = (raw_turn_id or "").strip()
+    if not tid:
+        return str(uuid.uuid4())
+    try:
+        return str(uuid.UUID(tid))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="turn_id must be a valid UUID") from e
+
+
 async def _schedule_gc(run_id: str, owner_org_id: str | None) -> None:
     await asyncio.sleep(_DETACHED_GC_SEC)
     await get_detached_run_store().drop(run_id, owner_org_id=owner_org_id)
@@ -115,8 +126,16 @@ async def start_detached_run(body: StreamChatBody, request: Request) -> JSONResp
 
     agent = getattr(request.app.state, "koraku_agent", None)
     server_mode = getattr(request.app.state, "server_mode", "unconfigured")
-    run_id = str(uuid.uuid4())
+    run_id = _resolve_run_id(body.turn_id)
     store = get_detached_run_store()
+    existing = await store.get(run_id, owner_org_id=auth_org_id)
+    if existing is not None:
+        if not existing.allows(auth_sub, auth_org_id):
+            if existing.owner_sub and auth_sub is None:
+                raise HTTPException(status_code=401, detail="Authorization required for this run.")
+            raise HTTPException(status_code=403, detail="This run belongs to another user")
+        return JSONResponse({"run_id": run_id})
+
     await store.register(run_id, owner_sub=auth_sub, owner_org_id=auth_org_id)
 
     asyncio.create_task(

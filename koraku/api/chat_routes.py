@@ -5,6 +5,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import uuid
 from contextvars import Token
 from typing import TYPE_CHECKING, Any, AsyncIterator, Literal
 
@@ -91,11 +92,19 @@ class StreamChatBody(BaseModel):
     client_locale: str | None = None
     images: list[StreamImagePart] = Field(default_factory=list, max_length=8)
     client_history: list[StreamClientHistoryMessage] = Field(default_factory=list, max_length=40)
+    # Client turn UUID; when set on ``POST /runs`` it becomes the detached ``run_id`` (idempotent resume).
+    turn_id: str = Field(default="", max_length=64)
 
     @model_validator(mode="after")
     def msg_or_images(self) -> "StreamChatBody":
         if not (self.msg.strip() or self.images):
             raise ValueError("Provide a non-empty message and/or at least one image")
+        tid = (self.turn_id or "").strip()
+        if tid:
+            try:
+                uuid.UUID(tid)
+            except ValueError as e:
+                raise ValueError("turn_id must be a valid UUID") from e
         return self
 
 
