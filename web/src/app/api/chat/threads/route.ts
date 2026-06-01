@@ -61,15 +61,25 @@ export async function POST(req: Request) {
   }
 
   let title = "New chat";
+  let id = crypto.randomUUID();
   try {
-    const body = (await req.json()) as { title?: string };
+    const body = (await req.json()) as { title?: string; id?: string };
+    if (typeof body.id === "string") {
+      const candidate = body.id.trim();
+      if (
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          candidate,
+        )
+      ) {
+        id = candidate;
+      }
+    }
     if (typeof body.title === "string" && body.title.trim()) {
       title = body.title.trim().slice(0, 200);
     }
   } catch {
     /* ignore empty body */
   }
-  const id = crypto.randomUUID();
 
   const { data, error } = await supabase
     .from("chat_thread")

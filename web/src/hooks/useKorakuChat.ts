@@ -104,6 +104,23 @@ function uid(): string {
   return crypto.randomUUID();
 }
 
+function isDefaultChatTitle(title: string): boolean {
+  const t = title.trim();
+  return !t || t === "New chat";
+}
+
+function isEmptyUnusedSession(
+  sid: string,
+  sessions: ChatSession[],
+  messagesBySession: Record<string, ChatMessage[]>,
+  streaming: ReadonlySet<string>,
+): boolean {
+  if (!sid || streaming.has(sid)) return false;
+  if ((messagesBySession[sid] ?? []).length > 0) return false;
+  const row = sessions.find((x) => x.id === sid);
+  return isDefaultChatTitle(row?.title ?? "");
+}
+
 function parseSseBlock(raw: string): { event: string; data: string; id?: string } {
   let event = "message";
   let id: string | undefined;
@@ -473,6 +490,8 @@ export function useKorakuChat() {
   const runOutboundJobRef = useRef<(sid: string, job: OutboundJob) => void>(() => {});
   const tryDrainGlobalQueueRef = useRef<() => void>(() => {});
   const newChatInFlightRef = useRef(false);
+  /** UI-only chats until the user sends the first message (no ``chat_thread`` row yet). */
+  const draftSessionIdsRef = useRef<Set<string>>(new Set());
   /** Dedupe detached-run resume side-effects (Strict Mode / re-renders). */
   const detachResumeStartedRef = useRef<Set<string>>(new Set());
   const persistDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -539,25 +558,15 @@ export function useKorakuChat() {
         const payload = (await tr.json()) as { threads?: { id: string; title: string }[] };
         let list = payload.threads ?? [];
         if (list.length === 0) {
-          const cr = await fetch("/api/chat/threads", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: "{}",
-          });
-          if (cancelled) return;
-          if (!cr.ok) {
-            const id = uid();
-            persistenceEnabledRef.current = false;
-            setSessions([{ id, title: "New chat" }]);
-            setActiveId(id);
-            setMessagesBySession({ [id]: [] });
-            messagesLoadedForThreadRef.current = new Set([id]);
-            setHydrated(true);
-            return;
-          }
-          const row = (await cr.json()) as { id: string; title: string };
-          list = [{ id: row.id, title: row.title }];
+          const id = uid();
+          draftSessionIdsRef.current.add(id);
+          persistenceEnabledRef.current = true;
+          setSessions([{ id, title: "New chat" }]);
+          setActiveId(id);
+          setMessagesBySession({ [id]: [] });
+          messagesLoadedForThreadRef.current = new Set([id]);
+          setHydrated(true);
+          return;
         }
         if (cancelled) return;
         persistenceEnabledRef.current = true;
@@ -679,6 +688,7 @@ export function useKorakuChat() {
   const schedulePersistThread = useCallback(
     (threadId: string, delayMs = 400) => {
       if (!persistenceEnabledRef.current) return;
+      if (draftSessionIdsRef.current.has(threadId)) return;
       const prev = persistDebounceRef.current[threadId];
       if (prev) clearTimeout(prev);
       persistDebounceRef.current[threadId] = setTimeout(() => {
@@ -688,6 +698,65 @@ export function useKorakuChat() {
     },
     [persistThreadToServer],
   );
+
+  const discardEmptySession = useCallback(async (sid: string) => {
+    if (
+      !isEmptyUnusedSession(
+        sid,
+        sessionsRef.current,
+        messagesBySessionRef.current,
+        streamingSidsRef.current,
+      )
+    ) {
+      return;
+    }
+
+    const isDraft = draftSessionIdsRef.current.has(sid);
+    if (isDraft) {
+      draftSessionIdsRef.current.delete(sid);
+    } else if (persistenceEnabledRef.current) {
+      try {
+        await fetch(`/api/chat/threads/${encodeURIComponent(sid)}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
+      } catch {
+        /* still remove locally */
+      }
+      delete serverChatSessionRef.current[sid];
+      setServerChatSessionByUi((prev) => {
+        if (!prev[sid]) return prev;
+        const next = { ...prev };
+        delete next[sid];
+        return next;
+      });
+    }
+
+    messagesLoadedForThreadRef.current.delete(sid);
+    delete queuesRef.current[sid];
+    setSessions((s) => {
+      const next = s.filter((x) => x.id !== sid);
+      if (activeIdRef.current === sid && next.length > 0) {
+        const fallbackId = next[0]!.id;
+        setActiveId(fallbackId);
+        const q = queuesRef.current[fallbackId] ?? [];
+        setQueuedMessages(q.map((j) => ({ id: j.id, text: jobPreviewText(j) })));
+      }
+      return next;
+    });
+    setMessagesBySession((m) => {
+      if (!m[sid]) return m;
+      const next = { ...m };
+      delete next[sid];
+      return next;
+    });
+  }, []);
+
+  const discardEmptyActiveSession = useCallback(async () => {
+    const sid = activeIdRef.current;
+    if (!sid) return;
+    await discardEmptySession(sid);
+  }, [discardEmptySession]);
 
   const syncQueueUi = useCallback((sid: string) => {
     const q = queuesRef.current[sid] ?? [];
@@ -729,108 +798,126 @@ export function useKorakuChat() {
 
   const runOutboundJob = useCallback(
     (sid: string, job: OutboundJob) => {
-      if (streamingSidsRef.current.has(sid)) return;
-      if (streamingSidsRef.current.size >= MAX_CONCURRENT_CHAT_STREAMS) return;
-
-      const trimmed = job.text.trim();
-      const imgs = job.images.filter((i) => i.data.length > 0);
-      const priorMessages = messagesBySessionRef.current[sid] ?? [];
-      const label =
-        (job.dropdownModelLabel || "").trim() || (job.model || "").trim() || "";
-
-      const userMsgId = uid();
-      const turnId = uid();
-      const assistantMsgId = turnId;
-      const useDetached = shouldUseDetachedStreamingForPayload(
-        trimmed.length,
-        imgs.length,
-        persistenceEnabledRef.current,
-      );
-      const userImages =
-        imgs.length > 0
-          ? imgs.map((i) => ({
-              id: i.id,
-              previewUrl: `data:${i.media_type};base64,${i.data}`,
-            }))
-          : undefined;
-
-      markStreamStart(sid);
-
-      setMessagesBySession((prev) => {
-        const nextList: ChatMessage[] = [
-          ...(prev[sid] ?? []),
-          { id: userMsgId, role: "user", text: trimmed, images: userImages },
-          {
-            id: assistantMsgId,
-            role: "assistant",
-            run: {
-              ...initialRunState(),
-              turnId,
-              runId: turnId,
-              streamStatus: useDetached ? "streaming" : "",
-              sseAfter: -1,
-              dropdownModelLabel: label,
-              streamStartedAt: Date.now(),
-            },
-          },
-        ];
-        const next = { ...prev, [sid]: nextList };
-        messagesBySessionRef.current = next;
-        return next;
-      });
-
-      const nextTitle = trimmed
-        ? trimmed.length > 48
-          ? `${trimmed.slice(0, 46)}…`
-          : trimmed
-        : imgs.length > 1
-          ? "Images"
-          : "Image";
-
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === sid && (s.title === "New chat" || !s.title)
-            ? { ...s, title: nextTitle }
-            : s,
-        ),
-      );
-
-      const controller = new AbortController();
-      abortBySessionRef.current[sid] = controller;
-
-      const serverSid = (serverChatSessionRef.current[sid] ?? "").trim();
-
-      let clientTz = "";
-      let clientLocale = "";
-      try {
-        clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-      } catch {
-        /* ignore */
-      }
-      try {
-        clientLocale = typeof navigator !== "undefined" ? navigator.language : "";
-      } catch {
-        /* ignore */
-      }
-
-      const body: Record<string, unknown> = {
-        msg: trimmed,
-        model: job.model || "",
-        provider: job.provider || "",
-        client_tz: clientTz || null,
-        client_locale: clientLocale || null,
-        images: imgs.map((i) => ({ media_type: i.media_type, data: i.data })),
-      };
-      const clientHistory = chatMessagesToClientHistory(priorMessages);
-      if (clientHistory.length > 0) body.client_history = clientHistory;
-      if (serverSid) body.session_id = serverSid;
-      if (useDetached) body.turn_id = turnId;
-
       void (async () => {
+        if (streamingSidsRef.current.has(sid)) return;
+        if (streamingSidsRef.current.size >= MAX_CONCURRENT_CHAT_STREAMS) return;
+
+        const trimmed = job.text.trim();
+        const imgs = job.images.filter((i) => i.data.length > 0);
+        const priorMessages = messagesBySessionRef.current[sid] ?? [];
+        const label =
+          (job.dropdownModelLabel || "").trim() || (job.model || "").trim() || "";
+
+        const userMsgId = uid();
+        const turnId = uid();
+        const assistantMsgId = turnId;
+        const useDetached = shouldUseDetachedStreamingForPayload(
+          trimmed.length,
+          imgs.length,
+          persistenceEnabledRef.current,
+        );
+        const userImages =
+          imgs.length > 0
+            ? imgs.map((i) => ({
+                id: i.id,
+                previewUrl: `data:${i.media_type};base64,${i.data}`,
+              }))
+            : undefined;
+
+        const nextTitle = trimmed
+          ? trimmed.length > 48
+            ? `${trimmed.slice(0, 46)}…`
+            : trimmed
+          : imgs.length > 1
+            ? "Images"
+            : "Image";
+
+        if (persistenceEnabledRef.current && draftSessionIdsRef.current.has(sid)) {
+          try {
+            const res = await fetch("/api/chat/threads", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: sid, title: nextTitle }),
+            });
+            if (res.ok) {
+              draftSessionIdsRef.current.delete(sid);
+              serverChatSessionRef.current[sid] = sid;
+              setServerChatSessionByUi((prev) => ({ ...prev, [sid]: sid }));
+            }
+          } catch {
+            /* stream may still proceed; persist will retry later */
+          }
+        }
+
+        markStreamStart(sid);
+
+        setMessagesBySession((prev) => {
+          const nextList: ChatMessage[] = [
+            ...(prev[sid] ?? []),
+            { id: userMsgId, role: "user", text: trimmed, images: userImages },
+            {
+              id: assistantMsgId,
+              role: "assistant",
+              run: {
+                ...initialRunState(),
+                turnId,
+                runId: turnId,
+                streamStatus: useDetached ? "streaming" : "",
+                sseAfter: -1,
+                dropdownModelLabel: label,
+                streamStartedAt: Date.now(),
+              },
+            },
+          ];
+          const next = { ...prev, [sid]: nextList };
+          messagesBySessionRef.current = next;
+          return next;
+        });
+
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === sid && isDefaultChatTitle(s.title)
+              ? { ...s, title: nextTitle }
+              : s,
+          ),
+        );
+
+        const controller = new AbortController();
+        abortBySessionRef.current[sid] = controller;
+
+        const serverSid = (serverChatSessionRef.current[sid] ?? "").trim();
+
+        let clientTz = "";
+        let clientLocale = "";
+        try {
+          clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+        } catch {
+          /* ignore */
+        }
+        try {
+          clientLocale = typeof navigator !== "undefined" ? navigator.language : "";
+        } catch {
+          /* ignore */
+        }
+
+        const body: Record<string, unknown> = {
+          msg: trimmed,
+          model: job.model || "",
+          provider: job.provider || "",
+          client_tz: clientTz || null,
+          client_locale: clientLocale || null,
+          images: imgs.map((i) => ({ media_type: i.media_type, data: i.data })),
+        };
+        const clientHistory = chatMessagesToClientHistory(priorMessages);
+        if (clientHistory.length > 0) body.client_history = clientHistory;
+        if (serverSid) body.session_id = serverSid;
+        if (useDetached) body.turn_id = turnId;
+
         let detachedRunId: string | null = useDetached ? turnId : null;
         let sawDone = false;
         try {
-          if (persistenceEnabledRef.current) {
+          if (persistenceEnabledRef.current && !draftSessionIdsRef.current.has(sid)) {
             setTimeout(() => {
               void persistThreadToServer(sid);
             }, 0);
@@ -981,7 +1068,9 @@ export function useKorakuChat() {
           markStreamEnd(sid);
           const aborted = controller.signal.aborted;
           setTimeout(() => {
-            void persistThreadToServer(sid);
+            if (!draftSessionIdsRef.current.has(sid)) {
+              void persistThreadToServer(sid);
+            }
             if (aborted) tryDrainGlobalQueueRef.current();
           }, 0);
           if (aborted) return;
@@ -1223,48 +1312,25 @@ export function useKorakuChat() {
 
   const newChat = useCallback(async () => {
     const sid = activeIdRef.current;
-    if (sid) {
-      const msgs = messagesBySessionRef.current[sid] ?? [];
-      const sessionRow = sessionsRef.current.find((x) => x.id === sid);
-      const title = sessionRow?.title?.trim() ?? "";
-      const defaultTitle = !title || title === "New chat";
-      if (
-        msgs.length === 0 &&
-        defaultTitle &&
-        !streamingSidsRef.current.has(sid)
-      ) {
-        return;
-      }
+    if (
+      sid &&
+      isEmptyUnusedSession(
+        sid,
+        sessionsRef.current,
+        messagesBySessionRef.current,
+        streamingSidsRef.current,
+      )
+    ) {
+      return;
     }
 
     if (newChatInFlightRef.current) return;
     newChatInFlightRef.current = true;
     try {
-      if (persistenceEnabledRef.current) {
-        try {
-          const res = await fetch("/api/chat/threads", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: "{}",
-          });
-          if (res.ok) {
-            const row = (await res.json()) as { id: string; title: string };
-            const id = row.id;
-            serverChatSessionRef.current[id] = id;
-            setServerChatSessionByUi((prev) => ({ ...prev, [id]: id }));
-            setSessions((s) => [{ id, title: row.title || "New chat" }, ...s]);
-            setMessagesBySession((m) => ({ ...m, [id]: [] }));
-            setActiveId(id);
-            setQueuedMessages([]);
-            messagesLoadedForThreadRef.current.add(id);
-            return;
-          }
-        } catch {
-          /* fall through to local-only chat */
-        }
-      }
       const id = uid();
+      if (persistenceEnabledRef.current) {
+        draftSessionIdsRef.current.add(id);
+      }
       setSessions((s) => [{ id, title: "New chat" }, ...s]);
       setMessagesBySession((m) => ({ ...m, [id]: [] }));
       setActiveId(id);
@@ -1276,6 +1342,10 @@ export function useKorakuChat() {
   }, []);
 
   const selectSession = useCallback((id: string) => {
+    const prev = activeIdRef.current;
+    if (prev && prev !== id) {
+      void discardEmptySession(prev);
+    }
     setActiveId(id);
     const q = queuesRef.current[id] ?? [];
     setQueuedMessages(q.map((j) => ({ id: j.id, text: jobPreviewText(j) })));
@@ -1317,7 +1387,7 @@ export function useKorakuChat() {
         setMessagesLoadingSessionIds((prev) => prev.filter((x) => x !== id));
       }
     })();
-  }, []);
+  }, [discardEmptySession]);
 
   const deleteSession = useCallback(
     async (id: string) => {
@@ -1335,9 +1405,11 @@ export function useKorakuChat() {
         markStreamEnd(id);
         delete queuesRef.current[id];
         delete serverChatSessionRef.current[id];
+        const wasDraft = draftSessionIdsRef.current.has(id);
+        draftSessionIdsRef.current.delete(id);
         messagesLoadedForThreadRef.current.delete(id);
 
-        if (persistenceEnabledRef.current) {
+        if (persistenceEnabledRef.current && !wasDraft) {
           try {
             await fetch(`/api/chat/threads/${id}`, {
               method: "DELETE",
@@ -1352,32 +1424,10 @@ export function useKorakuChat() {
         const nextSessions = sessionsRef.current.filter((s) => s.id !== id);
 
         if (nextSessions.length === 0) {
-          if (persistenceEnabledRef.current) {
-            try {
-              const res = await fetch("/api/chat/threads", {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/json" },
-                body: "{}",
-              });
-              if (res.ok) {
-                const row = (await res.json()) as { id: string; title: string };
-                const nid = row.id;
-                serverChatSessionRef.current = { [nid]: nid };
-                setServerChatSessionByUi({ [nid]: nid });
-                setSessions([{ id: nid, title: row.title || "New chat" }]);
-                setMessagesBySession({ [nid]: [] });
-                setActiveId(nid);
-                setQueuedMessages([]);
-                messagesLoadedForThreadRef.current = new Set([nid]);
-                queueMicrotask(() => tryDrainGlobalQueueRef.current());
-                return;
-              }
-            } catch {
-              /* fall through to local-only replacement */
-            }
-          }
           const nid = uid();
+          if (persistenceEnabledRef.current) {
+            draftSessionIdsRef.current.add(nid);
+          }
           serverChatSessionRef.current = {};
           setServerChatSessionByUi({});
           setSessions([{ id: nid, title: "New chat" }]);
@@ -1426,6 +1476,7 @@ export function useKorakuChat() {
       selectSession,
       newChat,
       deleteSession,
+      discardEmptyActiveSession,
     }),
     [
       hydrated,
@@ -1436,6 +1487,7 @@ export function useKorakuChat() {
       selectSession,
       newChat,
       deleteSession,
+      discardEmptyActiveSession,
     ],
   );
 
@@ -1479,6 +1531,7 @@ export type KorakuChatShellApi = {
   selectSession: (id: string) => void;
   newChat: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
+  discardEmptyActiveSession: () => Promise<void>;
 };
 
 export type KorakuChatThreadApi = {

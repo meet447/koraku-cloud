@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { KorakuChatProvider } from "@/context/KorakuChatContext";
 import { useKorakuChat } from "@/hooks/useKorakuChat";
 import { APP_BASE, isAppChatRoute } from "@/lib/app-path";
@@ -39,6 +39,15 @@ export function KorakuAppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     void fetch("/api/org/current", { method: "POST" }).catch(() => {});
   }, []);
+
+  const prevPathRef = useRef(pathname);
+  useEffect(() => {
+    const prev = prevPathRef.current;
+    prevPathRef.current = pathname;
+    if (isAppChatRoute(prev) && !isAppChatRoute(pathname)) {
+      void chat.shell.discardEmptyActiveSession();
+    }
+  }, [pathname, chat.shell]);
 
   return (
     <KorakuChatProvider shell={chat.shell} thread={chat.thread}>
