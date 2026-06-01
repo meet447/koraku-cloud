@@ -47,14 +47,14 @@ const CLIENT_HISTORY_MAX_TEXT_CHARS = 8_000;
  * - ``heavy`` / ``long`` / ``auto`` — detached only for long text (≥3200 chars) or any inline images.
  * - empty (default) — detached for signed-in persisted chats; inline for local-only guests.
  */
-type DetachedChatMode = "off" | "always" | "heavy";
+type DetachedChatMode = "default" | "off" | "always" | "heavy";
 
 function detachedChatMode(): DetachedChatMode {
   const v = (process.env.NEXT_PUBLIC_KORAKU_DETACHED_CHAT ?? "").trim().toLowerCase();
   if (v === "off" || v === "0" || v === "false") return "off";
   if (v === "1" || v === "true" || v === "yes" || v === "always") return "always";
   if (v === "heavy" || v === "long" || v === "auto") return "heavy";
-  return "off";
+  return "default";
 }
 
 function shouldUseDetachedStreamingForPayload(
@@ -68,7 +68,7 @@ function shouldUseDetachedStreamingForPayload(
     return textLen >= 3200 || imageCount > 0;
   }
   if (mode === "off") return false;
-  // Default: persisted (signed-in) chats use detached runs so refresh can reconnect.
+  // Unset env: signed-in persisted chats use detached runs so refresh can reconnect.
   return persistenceEnabled;
 }
 
@@ -1007,6 +1007,9 @@ export function useKorakuChat() {
       if (streamingSidsRef.current.has(p.threadId)) continue;
 
       detachResumeStartedRef.current.add(p.runId);
+      if (activeIdRef.current !== p.threadId) {
+        setActiveId(p.threadId);
+      }
 
       void (async () => {
         let streamMarked = false;
@@ -1145,6 +1148,12 @@ export function useKorakuChat() {
         }
       })();
     }
+
+    return () => {
+      for (const p of pending) {
+        detachResumeStartedRef.current.delete(p.runId);
+      }
+    };
   }, [hydrated, sessions, markStreamEnd, markStreamStart, persistThreadToServer, updateAssistantRun]);
 
   const send = useCallback(
