@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -65,30 +64,15 @@ async def composio_overview():
     return await asyncio.to_thread(_composio_overview_payload)
 
 
-_search_cache: dict[tuple[str, int], tuple[float, list[dict]]] = {}
-_SEARCH_CACHE_TTL = 300.0
-_SEARCH_CACHE_MAX_SIZE = 1000
-
-
 @router.get("/toolkits", dependencies=[Depends(_composio_request_scope)])
-async def composio_toolkits_search(q: str = "", limit: int = 48):
+async def composio_toolkits_catalog(q: str = ""):
+    """Curated integration catalog (~40 popular tools), resolved against Composio when configured."""
     if not composio_runtime.is_configured():
-        return {"items": [], "configured": False}
-    lim = max(1, min(int(limit), 50))
-
-    now = time.monotonic()
-    cache_key = (q, lim)
-    if cache_key in _search_cache:
-        cache_time, cached_items = _search_cache[cache_key]
-        if (now - cache_time) < _SEARCH_CACHE_TTL:
-            return {"items": cached_items, "configured": True}
-
-    items = await asyncio.to_thread(lambda: composio_runtime.search_toolkits(q, limit=lim))
-
-    if len(_search_cache) >= _SEARCH_CACHE_MAX_SIZE:
-        _search_cache.clear()
-
-    _search_cache[cache_key] = (now, items)
+        return {
+            "items": composio_runtime.list_curated_toolkits_static(query=q),
+            "configured": False,
+        }
+    items = await asyncio.to_thread(lambda: composio_runtime.list_curated_toolkits(query=q))
     return {"items": items, "configured": True}
 
 

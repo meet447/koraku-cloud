@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Coroutine
 
 from koraku.core.config import settings
+from koraku.integrations.composio_curated_toolkits import CURATED_TOOLKITS
 from koraku.tools.tool_def import Tool
 
 _TOOLKIT_SLUG_SAFE = re.compile(r"^[A-Z0-9][A-Z0-9_]{1,63}$")
@@ -30,6 +31,7 @@ _CONNECTIONS_CACHE_MAX_SIZE = 2000
 _search_cache: dict[tuple[str, int], tuple[float, list[dict[str, str]]]] = {}
 _TOOLKITS_CACHE_TTL = 300.0
 _SEARCH_CACHE_MAX_SIZE = 1000
+_curated_toolkits_cache: tuple[float, list[dict[str, str]]] | None = None
 
 # Composio's toolkit listing is capped and tends to return many low-level actions first (e.g. ACL_*),
 # so high-value tools (calendar events, Gmail send/draft) never appear. Always fetch these by slug first.
@@ -171,6 +173,76 @@ def start_toolkit_auth(toolkit: str, *, callback_url: str | None = None) -> dict
         "status": req.status,
         "redirect_url": req.redirect_url,
     }
+
+
+def _curated_row_from_meta(meta: dict[str, str], *, composio_name: str = "", composio_desc: str = "") -> dict[str, str]:
+    name = (composio_name or meta["name"]).strip() or meta["slug"]
+    desc = (composio_desc or meta["description"]).strip()
+    return {
+        "slug": meta["slug"],
+        "name": name,
+        "description": desc[:240],
+        "category": meta["category"],
+        "icon_slug": meta["icon_slug"],
+    }
+
+
+def list_curated_toolkits_static(*, query: str = "") -> list[dict[str, str]]:
+    """Browse-only catalog from the curated manifest (no Composio API)."""
+    return _filter_curated_toolkits(
+        [_curated_row_from_meta(dict(meta)) for meta in CURATED_TOOLKITS],
+        query=query,
+    )
+
+
+def _filter_curated_toolkits(items: list[dict[str, str]], *, query: str) -> list[dict[str, str]]:
+    q = (query or "").strip().lower()
+    if not q:
+        return items
+    return [
+        row
+        for row in items
+        if q in row["slug"].lower()
+        or q in row["name"].lower()
+        or q in row["description"].lower()
+    ]
+
+
+def list_curated_toolkits(*, query: str = "") -> list[dict[str, str]]:
+    """Resolve the curated catalog against Composio; omit slugs Composio does not support."""
+    global _curated_toolkits_cache
+    now = time.monotonic()
+    if _curated_toolkits_cache is not None:
+        cache_time, cached = _curated_toolkits_cache
+        if (now - cache_time) < _TOOLKITS_CACHE_TTL:
+            return _filter_curated_toolkits([dict(r) for r in cached], query=query)
+
+    if not is_configured():
+        return list_curated_toolkits_static(query=query)
+
+    c = _client()
+    resolved: list[dict[str, str]] = []
+    for meta in CURATED_TOOLKITS:
+        slug = meta["slug"]
+        try:
+            tk = c.toolkits.get(slug)
+        except Exception:
+            logger.debug("Curated toolkit %s not available in Composio", slug, exc_info=True)
+            continue
+        composio_desc = ""
+        tk_meta = getattr(tk, "meta", None)
+        if tk_meta is not None:
+            composio_desc = str(getattr(tk_meta, "description", "") or "")
+        resolved.append(
+            _curated_row_from_meta(
+                dict(meta),
+                composio_name=str(getattr(tk, "name", "") or ""),
+                composio_desc=composio_desc,
+            )
+        )
+
+    _curated_toolkits_cache = (now, resolved)
+    return _filter_curated_toolkits([dict(r) for r in resolved], query=query)
 
 
 def search_toolkits(query: str | None, *, limit: int = 48) -> list[dict[str, str]]:
