@@ -1,0 +1,47 @@
+{
+  "name": "koraku-web",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24.0.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "db:migrate": "supabase db push --linked --yes"
+  },
+  "dependencies": {
+    "@koraku/client": "file:../packages/koraku-client",
+    "@supabase/ssr": "^0.6.1",
+    "@supabase/supabase-js": "^2.49.1",
+    "@supermemory/memory-graph": "^0.2.2",
+    "@tanstack/react-virtual": "^3.13.24",
+    "clsx": "^2.1.1",
+    "ioredis": "^5.10.1",
+    "lucide-react": "^0.469.0",
+    "mammoth": "^1.12.0",
+    "next": "^15.5.18",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9",
+    "eslint-config-next": "^15.1.0",
+    "postcss": "^8.5.10",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "ws": "^8.20.1",
+    "brace-expansion": "^5.0.6"
+  }
+}

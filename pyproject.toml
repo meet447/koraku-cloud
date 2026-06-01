@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "koraku"
+version = "0.2.0"
+description = "Embeddable ReAct agent SDK and self-hostable AI assistant"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Meet Sonawane" }]
+keywords = ["agent", "llm", "react", "sdk", "ai-assistant"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "anthropic>=0.28.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+    "httpx>=0.27.0",
+    "beautifulsoup4>=4.12.0",
+    "markdownify>=0.12.0",
+    "PyJWT>=2.8.0",
+    "cryptography>=42.0.0",
+]
+
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "python-multipart>=0.0.9",
+    "jinja2>=3.1.0",
+    "aiofiles>=23.2.0",
+    "apscheduler>=3.10.0,<4.0.0",
+    "croniter>=2.0.0",
+    "redis>=5.0.0",
+]
+composio = ["composio>=0.11.0"]
+blaxel = ["blaxel>=0.2.40"]
+supermemory = ["supermemory>=3.0.0"]
+all = ["koraku[server,composio,blaxel,supermemory]"]
+dev = ["pytest>=8.0", "pytest-mock>=3.14", "pytest-asyncio>=0.23"]
+
+[project.urls]
+Homepage = "https://github.com/meet447/koraku"
+Repository = "https://github.com/meet447/koraku"
+
+[project.scripts]
+koraku-server = "koraku.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["koraku*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

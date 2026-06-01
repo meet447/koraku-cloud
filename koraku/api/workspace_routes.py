@@ -1,0 +1,197 @@
+"""Cloud workspace file tree + read (Blaxel session folder)."""
+from __future__ import annotations
+
+import posixpath
+import uuid
+from collections.abc import AsyncGenerator
+from typing import Any
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi.responses import Response
+
+from koraku.core.auth import auth_error_detail, verify_request_auth
+from koraku.core.config import settings
+from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
+from koraku.integrations.supabase_tenant import parse_org_header, resolve_org_id_sync
+from koraku.integrations.blaxel_runtime import (
+    cloud_blaxel_block_reason,
+    ensure_chat_sandbox,
+    session_workspace_root_posix,
+)
+from koraku.integrations.cloud_user import (
+    effective_cloud_user_id,
+    reset_cloud_user_id,
+    set_cloud_user_id,
+)
+
+router = APIRouter(prefix="/api/workspace", tags=["workspace"])
+
+_MAX_TEXT_FILE_BYTES = 2 * 1024 * 1024
+_MAX_BLOB_FILE_BYTES = 12 * 1024 * 1024
+
+_BLOB_MEDIA = {
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    # Raster / vector images (workspace preview + download)
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".jpe": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".ico": "image/x-icon",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
+    ".svg": "image/svg+xml",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    ".jfif": "image/jpeg",
+    ".apng": "image/apng",
+}
+
+
+def _parse_session_id(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s:
+        raise HTTPException(status_code=400, detail="session_id is required")
+    try:
+        uuid.UUID(s)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="session_id must be a UUID") from e
+    return s
+
+
+def safe_join_under_session_root(root: str, rel: str) -> str:
+    """Resolve ``rel`` under ``root``; raises ``HTTPException`` if path escapes."""
+    root = root.rstrip("/") or "/"
+    rel = (rel or "").strip().replace("\\", "/").lstrip("/")
+    if not rel:
+        return root
+    candidate = posixpath.normpath(posixpath.join(root, rel))
+    prefix = root if root.endswith("/") else root + "/"
+    if candidate == root or candidate.startswith(prefix):
+        return candidate
+    raise HTTPException(status_code=400, detail="path must stay under the session workspace")
+
+
+def _require_cloud_workspace() -> None:
+    reason = cloud_blaxel_block_reason(settings)
+    if reason:
+        raise HTTPException(status_code=503, detail=reason)
+
+
+async def _workspace_user_scope(
+    request: Request,
+    authorization: str | None = Header(None),
+) -> AsyncGenerator[None, None]:
+    """Require Blaxel + valid Supabase JWT; match chat sandbox path (org + user)."""
+    _require_cloud_workspace()
+    jwt_res = verify_request_auth(authorization)
+    if not jwt_res.ok or not jwt_res.sub:
+        status = 503 if jwt_res.reason == "no_secret" else 401
+        detail = auth_error_detail(jwt_res.reason)
+        raise HTTPException(status_code=status, detail=f"{detail} (code={jwt_res.reason})")
+    uid = jwt_res.sub
+    requested_org = parse_org_header(request.headers)
+    org_id, reason = resolve_org_id_sync(uid, requested_org)
+    if requested_org and reason == "org_forbidden":
+        raise HTTPException(status_code=403, detail="You do not have access to this organization.")
+    if not org_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Tenant service unavailable. Check Supabase configuration.",
+        )
+    cloud_token = set_cloud_user_id(uid)
+    tenant_token = set_tenant_org_id(org_id)
+    try:
+        yield
+    finally:
+        reset_tenant_org_id(tenant_token)
+        reset_cloud_user_id(cloud_token)
+
+
+@router.get("/tree", dependencies=[Depends(_workspace_user_scope)])
+async def workspace_tree(
+    session_id: str = Query(..., min_length=8),
+    path: str = Query("", max_length=2048),
+) -> dict[str, Any]:
+    """List files and subdirectories under the chat session folder (or a subpath)."""
+    sid = _parse_session_id(session_id)
+    uid = effective_cloud_user_id()
+    root = session_workspace_root_posix(uid, sid, settings)
+    target = safe_join_under_session_root(root, path)
+    try:
+        sb = await ensure_chat_sandbox(sid, settings, user_id=uid)
+        directory = await sb.fs.ls(target)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Blaxel: {e}") from e
+
+    files = [
+        {"name": f.name, "path": f.path, "size": getattr(f, "size", 0)}
+        for f in (directory.files or [])
+    ]
+    dirs = [{"name": d.name, "path": d.path} for d in (directory.subdirectories or [])]
+    return {"root": root, "path": target, "files": files, "directories": dirs}
+
+
+@router.get("/file", dependencies=[Depends(_workspace_user_scope)])
+async def workspace_read_file(
+    session_id: str = Query(..., min_length=8),
+    path: str = Query(..., min_length=1, max_length=2048),
+) -> dict[str, Any]:
+    """Read a text file under the session workspace (size-capped)."""
+    sid = _parse_session_id(session_id)
+    uid = effective_cloud_user_id()
+    root = session_workspace_root_posix(uid, sid, settings)
+    target = safe_join_under_session_root(root, path)
+    try:
+        sb = await ensure_chat_sandbox(sid, settings, user_id=uid)
+        text = await sb.fs.read(target)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Blaxel: {e}") from e
+
+    raw = text if isinstance(text, str) else str(text)
+    truncated = len(raw.encode("utf-8")) > _MAX_TEXT_FILE_BYTES
+    if truncated:
+        raw = raw.encode("utf-8")[:_MAX_TEXT_FILE_BYTES].decode("utf-8", errors="replace")
+    return {"path": target, "content": raw, "truncated": truncated}
+
+
+@router.get("/file/blob", dependencies=[Depends(_workspace_user_scope)])
+async def workspace_read_blob(
+    session_id: str = Query(..., min_length=8),
+    path: str = Query(..., min_length=1, max_length=2048),
+) -> Response:
+    """Return raw bytes (PDF/DOCX with known media types; other files as octet-stream for download)."""
+    sid = _parse_session_id(session_id)
+    uid = effective_cloud_user_id()
+    root = session_workspace_root_posix(uid, sid, settings)
+    target = safe_join_under_session_root(root, path)
+    ext = posixpath.splitext(target)[1].lower()
+    media_type = _BLOB_MEDIA.get(ext, "application/octet-stream")
+    try:
+        sb = await ensure_chat_sandbox(sid, settings, user_id=uid)
+        data = await sb.fs.read_binary(target)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Blaxel: {e}") from e
+    if not isinstance(data, (bytes, bytearray)):
+        raise HTTPException(status_code=502, detail="unexpected binary payload")
+    body = bytes(data)
+    if len(body) > _MAX_BLOB_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="file too large for preview")
+    filename = (posixpath.basename(target) or "download").replace('"', "'")[:180]
+    return Response(
+        content=body,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
