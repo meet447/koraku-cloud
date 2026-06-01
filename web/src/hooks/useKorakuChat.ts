@@ -121,7 +121,7 @@ type StreamingTurn = {
   threadId: string;
   assistantMsgId: string;
   turnId: string;
-  after: number;
+  startedAt: number;
 };
 
 /** In-flight detached turns persisted on assistant rows (``streamStatus: streaming``). */
@@ -142,11 +142,25 @@ function collectStreamingTurns(
         threadId: s.id,
         assistantMsgId: m.id,
         turnId,
-        after: typeof m.run.sseAfter === "number" ? m.run.sseAfter : -1,
+        startedAt: m.run.streamStartedAt ?? 0,
       });
     }
   }
   return out;
+}
+
+/** Clear partial UI so a full SSE replay from ``after=-1`` renders cleanly. */
+function runStateForStreamReplay(prev: RunState): RunState {
+  return {
+    ...initialRunState(),
+    turnId: prev.turnId,
+    runId: prev.runId || prev.turnId,
+    streamStatus: "streaming",
+    sseAfter: -1,
+    streamStartedAt: prev.streamStartedAt,
+    dropdownModelLabel: prev.dropdownModelLabel,
+    statusText: "Reconnecting…",
+  };
 }
 
 function finalizeTurnStreamStatus(error: string | null, completed: boolean): TurnStreamStatus {
@@ -571,7 +585,7 @@ export function useKorakuChat() {
         const streaming = collectStreamingTurns(sessList, msgMap);
         if (streaming.length > 0) {
           const latest = streaming.reduce((a, b) =>
-            a.after >= b.after ? a : b,
+            a.startedAt >= b.startedAt ? a : b,
           );
           focusId = latest.threadId;
           if (focusId !== sessList[0]!.id && msgMap[focusId]?.length === 0) {
@@ -1062,15 +1076,10 @@ export function useKorakuChat() {
             /* ignore */
           }
 
-          updateAssistantRun(p.threadId, p.assistantMsgId, (r) => ({
-            ...r,
-            statusText: "Reconnecting…",
-            error: null,
-            streamStatus: "streaming",
-          }));
+          updateAssistantRun(p.threadId, p.assistantMsgId, (r) => runStateForStreamReplay(r));
 
           const streamRes = await fetch(
-            `/koraku-api/runs/${encodeURIComponent(p.turnId)}/stream?after=${encodeURIComponent(String(p.after))}`,
+            `/koraku-api/runs/${encodeURIComponent(p.turnId)}/stream?after=-1`,
             {
               method: "GET",
               headers: { Accept: "text/event-stream", ...authHeaders },
