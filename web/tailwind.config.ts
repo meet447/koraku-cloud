@@ -18,6 +18,9 @@ export default {
       },
       fontFamily: {
         sans: ["var(--font-koraku)", "system-ui", "sans-serif"],
+        helvetica: ['"Helvetica Regular"', "ui-sans-serif", "system-ui", "sans-serif"],
+        "landing-sans": ["var(--font-inter)", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        "landing-display": ["var(--font-outfit)", "Outfit", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       borderRadius: {
         "4xl": "2rem",

@@ -9,8 +9,9 @@ const font = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Koraku",
-  description: "Light, minimal agent workspace for Koraku",
+  title: "Koraku — Fluid memory streams",
+  description:
+    "Your companion for memory, connected apps, and safe automations. Remember how you work and turn momentum into action.",
   icons: {
     icon: [{ url: "/icon.png", type: "image/png" }],
     apple: [{ url: "/icon.png", type: "image/png" }],
