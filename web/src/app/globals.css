@@ -50,6 +50,33 @@ body {
   animation: koraku-composer-pulse-glow 1.75s ease-in-out infinite;
 }
 
+@keyframes koraku-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.koraku-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(245 245 245) 0%,
+    rgb(250 250 250) 40%,
+    rgb(245 245 245) 80%
+  );
+  background-size: 200% 100%;
+  animation: koraku-shimmer 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .koraku-shimmer {
+    animation: none;
+    background: rgb(245 245 245);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .koraku-composer-pulse {
     animation: none;

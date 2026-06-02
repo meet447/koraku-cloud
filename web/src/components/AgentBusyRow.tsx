@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { busyRowLabelFromStatus } from "@/lib/runStatusText";
 import {
   AGENT_BUSY_PHRASES,
   formatElapsedClock,
@@ -54,16 +55,7 @@ export function AgentBusyRow({
 }) {
   const elapsed = useElapsedSince(startedAtMs);
   const phrase = useRotatingPhrase();
-  const activeLabel =
-    statusText &&
-    !statusText.includes("Reconnect") &&
-    !statusText.includes("Subscribe") &&
-    !statusText.includes("Thinking… ·") &&
-    statusText !== "Connecting…" &&
-    statusText !== "Done" &&
-    !statusText.includes(" steps")
-      ? statusText.replace(/…+$/, "")
-      : null;
+  const activeLabel = busyRowLabelFromStatus(statusText ?? "");
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium text-neutral-500">

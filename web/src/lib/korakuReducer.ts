@@ -694,7 +694,7 @@ function handleStreamEvent(s: RunState, ev: Record<string, unknown>): RunState {
       return s;
     }
     if (hasToolUse && !text.trim()) {
-      return { ...next, sawToolUseThisTurn: true, statusText: next.statusText || "Preparing tools…" };
+      return { ...next, sawToolUseThisTurn: true };
     }
 
     // Intermediate react step: prose before ``tool_use`` is step status — one line, not a
@@ -770,9 +770,7 @@ export function applyKorakuSseEvent(
       assistantBubbleMode: "final",
       stepCaption: null,
       ...(rid ? { runId: rid, turnId: next.turnId || rid } : {}),
-      ...(d && typeof d.model === "string"
-        ? { metaModel: d.model, statusText: "Connecting…" }
-        : {}),
+      ...(d && typeof d.model === "string" ? { metaModel: d.model } : {}),
     };
     return next;
   }
@@ -811,15 +809,6 @@ export function applyKorakuSseEvent(
   }
 
   if (typ === "koraku.turn_usage") {
-    const d = outer.data as Record<string, unknown> | undefined;
-    const inTok = typeof d?.input_tokens === "number" ? d.input_tokens : 0;
-    const outTok = typeof d?.output_tokens === "number" ? d.output_tokens : 0;
-    if (inTok + outTok > 0) {
-      next = {
-        ...next,
-        statusText: `Thinking… · ${inTok + outTok} tok`,
-      };
-    }
     return next;
   }
 
@@ -876,7 +865,6 @@ export function applyKorakuSseEvent(
           maxSteps: max,
           metaModel: model || next.metaModel,
           metaProvider: provider || next.metaProvider,
-          statusText: `${mode} · up to ${max} steps`,
         };
       }
       if (trace === "tools") {
@@ -932,7 +920,6 @@ export function applyKorakuSseEvent(
             ...next,
             mode: String(koraku.mode),
             maxSteps: Number(koraku.max_steps) || next.maxSteps,
-            statusText: `${koraku.mode} · up to ${koraku.max_steps} steps`,
           };
         }
         const tn = koraku.tool_names;

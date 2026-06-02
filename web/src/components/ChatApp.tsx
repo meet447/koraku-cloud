@@ -14,20 +14,27 @@ import { AgentBusyRow } from "./AgentBusyRow";
 import { BrandMark } from "./BrandMark";
 import { WorkspacePanel } from "./WorkspacePanel";
 import { RunWorkspaceAttachments } from "./RunWorkspaceAttachments";
+import { StreamingReplySkeleton } from "./StreamingReplySkeleton";
+import { shouldShowRunFooterStatus } from "@/lib/runStatusText";
 
 /** Use windowed rendering when a thread has at least this many rows. */
 const VIRTUALIZE_MESSAGE_COUNT = 10;
 
 function ChatMessagesSkeleton() {
+  const line = (w: string, delay?: string) => (
+    <div
+      className={`koraku-shimmer h-3.5 rounded-md ${w}${delay ? ` ${delay}` : ""}`}
+    />
+  );
   const block = (key: string) => (
     <div key={key} className="mb-10 space-y-4">
       <div className="flex justify-end">
-        <div className="h-11 w-[min(72%,18rem)] animate-pulse rounded-3xl bg-neutral-100" />
+        <div className="koraku-shimmer h-11 w-[min(72%,18rem)] rounded-3xl" />
       </div>
       <div className="space-y-2.5 pl-1">
-        <div className="h-3.5 w-[78%] max-w-xl animate-pulse rounded-md bg-neutral-100" />
-        <div className="h-3.5 w-[58%] max-w-md animate-pulse rounded-md bg-neutral-100" />
-        <div className="mt-3 h-28 w-full max-w-2xl animate-pulse rounded-2xl bg-neutral-50" />
+        {line("w-[78%] max-w-xl")}
+        {line("w-[58%] max-w-md", "[animation-delay:120ms]")}
+        <div className="koraku-shimmer mt-3 h-28 w-full max-w-2xl rounded-2xl [animation-delay:200ms]" />
       </div>
     </div>
   );
@@ -65,6 +72,17 @@ function ChatMessageRow({
   /** Workspace file strip: only after this turn finishes (avoid live-updating during stream). */
   const showWorkspaceAttachments =
     m.role === "assistant" && !(busy && isLastAssistant);
+
+  const showStreamingSkeleton =
+    busy &&
+    isLastAssistant &&
+    !m.run.assistantMarkdown.trim() &&
+    m.run.timeline.length === 0 &&
+    !m.run.activeThought;
+
+  const showRunFooter =
+    shouldShowRunFooterStatus(m.run.statusText) ||
+    (m.run.error != null && m.run.error.length > 0);
 
   return m.role === "user" ? (
     <div className="mb-6 flex justify-end">
@@ -109,6 +127,7 @@ function ChatMessageRow({
               : ""}
         </p>
       ) : null}
+      {showStreamingSkeleton ? <StreamingReplySkeleton /> : null}
       {showFullAssistantMarkdown ? (
         <MarkdownBody
           source={m.run.assistantMarkdown}
@@ -150,10 +169,10 @@ function ChatMessageRow({
           ) : null}
         </div>
       ) : null}
-      {!(busy && isLastAssistant) ? (
+      {showRunFooter ? (
         <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
           {m.run.statusText}
-          {m.run.dropdownModelLabel && m.run.statusText !== "Done"
+          {m.run.dropdownModelLabel && m.run.statusText === "Done"
             ? ` · ${m.run.dropdownModelLabel}`
             : ""}
         </p>
