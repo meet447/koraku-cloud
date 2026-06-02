@@ -1,5 +1,4 @@
 import { cn } from "@/lib/cn";
-import styles from "@/components/landing/LogoMarquee.module.css";
 
 type LogoItem = {
   alt: string;
@@ -8,54 +7,24 @@ type LogoItem = {
 };
 
 const LOGOS: LogoItem[] = [
-  {
-    alt: "Procure",
-    src: "https://svgl.app/library/procure.svg",
-    gradient: "linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)",
-  },
-  {
-    alt: "Shopify",
-    src: "https://svgl.app/library/shopify.svg",
-    gradient: "linear-gradient(135deg, #fde047 0%, #ca8a04 100%)",
-  },
-  {
-    alt: "Blender",
-    src: "https://svgl.app/library/blender.svg",
-    gradient: "linear-gradient(135deg, #93c5fd 0%, #1d4ed8 100%)",
-  },
-  {
-    alt: "Figma",
-    src: "https://svgl.app/library/figma.svg",
-    gradient: "linear-gradient(135deg, #c084fc 0%, #7e22ce 100%)",
-  },
-  {
-    alt: "Spotify",
-    src: "https://svgl.app/library/spotify.svg",
-    gradient: "linear-gradient(135deg, #f472b6 0%, #dc2626 100%)",
-  },
-  {
-    alt: "Lottielab",
-    src: "https://svgl.app/library/lottielab.svg",
-    gradient: "linear-gradient(135deg, #fde047 0%, #22c55e 100%)",
-  },
-  {
-    alt: "Google Cloud",
-    src: "https://svgl.app/library/google-cloud.svg",
-    gradient: "linear-gradient(135deg, #bae6fd 0%, #0284c7 100%)",
-  },
-  {
-    alt: "Bing",
-    src: "https://svgl.app/library/bing.svg",
-    gradient: "linear-gradient(135deg, #67e8f9 0%, #0d9488 100%)",
-  },
+  { alt: "Procure", src: "https://svgl.app/library/procure.svg", gradient: "from-blue-400 to-blue-600" },
+  { alt: "Shopify", src: "https://svgl.app/library/shopify.svg", gradient: "from-yellow-300 to-yellow-600" },
+  { alt: "Blender", src: "https://svgl.app/library/blender.svg", gradient: "from-blue-300 to-blue-700" },
+  { alt: "Figma", src: "https://svgl.app/library/figma.svg", gradient: "from-purple-400 to-purple-700" },
+  { alt: "Spotify", src: "https://svgl.app/library/spotify.svg", gradient: "from-pink-400 to-red-600" },
+  { alt: "Lottielab", src: "https://svgl.app/library/lottielab.svg", gradient: "from-yellow-300 to-green-500" },
+  { alt: "Google Cloud", src: "https://svgl.app/library/google-cloud.svg", gradient: "from-sky-200 to-sky-600" },
+  { alt: "Bing", src: "https://svgl.app/library/bing.svg", gradient: "from-cyan-300 to-teal-600" },
 ];
 
 function LogoCard({ logo }: { logo: LogoItem }) {
   return (
     <div className="group relative flex h-24 w-40 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-200/60 bg-white shadow-sm transition-all hover:border-slate-300">
       <div
-        className="absolute inset-0 scale-150 opacity-0 transition-all duration-300 group-hover:scale-100 group-hover:opacity-100"
-        style={{ background: logo.gradient }}
+        className={cn(
+          "absolute inset-0 scale-150 bg-gradient-to-br opacity-0 transition-all duration-300 group-hover:scale-100 group-hover:opacity-100",
+          logo.gradient,
+        )}
         aria-hidden
       />
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -74,8 +43,16 @@ export function LogoMarquee() {
   const loop = [...LOGOS, ...LOGOS];
 
   return (
-    <div className={cn("mt-10", styles.mask)}>
-      <div className={styles.track} aria-hidden>
+    <div
+      className={cn(
+        "group/marquee mt-10 overflow-hidden",
+        "[mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]",
+      )}
+    >
+      <div
+        className="flex w-max gap-4 animate-marquee group-hover/marquee:[animation-play-state:paused]"
+        aria-hidden
+      >
         {loop.map((logo, index) => (
           <LogoCard key={`${logo.alt}-${index}`} logo={logo} />
         ))}

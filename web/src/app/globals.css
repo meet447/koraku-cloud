@@ -1,22 +1,16 @@
-@import url("https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-  font-family: "Helvetica Regular";
-  src: url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.eot");
-  src:
-    url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.eot?#iefix")
-      format("embedded-opentype"),
-    url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.woff2") format("woff2"),
-    url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.woff") format("woff"),
-    url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.ttf") format("truetype"),
-    url("https://db.onlinewebfonts.com/t/a64ff11d2c24584c767f6257e880dc65.svg#Helvetica Regular")
-      format("svg");
-  font-display: swap;
+@layer utilities {
+  .landing-mesh-overlay {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.8) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.8) 1px, transparent 1px);
+    background-size: 16px 16px;
+    -webkit-mask-image: radial-gradient(circle at center top, black 0%, transparent 80%);
+    mask-image: radial-gradient(circle at center top, black 0%, transparent 80%);
+  }
 }
 
 html {
@@ -30,13 +24,6 @@ body {
 
 body {
   @apply min-h-dvh bg-white antialiased;
-}
-
-.landing-page {
-  margin: 0;
-  overflow-x: hidden;
-  font-family: "Helvetica Regular", ui-sans-serif, system-ui, sans-serif;
-  background-color: #f7f4ef;
 }
 
 .koraku-md a {

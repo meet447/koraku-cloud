@@ -5,14 +5,11 @@ import { BottomLeftCard } from "@/components/landing/BottomLeftCard";
 import { BottomRightCorner } from "@/components/landing/BottomRightCorner";
 import { HeroBadge } from "@/components/landing/HeroBadge";
 import { Navbar } from "@/components/landing/Navbar";
-import { LANDING, LANDING_VIDEO_SRC, landingText } from "@/lib/landing-theme";
+import { LANDING_HERO_VIDEO } from "@/lib/landing-videos";
 
 export function Hero() {
   return (
-    <div
-      className="flex h-screen w-full items-center justify-center p-3 md:p-5"
-      style={{ backgroundColor: LANDING.bg }}
-    >
+    <div className="flex h-screen w-full items-center justify-center bg-landing-stone p-3 md:p-5">
       <section className="group relative flex h-full w-full max-w-[1536px] flex-col items-center overflow-hidden rounded-[1.5rem] bg-white/10 shadow-none md:rounded-[3rem]">
         <video
           autoPlay
@@ -22,12 +19,11 @@ export function Hero() {
           className="absolute inset-0 z-0 h-full w-full object-cover object-[65%] lg:object-center"
           aria-hidden
         >
-          <source src={LANDING_VIDEO_SRC} type="video/mp4" />
+          <source src={LANDING_HERO_VIDEO} type="video/mp4" />
         </video>
 
-        {/* Warm wash so cool video footage matches Koraku stone/orange language */}
         <div
-          className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-amber-50/45 via-orange-50/20 to-[#f7f4ef]/55"
+          className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-amber-50/45 via-orange-50/20 to-landing-stone/55"
           aria-hidden
         />
 
@@ -40,7 +36,7 @@ export function Hero() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className={`mb-2 text-4xl font-normal leading-[1.05] tracking-tight sm:text-5xl md:text-6xl lg:text-[80px] ${landingText.headline}`}
+              className="mb-2 text-4xl font-normal leading-[1.05] tracking-tight text-landing-ink sm:text-5xl md:text-6xl lg:text-[80px]"
             >
               Fluid Memory Streams
             </motion.h1>
@@ -48,7 +44,7 @@ export function Hero() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.8, delay: 0.4 }}
-              className={`max-w-xl text-sm font-normal leading-relaxed sm:text-base md:text-lg ${landingText.body}`}
+              className="max-w-xl text-sm font-normal leading-relaxed text-landing-muted sm:text-base md:text-lg"
             >
               Remember how you work, connect your apps, and turn everyday momentum into
               memory, chat, and safe automations—instantly.
