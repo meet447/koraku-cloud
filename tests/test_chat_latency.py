@@ -21,7 +21,7 @@ def test_no_defer_when_saving_files() -> None:
     )
 
 
-def test_quick_step_budget_for_greeting() -> None:
+def test_step_budget_standard_for_greeting() -> None:
     mode, steps = _step_budget("hello")
-    assert mode == "quick"
-    assert steps <= 4
+    assert mode == "standard"
+    assert steps >= 10

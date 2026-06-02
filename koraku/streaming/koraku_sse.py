@@ -397,6 +397,11 @@ def map_koraku_stream_events(event: dict[str, Any], state: KorakuStreamState) ->
         return [_koraku_trace("context", event.get("data") or {}, state.inner_session_id, rid)]
     if et == "agent.history":
         return [_koraku_trace("history", event.get("data") or {}, state.inner_session_id, rid)]
+    if et == "agent.trace":
+        data = event.get("data") if isinstance(event.get("data"), dict) else {}
+        trace = str(data.get("trace") or "status")
+        payload = {k: v for k, v in data.items() if k != "trace"}
+        return [_koraku_trace(trace, payload, state.inner_session_id, rid)]
     if et == "tool_execution":
         data = event.get("data") if isinstance(event.get("data"), dict) else {}
         tool_use_id = str(data.get("id") or "")

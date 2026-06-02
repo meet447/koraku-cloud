@@ -188,28 +188,36 @@ function _appendSubagentProseChunk(
   const base = s.streamSubagentMeta?.composio
     ? s
     : { ...s, streamSubagentMeta: meta };
-  const next = finalizeThought(base);
-  if (!next.activeThought) {
+  if (!base.activeThought) {
     return {
-      ...next,
+      ...base,
       streamSubagentMeta: meta,
       activeThought: { started: Date.now(), text: chunk },
     };
   }
   return {
-    ...next,
+    ...base,
     streamSubagentMeta: meta,
     activeThought: {
-      ...next.activeThought,
-      text: next.activeThought.text + chunk,
+      ...base.activeThought,
+      text: base.activeThought.text + chunk,
     },
   };
+}
+
+/** Flush streamed subagent prose when the provider closes a text block (or at turn end). */
+function _finalizeSubagentProse(s: RunState): RunState {
+  if (!s.streamSubagentMeta?.composio || !s.activeThought) {
+    return s;
+  }
+  return finalizeThought(s);
 }
 
 function _appendSubagentThoughtRow(
   s: RunState,
   rawBody: string,
   meta: ComposioSubagentMeta,
+  seconds = 0,
 ): RunState {
   const raw = rawBody.trim();
   if (!raw) return s;
@@ -217,7 +225,7 @@ function _appendSubagentThoughtRow(
   const row: TimelineRow = {
     id: rid(),
     kind: "thought",
-    seconds: 0,
+    seconds: Math.round(Math.max(0, seconds) * 10) / 10,
     body,
   };
   return _appendTimelineRow(
@@ -712,6 +720,8 @@ function handleStreamEvent(s: RunState, ev: Record<string, unknown>): RunState {
     let next = { ...s };
     if (kind === "thinking") {
       next = finalizeThought(next);
+    } else if (kind === "text" && next.streamSubagentMeta?.composio) {
+      next = _finalizeSubagentProse(next);
     }
     const { [idx]: _i, ...restPart } = next.partialJsonByIndex;
     const { [idx]: _k, ...restKind } = next.blockKindByIndex;
@@ -955,6 +965,13 @@ export function applyKorakuSseEvent(
           tool_input: data.input,
           subagent: data.composio_subagent,
         });
+      }
+      if (trace === "worker_status") {
+        const msg =
+          typeof data.message === "string" && data.message.trim()
+            ? data.message.trim()
+            : "Still working…";
+        return { ...next, statusText: msg };
       }
       return next;
     }

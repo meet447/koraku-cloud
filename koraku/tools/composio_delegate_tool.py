@@ -35,7 +35,10 @@ COMPOSIO_RUN_TOOL = Tool(
             },
             "goal": {
                 "type": "string",
-                "description": "Single-task instruction for the integration worker.",
+                "description": (
+                    "Single-task instruction for the integration worker. "
+                    "Include concrete parameters when known (e.g. Gmail: query: OLX after:2026/06/02)."
+                ),
             },
             "max_steps": {
                 "type": "integer",

@@ -35,8 +35,9 @@ async def _memory_save(content: str) -> str:
 memory_search_tool = Tool(
     name="MemorySearch",
     description=(
-        "Search the user's long-term learned memory (Supermemory) for facts, preferences, and past context. "
-        "Use before answering when prior decisions, names, or preferences might matter."
+        "Search the user's long-term learned memory for facts, preferences, and past context. "
+        "Required before any statement about the user's preferences, contacts, schedule, or history — "
+        "including claims that you do not have something stored."
     ),
     input_schema={
         "type": "object",

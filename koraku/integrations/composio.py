@@ -508,8 +508,8 @@ def composio_dispatcher_prompt_section_quick() -> str:
         return ""
     lines = [
         "## Connected integrations (Composio)",
-        "- For Gmail, Calendar, Drive, Slack, and similar tasks, call **ComposioRun** with ACTIVE "
-        "toolkit slugs and a concrete `goal`.",
+        "- For Gmail, Calendar, Drive, Slack, and similar tasks, call **ComposioRun** once with ACTIVE "
+        "toolkit slugs and a **short, concrete** `goal` (rewrite the user ask — not a copy-paste of chat).",
         "- If the user has not connected an app, suggest the **Connections** page.",
     ]
     active = active_toolkit_slugs()
@@ -529,16 +529,16 @@ def composio_dispatcher_prompt_section() -> str:
     lines = [
         "## Connected integrations (Composio) — sub-agent mode",
         f"- Koraku user id for Composio: `{user_id()}`",
-        "- Gmail, Calendar, Drive, Slack, and other linked apps are **not** exposed as individual tools on this agent.",
-        "- To read, search, draft, or act in a linked app, call **ComposioRun** with:",
-        "  - `toolkits`: one or more **ACTIVE** toolkit slugs from the list below (uppercase, e.g. `GMAIL`, `GOOGLECALENDAR`).",
-        "  - `goal`: a single, concrete instruction for a **background integration worker** (not the raw user chat).",
-        "- The worker runs with **only** those toolkits' Composio actions plus normal workspace/web tools — small tool lists are more reliable.",
-        "- For tasks spanning multiple apps, call **ComposioRun once per toolkit** or pass several slugs in one `toolkits` array.",
-        "- Do **not** tell the user what is in their Gmail/calendar/Drive (including 'no messages' or 'found nothing') "
-        "**before** you run **ComposioRun** and see its result. Short acknowledgements like 'Checking your inbox now' are fine.",
-        "- Verify recipients, times, and side effects before the worker sends or posts; prefer drafts when unsure.",
-        "- If a toolkit is missing from the list, ask the user to connect it under **Connections**.",
+        "- Linked apps (Gmail, Calendar, Drive, Slack, …) are accessed via **ComposioRun**, not as individual tools on this agent.",
+        "- You still have **WebSearch**, **MemorySearch**, and workspace tools — use whichever fits the user ask.",
+        "- For linked-app work, call **ComposioRun** with:",
+        "  - `toolkits`: **ACTIVE** toolkit slugs from the list below (uppercase, e.g. `GMAIL`, `GOOGLECALENDAR`).",
+        "  - `goal`: one crisp instruction for the worker (include concrete params when known, e.g. Gmail `query: …`).",
+        "- Distill intent into `goal`; do not paste the full chat transcript.",
+        "- Prefer one ComposioRun per app task when possible; combine toolkits when the task truly spans apps.",
+        "- Do not claim inbox/calendar/Drive contents until ComposioRun returns (brief 'checking…' is fine).",
+        "- Prefer drafts over send when the user did not clearly confirm.",
+        "- If a toolkit is missing, suggest **Connections** in the app.",
     ]
     active = active_toolkit_slugs()
     if active:

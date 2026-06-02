@@ -181,6 +181,47 @@ class Settings(BaseSettings):
     max_tokens: int = 4096
     max_steps: int = 15
     research_max_steps: int = 100
+    # Chat turn safety rails (wall clock stops before round cap in normal use).
+    chat_turn_wall_seconds_standard: float = Field(
+        default=180.0,
+        validation_alias=AliasChoices("CHAT_TURN_WALL_SECONDS_STANDARD", "chat_turn_wall_seconds_standard"),
+    )
+    chat_turn_wall_seconds_quick: float = Field(
+        default=75.0,
+        validation_alias=AliasChoices("CHAT_TURN_WALL_SECONDS_QUICK", "chat_turn_wall_seconds_quick"),
+    )
+    chat_turn_wall_seconds_integration: float = Field(
+        default=120.0,
+        validation_alias=AliasChoices("CHAT_TURN_WALL_SECONDS_INTEGRATION", "chat_turn_wall_seconds_integration"),
+    )
+    chat_turn_wall_seconds_research: float = Field(
+        default=600.0,
+        validation_alias=AliasChoices("CHAT_TURN_WALL_SECONDS_RESEARCH", "chat_turn_wall_seconds_research"),
+    )
+    chat_max_rounds_standard: int = Field(
+        default=32,
+        validation_alias=AliasChoices("CHAT_MAX_ROUNDS_STANDARD", "chat_max_rounds_standard"),
+    )
+    chat_max_rounds_integration: int = Field(
+        default=18,
+        validation_alias=AliasChoices("CHAT_MAX_ROUNDS_INTEGRATION", "chat_max_rounds_integration"),
+    )
+    agent_loop_warn_round_fraction: float = Field(
+        default=0.85,
+        validation_alias=AliasChoices("AGENT_LOOP_WARN_ROUND_FRACTION", "agent_loop_warn_round_fraction"),
+    )
+    chat_prefetch_learned_memory: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("CHAT_PREFETCH_LEARNED_MEMORY", "chat_prefetch_learned_memory"),
+    )
+    agent_worker_heartbeat_seconds: float = Field(
+        default=10.0,
+        validation_alias=AliasChoices("AGENT_WORKER_HEARTBEAT_SECONDS", "agent_worker_heartbeat_seconds"),
+    )
+    agent_llm_stream_heartbeat_seconds: float = Field(
+        default=12.0,
+        validation_alias=AliasChoices("AGENT_LLM_STREAM_HEARTBEAT_SECONDS", "agent_llm_stream_heartbeat_seconds"),
+    )
     # Per tool_result string cap when building the next LLM request (saves tokens; raise for verbose Composio/API JSON).
     max_tool_result_chars: int = 48_000
     temperature: float = 0.5
@@ -201,8 +242,33 @@ class Settings(BaseSettings):
     # When True (default), the chat agent uses **ComposioRun** to spawn a scoped sub-run per toolkit
     # instead of loading all Composio tools on the main agent (toolkit-scoped ComposioRun sub-agent).
     composio_subagent_mode: bool = True
-    # Step cap for each ComposioRun inner loop (separate from chat max_steps).
-    composio_subagent_max_steps: int = 20
+    # ComposioRun sub-agent delegation on the main chat agent (does not disable web, memory, or files).
+    koraku_dispatcher_mode: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("KORAKU_DISPATCHER_MODE", "koraku_dispatcher_mode"),
+    )
+    # Step cap for each ComposioRun inner loop (safety ceiling; wall clock usually stops first).
+    composio_subagent_max_steps: int = 16
+    composio_subagent_max_steps_simple: int = Field(
+        default=6,
+        validation_alias=AliasChoices("COMPOSIO_SUBAGENT_MAX_STEPS_SIMPLE", "composio_subagent_max_steps_simple"),
+    )
+    composio_subagent_max_steps_compose: int = Field(
+        default=10,
+        validation_alias=AliasChoices("COMPOSIO_SUBAGENT_MAX_STEPS_COMPOSE", "composio_subagent_max_steps_compose"),
+    )
+    composio_subagent_wall_seconds: float = Field(
+        default=150.0,
+        validation_alias=AliasChoices("COMPOSIO_SUBAGENT_WALL_SECONDS", "composio_subagent_wall_seconds"),
+    )
+    composio_subagent_wall_seconds_simple: float = Field(
+        default=90.0,
+        validation_alias=AliasChoices("COMPOSIO_SUBAGENT_WALL_SECONDS_SIMPLE", "composio_subagent_wall_seconds_simple"),
+    )
+    composio_subagent_wall_seconds_compose: float = Field(
+        default=120.0,
+        validation_alias=AliasChoices("COMPOSIO_SUBAGENT_WALL_SECONDS_COMPOSE", "composio_subagent_wall_seconds_compose"),
+    )
     # Supabase JWT secret (Settings → API) so the backend can verify browser access tokens for
     # per-user Composio linking and tool execution.
     supabase_jwt_secret: str = Field(
