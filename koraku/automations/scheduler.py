@@ -76,13 +76,18 @@ def refresh_next_run_metadata(user_id: str, automation_id: str) -> None:
     row = supabase_store.get_automation(user_id, automation_id)
     if not row or row.get("trigger_mode") != "scheduled":
         return
+    org_id = str(row.get("org_id") or "").strip()
+    if not org_id:
+        return
     cron = row.get("cron_expression")
     tz = row.get("timezone")
     if not cron or not tz:
         return
     nxt = compute_next_cron_fire(str(cron), str(tz), base=datetime.now(timezone.utc))
     if nxt:
-        supabase_store.set_automation_run_times(user_id, automation_id, next_run_at=nxt)
+        supabase_store.set_automation_run_times(
+            user_id, org_id, automation_id, next_run_at=nxt
+        )
 
 
 async def _scheduled_tick(automation_id: str, user_id: str) -> None:
@@ -98,6 +103,7 @@ async def _scheduled_tick(automation_id: str, user_id: str) -> None:
         await execute_automation(
             user_id,
             automation_id,
+            org_id=str(row.get("org_id") or "") or None,
             agent=_agent,
             trigger_summary=summary,
         )

@@ -33,7 +33,9 @@ async def prepare_automation_agent_context(
 
     account_p: dict[str, str] | None = None
     if supabase_personalization_configured():
-        fetched = await asyncio.to_thread(fetch_personalization_sync, user_id)
+        fetched = await asyncio.to_thread(
+            fetch_personalization_sync, user_id, org_id=org_id
+        )
         account_p = (
             fetched if fetched is not None else {"agent_name": "", "memory": "", "soul": ""}
         )

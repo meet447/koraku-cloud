@@ -81,6 +81,19 @@ def delete(key: str) -> None:
         log.warning("redis DEL %s failed: %s", key, e)
 
 
+def set_nx(key: str, value: str, ttl_seconds: int) -> bool | None:
+    """SET if not exists with TTL. Returns True when set, False when key exists, None if Redis down."""
+    client = get_client()
+    if client is None:
+        return None
+    try:
+        ok = client.set(key, value, nx=True, ex=max(1, int(ttl_seconds)))
+        return bool(ok)
+    except Exception as e:
+        log.warning("redis SET NX %s failed: %s", key, e)
+        return None
+
+
 def increment_with_ttl(key: str, ttl_seconds: int) -> int | None:
     """Atomically INCR and set TTL on first write (fixed-window rate limits)."""
     client = get_client()

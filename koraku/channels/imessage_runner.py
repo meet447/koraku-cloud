@@ -42,17 +42,30 @@ _DEDUP_TTL_SEC = 3600.0
 
 
 def claim_message_handle(handle: str) -> bool:
+    """Return True when this handle should be processed (first claim wins)."""
     import time
+
+    from koraku.core import redis_client
 
     if not handle:
         return True
+    h = handle.strip()
+    if not h:
+        return True
+
+    rkey = f"koraku:imessage:dedup:{h}"
+    if redis_client.is_configured():
+        claimed = redis_client.set_nx(rkey, "1", int(_DEDUP_TTL_SEC))
+        if claimed is not None:
+            return claimed
+
     now = time.monotonic()
     stale = [k for k, t in _dedup_handles.items() if now - t > _DEDUP_TTL_SEC]
     for k in stale:
         _dedup_handles.pop(k, None)
-    if handle in _dedup_handles:
+    if h in _dedup_handles:
         return False
-    _dedup_handles[handle] = now
+    _dedup_handles[h] = now
     return True
 
 

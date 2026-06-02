@@ -13,11 +13,24 @@ from koraku.automations.validation import (
     validate_cron_expression,
     validate_timezone_iana,
 )
+from koraku.core.tenant import effective_tenant_org_id
 from koraku.integrations.cloud_user import effective_auth_user_sub
 
 
 def _uid() -> str:
     return effective_auth_user_sub()
+
+
+def _org_id() -> str | None:
+    oid = (effective_tenant_org_id() or "").strip()
+    return oid or None
+
+
+def _org_required() -> str:
+    oid = _org_id()
+    if not oid:
+        raise ValueError("Organization context is required for automations.")
+    return oid
 
 
 def _normalize_toolkits(toolkits: Any) -> list[str]:
@@ -34,7 +47,11 @@ async def _automations_list(**_kwargs: Any) -> str:
     if not supabase_automations_configured():
         return "Error: Automations require Supabase (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) on the server."
     uid = _uid()
-    raw = await async_ops.list_automations(uid)
+    try:
+        oid = _org_required()
+    except ValueError as e:
+        return f"Error: {e}"
+    raw = await async_ops.list_automations(uid, oid)
     rows = await enrich_automation_rows([dict(r) for r in raw])
     return json.dumps({"automations": list(rows), "count": len(rows)}, indent=2)
 
@@ -56,6 +73,10 @@ async def _automations_create(**kwargs: Any) -> str:
     toolkits = kwargs.get("toolkits")
     status = str(kwargs.get("status") or "active").strip()
     uid = _uid()
+    try:
+        oid = _org_required()
+    except ValueError as e:
+        return f"Error: {e}"
     tm = trigger_mode.lower()
     if tm == "event":
         return f"Error: {EVENT_TRIGGER_UNAVAILABLE}"
@@ -87,6 +108,7 @@ async def _automations_create(**kwargs: Any) -> str:
     ev_out = None
     row = await async_ops.insert_automation(
         uid,
+        oid,
         title=title,
         headline=headline,
         natural_language_spec=natural_language_spec,
@@ -115,10 +137,14 @@ async def _automations_update(**kwargs: Any) -> str:
     event_display = kwargs.get("event_display")
     toolkits = kwargs.get("toolkits")
     uid = _uid()
+    try:
+        oid = _org_required()
+    except ValueError as e:
+        return f"Error: {e}"
     aid = str(automation_id or "").strip()
     if not aid:
         return "Error: automation_id is required."
-    existing = await async_ops.get_automation(uid, aid)
+    existing = await async_ops.get_automation(uid, aid, org_id=oid)
     if not existing:
         return f"Error: no automation with id {aid!r}."
 
@@ -142,6 +168,7 @@ async def _automations_update(**kwargs: Any) -> str:
     tk = _normalize_toolkits(toolkits) if toolkits is not None else None
     row = await async_ops.update_automation(
         uid,
+        oid,
         aid,
         title=_opt_str(title),
         headline=_opt_str(headline),
@@ -165,10 +192,14 @@ async def _automations_delete(**kwargs: Any) -> str:
         return "Error: Automations require Supabase (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) on the server."
     automation_id = kwargs.get("automation_id")
     uid = _uid()
+    try:
+        oid = _org_required()
+    except ValueError as e:
+        return f"Error: {e}"
     aid = str(automation_id or "").strip()
     if not aid:
         return "Error: automation_id is required."
-    if not await async_ops.delete_automation(uid, aid):
+    if not await async_ops.delete_automation(uid, oid, aid):
         return f"Error: no automation with id {aid!r}."
     await scheduler.sync_scheduler_jobs_async()
     return json.dumps({"ok": True, "deleted_id": aid}, indent=2)

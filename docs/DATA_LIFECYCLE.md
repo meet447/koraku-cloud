@@ -63,7 +63,7 @@ This document is the **engineering data map** for what the backend stores, proce
 
 ## Configuration knobs related to reliability (Phase A)
 
-See `/health` for live values:
+See `/health/detail` (with `HEALTH_DETAIL_TOKEN`) for live operational values; `/health` is minimal for the UI:
 
 - `agent_llm_stream_timeout_seconds` — wall-clock cap for one LLM streaming step in interactive chat.
 - `agent_tool_phase_timeout_seconds` — wall-clock cap for executing one batch of tool calls in a step.

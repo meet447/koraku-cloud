@@ -10,18 +10,46 @@ export async function GET() {
   }
   const { supabase, userId } = auth;
 
-  const [
-    threads,
-    messages,
-    personalization,
-    automations,
-    automationRuns,
-  ] = await Promise.all([
-    supabase.from("chat_thread").select("*").order("updated_at", { ascending: false }),
-    supabase.from("chat_message").select("*").order("created_at", { ascending: true }),
-    supabase.from("koraku_personalization").select("*").eq("user_id", userId).maybeSingle(),
-    supabase.from("koraku_automation").select("*").order("updated_at", { ascending: false }),
-    supabase.from("koraku_automation_run").select("*").order("started_at", { ascending: false }).limit(1000),
+  const { data: userThreads, error: threadsErr } = await supabase
+    .from("chat_thread")
+    .select("id")
+    .eq("user_id", userId);
+
+  if (threadsErr) {
+    return Response.json({ error: "Export failed", details: [threadsErr.message] }, { status: 500 });
+  }
+
+  const threadIds = (userThreads ?? []).map((t) => t.id);
+
+  const [threads, messages, personalization, automations, automationRuns] = await Promise.all([
+    supabase
+      .from("chat_thread")
+      .select("*")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false }),
+    threadIds.length > 0
+      ? supabase
+          .from("chat_message")
+          .select("*")
+          .in("thread_id", threadIds)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [], error: null }),
+    supabase
+      .from("koraku_personalization")
+      .select("*")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("koraku_automation")
+      .select("*")
+      .eq("user_id", userId)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("koraku_automation_run")
+      .select("*")
+      .eq("user_id", userId)
+      .order("started_at", { ascending: false })
+      .limit(1000),
   ]);
 
   const errors = [threads.error, messages.error, personalization.error, automations.error, automationRuns.error]
@@ -38,7 +66,7 @@ export async function GET() {
     retention_note: KORAKU_COPY.exportNote,
     chat_threads: threads.data ?? [],
     chat_messages: messages.data ?? [],
-    personalization: personalization.data ?? null,
+    personalization: personalization.data ?? [],
     automations: automations.data ?? [],
     automation_runs: automationRuns.data ?? [],
   });

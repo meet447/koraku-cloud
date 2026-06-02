@@ -45,7 +45,9 @@ async def personalization_get(request: Request):
     if not resolved.auth_ok:
         raise _auth_401(resolved.auth.reason)
     resolved.require_chat_access()
-    row = await asyncio.to_thread(fetch_personalization_sync, resolved.sub or "")
+    row = await asyncio.to_thread(
+        fetch_personalization_sync, resolved.sub or "", org_id=resolved.org_id
+    )
     if row is None:
         raise HTTPException(status_code=502, detail="Could not load personalization from database.")
     return row

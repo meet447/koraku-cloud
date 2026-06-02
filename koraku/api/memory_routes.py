@@ -38,7 +38,9 @@ async def memory_graph(
     explicit_memory = ""
     explicit_soul = ""
     if supabase_personalization_configured():
-        row = await asyncio.to_thread(fetch_personalization_sync, resolved.sub)
+        row = await asyncio.to_thread(
+            fetch_personalization_sync, resolved.sub, org_id=resolved.org_id
+        )
         if row:
             explicit_memory = row.get("memory") or ""
             explicit_soul = row.get("soul") or ""

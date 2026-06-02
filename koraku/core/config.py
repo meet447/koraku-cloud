@@ -75,6 +75,11 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("KORAKU_API_KEY", "koraku_api_key"),
     )
+    # Bearer or X-Health-Token for ``GET /health/detail`` (verbose ops snapshot).
+    health_detail_token: str = Field(
+        default="",
+        validation_alias=AliasChoices("HEALTH_DETAIL_TOKEN", "health_detail_token"),
+    )
     # Chat session persistence: ``memory`` (single worker) or ``redis`` (requires ``REDIS_URL``).
     session_store_backend: str = Field(
         default="redis",
@@ -413,6 +418,14 @@ class Settings(BaseSettings):
     sendblue_api_base: str = Field(
         default="https://api.sendblue.co/api",
         validation_alias=AliasChoices("SENDBLUE_API_BASE", "sendblue_api_base"),
+    )
+    # Comma-separated host suffixes allowed for server-side fetch of inbound media (SSRF guard).
+    sendblue_inbound_media_host_allowlist: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "SENDBLUE_INBOUND_MEDIA_HOST_ALLOWLIST",
+            "sendblue_inbound_media_host_allowlist",
+        ),
     )
     imessage_voice_transcription_enabled: bool = Field(
         default=True,

@@ -49,6 +49,20 @@ const CLIENT_HISTORY_MAX_TEXT_CHARS = 8_000;
  */
 type DetachedChatMode = "default" | "off" | "always" | "heavy";
 
+/** Cached from ``GET /koraku-api/health`` — ``false`` when API uses in-memory detached runs only. */
+let detachedRunsRedisCapable: boolean | null = null;
+
+async function refreshDetachedRunsCapability(): Promise<void> {
+  try {
+    const r = await fetch("/koraku-api/health", { cache: "no-store" });
+    if (!r.ok) return;
+    const data = (await r.json()) as { detached_runs_redis?: boolean };
+    detachedRunsRedisCapable = Boolean(data.detached_runs_redis);
+  } catch {
+    /* keep prior value */
+  }
+}
+
 function detachedChatMode(): DetachedChatMode {
   const v = (process.env.NEXT_PUBLIC_KORAKU_DETACHED_CHAT ?? "").trim().toLowerCase();
   if (v === "off" || v === "0" || v === "false") return "off";
@@ -68,8 +82,10 @@ function shouldUseDetachedStreamingForPayload(
     return textLen >= 3200 || imageCount > 0;
   }
   if (mode === "off") return false;
-  // Unset env: signed-in persisted chats use detached runs so refresh can reconnect.
-  return persistenceEnabled;
+  // Default: detached when persisted + Redis-backed runs (multi-worker safe).
+  if (!persistenceEnabled) return false;
+  if (detachedRunsRedisCapable === false) return false;
+  return true;
 }
 
 async function fetchDetachedRunStatusJson(
@@ -658,6 +674,11 @@ export function useKorakuChat() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!hydrated || !persistenceEnabledRef.current) return;
+    void refreshDetachedRunsCapability();
+  }, [hydrated]);
+
   useEffect(
     () => () => {
       for (const c of Object.values(abortBySessionRef.current)) {
@@ -837,6 +858,9 @@ export function useKorakuChat() {
         const userMsgId = uid();
         const turnId = uid();
         const assistantMsgId = turnId;
+        if (persistenceEnabledRef.current && detachedChatMode() === "default") {
+          await refreshDetachedRunsCapability();
+        }
         const useDetached = shouldUseDetachedStreamingForPayload(
           trimmed.length,
           imgs.length,
@@ -1289,8 +1313,9 @@ export function useKorakuChat() {
 
   useEffect(() => {
     resumeStreamingTurns();
+    const started = detachResumeStartedRef.current;
     return () => {
-      detachResumeStartedRef.current.clear();
+      started.clear();
     };
   }, [hydrated, sessions, resumeStreamingTurns]);
 

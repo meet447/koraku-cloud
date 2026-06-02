@@ -6,6 +6,8 @@ export type KorakuHealth = {
   llmConfigured: boolean;
   mode: string;
   llmProvider: string;
+  /** When true, detached runs survive refresh across API workers (Redis-backed). */
+  detachedRunsRedis: boolean;
 };
 
 export function useKorakuHealth() {
@@ -24,6 +26,7 @@ export function useKorakuHealth() {
           llmConfigured: Boolean(data.llm_configured),
           mode: String(data.mode ?? "unknown"),
           llmProvider: String(data.llm_provider ?? ""),
+          detachedRunsRedis: Boolean(data.detached_runs_redis),
         });
         setError(false);
       } catch {

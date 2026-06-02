@@ -135,6 +135,7 @@ async def _run_agent_session_with_timeout(
 
 async def _finalize_automation_run(
     user_id: str,
+    org_id: str,
     automation_id: str,
     run_id: str,
     status: str,
@@ -145,6 +146,7 @@ async def _finalize_automation_run(
 ) -> None:
     await async_ops.finish_run(
         user_id,
+        org_id,
         run_id,
         status=status,  # type: ignore[arg-type]
         result_summary=res,
@@ -152,7 +154,9 @@ async def _finalize_automation_run(
         started_at=started,
         finished_at=finished,
     )
-    await async_ops.set_automation_run_times(user_id, automation_id, last_run_at=finished)
+    await async_ops.set_automation_run_times(
+        user_id, org_id, automation_id, last_run_at=finished
+    )
 
     try:
         from koraku.automations import scheduler
@@ -165,10 +169,11 @@ async def _finalize_automation_run(
 
 
 async def _handle_missing_agent(
-    user_id: str, automation_id: str, run_id: str, started: Any
+    user_id: str, org_id: str, automation_id: str, run_id: str, started: Any
 ) -> dict[str, Any]:
     await async_ops.finish_run(
         user_id,
+        org_id,
         run_id,
         status="failed",
         result_summary=None,
@@ -176,7 +181,9 @@ async def _handle_missing_agent(
         started_at=started,
         finished_at=utcnow(),
     )
-    await async_ops.set_automation_run_times(user_id, automation_id, last_run_at=utcnow())
+    await async_ops.set_automation_run_times(
+        user_id, org_id, automation_id, last_run_at=utcnow()
+    )
     return {"ok": False, "error": "llm_not_configured", "run_id": run_id}
 
 
@@ -209,6 +216,7 @@ async def execute_automation(
     user_id: str,
     automation_id: str,
     *,
+    org_id: str | None = None,
     agent: Agent | None,
     trigger_summary: str,
     emit: Callable[[dict[str, Any]], None] | None = None,
@@ -225,17 +233,25 @@ async def execute_automation(
             comp_tok = composio_runtime.set_composio_request_user(user_id)
             composio_runtime.configure_workspace_cache(workspace_dir())
 
-            auto = await async_ops.get_automation(user_id, automation_id)
+            oid = (org_id or "").strip()
+            auto = await async_ops.get_automation(
+                user_id, automation_id, org_id=oid or None
+            )
             if auto is None:
                 return {"ok": False, "error": "automation_not_found"}
+            oid = oid or str(auto.get("org_id") or "").strip()
+            if not oid:
+                return {"ok": False, "error": "automation_missing_org"}
 
             started = utcnow()
             run_id = await async_ops.insert_run_start(
-                user_id, automation_id, trigger_summary=trigger_summary
+                user_id, oid, automation_id, trigger_summary=trigger_summary
             )
 
             if agent is None:
-                return await _handle_missing_agent(user_id, automation_id, run_id, started)
+                return await _handle_missing_agent(
+                    user_id, oid, automation_id, run_id, started
+                )
 
             session = SessionState(session_id=f"auto-{automation_id}-{run_id}")
             user_msg = build_automation_user_message(
@@ -245,10 +261,17 @@ async def execute_automation(
                 toolkits=auto.get("toolkits"),
             )
 
-            org_id, account_p, tenant_tok = await prepare_automation_agent_context(
+            run_org_id, account_p, tenant_tok = await prepare_automation_agent_context(
                 user_id,
                 spec_query=auto.get("natural_language_spec"),
             )
+            if run_org_id and run_org_id != oid:
+                log.warning(
+                    "automation org mismatch automation=%s row_org=%s context_org=%s",
+                    automation_id,
+                    oid,
+                    run_org_id,
+                )
 
             lazy_tok, lazy_root_tok = set_lazy_blaxel_session(session.session_id)
 
@@ -267,7 +290,7 @@ async def execute_automation(
                     auto,
                     account_personalization=account_p,
                     user_id=user_id,
-                    org_id=org_id,
+                    org_id=oid,
                     run_id=run_id,
                 )
             finally:
@@ -285,7 +308,7 @@ async def execute_automation(
                 res = summary or None
 
             await _finalize_automation_run(
-                user_id, automation_id, run_id, status, err, res, started, finished
+                user_id, oid, automation_id, run_id, status, err, res, started, finished
             )
 
             elapsed_ms = int((time.perf_counter() - t0) * 1000)

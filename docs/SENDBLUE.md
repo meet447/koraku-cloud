@@ -84,7 +84,7 @@ SendBlue must POST inbound messages to your **public** Koraku API URL.
 sendblue webhooks set-receive https://<public-host>/sendblue/webhook
 ```
 
-If you set a signing secret in SendBlue, add the same value to `.env` as `SENDBLUE_WEBHOOK_SECRET`.
+Set a signing secret in SendBlue and add the same value to `.env` as `SENDBLUE_WEBHOOK_SECRET`. When SendBlue credentials are configured, the API **rejects** webhooks if this secret is missing or wrong.
 
 ## 5. Test
 

@@ -15,9 +15,10 @@ def test_settings_has_agent_timeout_fields() -> None:
     assert settings.cors_origins_list
 
 
-def test_health_includes_reliability_and_sandbox_fields() -> None:
+def test_health_includes_reliability_and_sandbox_fields(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "health_detail_token", "test-health-detail")
     client = TestClient(app)
-    r = client.get("/health")
+    r = client.get("/health/detail", headers={"Authorization": "Bearer test-health-detail"})
     assert r.status_code == 200
     data = r.json()
     assert "agent_llm_stream_timeout_seconds" in data

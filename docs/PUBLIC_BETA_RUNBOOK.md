@@ -17,7 +17,7 @@ This is the minimum operational checklist before inviting public users.
 ## Release checklist
 
 - Run Supabase migrations from `web/supabase/migrations`.
-- Verify `/health` reports the expected LLM provider, scheduler state, Supabase config, and sandbox mode.
+- Verify `/health` (UI liveness) and `/health/detail` (ops; requires `HEALTH_DETAIL_TOKEN`) report LLM, scheduler, Supabase, and sandbox state.
 - Exercise sign-up, onboarding, chat, memory save, connection list, automation create/run, data export, and account deletion request.
 - Confirm unauthenticated calls to `POST /stream` and `POST /runs` return `401`.
 - Confirm production logs redact secrets and include enough context for support: request path, user id when available, run id, automation id, and provider error category.

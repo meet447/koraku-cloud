@@ -219,7 +219,7 @@ async def _stream_agent_sse(
     personalization_task: asyncio.Task | None = None
     if auth_sub and supabase_personalization_configured():
         personalization_task = asyncio.create_task(
-            asyncio.to_thread(fetch_personalization_sync, auth_sub)
+            asyncio.to_thread(fetch_personalization_sync, auth_sub, org_id=auth_org_id)
         )
     hydration_task = asyncio.create_task(
         hydrate_session_messages_from_db(

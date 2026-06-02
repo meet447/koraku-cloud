@@ -7,9 +7,8 @@ import logging
 import uuid
 from dataclasses import dataclass
 from typing import Any
-import httpx
-
 from koraku.core.config import settings
+from koraku.integrations.supabase_rest import get_http_client, headers as rest_headers, rest_url
 from koraku.core.models import AgentMessage, SessionState
 
 log = logging.getLogger(__name__)
@@ -175,26 +174,27 @@ def fetch_thread_messages_sync(
         return None
 
     try:
-        with httpx.Client(timeout=30.0) as client:
-            tq = f"/chat_thread?id=eq.{tid}&user_id=eq.{uid}&select=id&limit=1"
-            if (org_id or "").strip():
-                tq = (
-                    f"/chat_thread?id=eq.{tid}&user_id=eq.{uid}"
-                    f"&org_id=eq.{(org_id or '').strip()}&select=id&limit=1"
-                )
-            tr = client.get(_rest_url(tq), headers=_headers())
-            tr.raise_for_status()
-            trows = tr.json()
-            if not isinstance(trows, list) or len(trows) == 0:
-                return None
+        client = get_http_client()
+        h = rest_headers()
+        tq = f"/chat_thread?id=eq.{tid}&user_id=eq.{uid}&select=id&limit=1"
+        if (org_id or "").strip():
+            tq = (
+                f"/chat_thread?id=eq.{tid}&user_id=eq.{uid}"
+                f"&org_id=eq.{(org_id or '').strip()}&select=id&limit=1"
+            )
+        tr = client.get(rest_url(tq), headers=h)
+        tr.raise_for_status()
+        trows = tr.json()
+        if not isinstance(trows, list) or len(trows) == 0:
+            return None
 
-            mq = f"/chat_message?thread_id=eq.{tid}&order=created_at.asc&select=role,content_json"
-            mr = client.get(_rest_url(mq), headers=_headers())
-            mr.raise_for_status()
-            mrows = mr.json()
-            if not isinstance(mrows, list):
-                return []
-            return [x for x in mrows if isinstance(x, dict)]
+        mq = f"/chat_message?thread_id=eq.{tid}&order=created_at.asc&select=role,content_json"
+        mr = client.get(rest_url(mq), headers=h)
+        mr.raise_for_status()
+        mrows = mr.json()
+        if not isinstance(mrows, list):
+            return []
+        return [x for x in mrows if isinstance(x, dict)]
     except Exception as e:
         log.warning("supabase chat history fetch failed: %s", e)
         return None

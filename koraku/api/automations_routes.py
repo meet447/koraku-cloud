@@ -20,14 +20,14 @@ from koraku.automations.validation import (
     validate_cron_expression,
     validate_timezone_iana,
 )
+from dataclasses import dataclass
+
 from koraku.core.auth import auth_error_detail, verify_request_auth
 from koraku.core.config import settings
 from koraku.core.rate_limit import RateLimit, enforce_rate_limit, rate_limit_key
-from koraku.integrations.cloud_user import (
-    effective_auth_user_sub,
-    reset_cloud_user_id,
-    set_cloud_user_id,
-)
+from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
+from koraku.integrations.cloud_user import reset_cloud_user_id, set_cloud_user_id
+from koraku.integrations.supabase_tenant import parse_org_header, resolve_org_id_sync
 
 router = APIRouter(prefix="/api/automations", tags=["automations"])
 
@@ -53,10 +53,17 @@ async def _release_manual_run_slot(uid: str) -> None:
             _manual_run_inflight[uid] = n
 
 
+@dataclass(frozen=True)
+class AutomationsAuth:
+    user_id: str
+    org_id: str
+
+
 async def _automations_request_scope(
+    request: Request,
     authorization: str | None = Header(None),
-) -> AsyncGenerator[None, None]:
-    """Require Supabase JWT and backend Supabase REST credentials; bind auth ``sub`` for row scope."""
+) -> AsyncGenerator[AutomationsAuth, None]:
+    """Require Supabase JWT, org membership, and bind user/org context for row scope."""
     if not supabase_automations_configured():
         raise HTTPException(
             status_code=503,
@@ -73,15 +80,22 @@ async def _automations_request_scope(
             status_code=status, detail=f"{detail} (code={jwt_res.reason})"
         )
     uid = jwt_res.sub
-    t = set_cloud_user_id(uid)
+    requested = parse_org_header(request.headers)
+    org_id, reason = resolve_org_id_sync(uid, requested)
+    if not org_id:
+        if reason == "org_forbidden":
+            raise HTTPException(status_code=403, detail="You do not have access to this organization.")
+        raise HTTPException(
+            status_code=503,
+            detail="Tenant service unavailable. Check Supabase configuration.",
+        )
+    cloud_tok = set_cloud_user_id(uid)
+    tenant_tok = set_tenant_org_id(org_id)
     try:
-        yield
+        yield AutomationsAuth(user_id=uid, org_id=org_id)
     finally:
-        reset_cloud_user_id(t)
-
-
-def _user_id() -> str:
-    return effective_auth_user_sub()
+        reset_tenant_org_id(tenant_tok)
+        reset_cloud_user_id(cloud_tok)
 
 
 class AutomationCreate(BaseModel):
@@ -133,25 +147,30 @@ class AutomationPatch(BaseModel):
         return self
 
 
-@router.get("", dependencies=[Depends(_automations_request_scope)])
-async def automations_list():
-    uid = _user_id()
-    rows = await async_ops.list_automations(uid)
+@router.get("")
+async def automations_list(auth: AutomationsAuth = Depends(_automations_request_scope)):
+    rows = await async_ops.list_automations(auth.user_id, auth.org_id)
     items = await enrich_automation_rows(list(rows))
     return {"items": items}
 
 
-@router.post("", dependencies=[Depends(_automations_request_scope)])
-async def automations_create(body: AutomationCreate, request: Request):
-    uid = _user_id()
+@router.post("")
+async def automations_create(
+    body: AutomationCreate,
+    request: Request,
+    auth: AutomationsAuth = Depends(_automations_request_scope),
+):
     enforce_rate_limit(
         RateLimit(
-            key=rate_limit_key(request, scope="automation-create", user_id=uid),
+            key=rate_limit_key(
+                request, scope="automation-create", user_id=auth.user_id, org_id=auth.org_id
+            ),
             limit=settings.automation_rate_limit_per_minute,
         )
     )
     row = await async_ops.insert_automation(
-        uid,
+        auth.user_id,
+        auth.org_id,
         title=body.title,
         headline=body.headline,
         natural_language_spec=body.natural_language_spec,
@@ -166,26 +185,33 @@ async def automations_create(body: AutomationCreate, request: Request):
     return await enrich_automation_row(row)
 
 
-@router.get("/{automation_id}", dependencies=[Depends(_automations_request_scope)])
-async def automations_get(automation_id: str):
-    uid = _user_id()
-    row = await async_ops.get_automation(uid, automation_id)
+@router.get("/{automation_id}")
+async def automations_get(
+    automation_id: str, auth: AutomationsAuth = Depends(_automations_request_scope)
+):
+    row = await async_ops.get_automation(auth.user_id, automation_id, org_id=auth.org_id)
     if not row:
         raise HTTPException(status_code=404, detail="Automation not found")
     return await enrich_automation_row(row)
 
 
-@router.patch("/{automation_id}", dependencies=[Depends(_automations_request_scope)])
-async def automations_patch(automation_id: str, body: AutomationPatch):
-    uid = _user_id()
-    existing = await async_ops.get_automation(uid, automation_id)
+@router.patch("/{automation_id}")
+async def automations_patch(
+    automation_id: str,
+    body: AutomationPatch,
+    auth: AutomationsAuth = Depends(_automations_request_scope),
+):
+    existing = await async_ops.get_automation(
+        auth.user_id, automation_id, org_id=auth.org_id
+    )
     if not existing:
         raise HTTPException(status_code=404, detail="Automation not found")
     patch = body.model_dump(exclude_unset=True)
     if not patch:
         return await enrich_automation_row(existing)
     row = await async_ops.update_automation(
-        uid,
+        auth.user_id,
+        auth.org_id,
         automation_id,
         title=patch.get("title"),
         headline=patch.get("headline"),
@@ -201,35 +227,48 @@ async def automations_patch(automation_id: str, body: AutomationPatch):
     return await enrich_automation_row(row)
 
 
-@router.delete("/{automation_id}", dependencies=[Depends(_automations_request_scope)])
-async def automations_delete(automation_id: str):
-    uid = _user_id()
-    if not await async_ops.delete_automation(uid, automation_id):
+@router.delete("/{automation_id}")
+async def automations_delete(
+    automation_id: str, auth: AutomationsAuth = Depends(_automations_request_scope)
+):
+    if not await async_ops.delete_automation(auth.user_id, auth.org_id, automation_id):
         raise HTTPException(status_code=404, detail="Automation not found")
     await automation_scheduler.sync_scheduler_jobs_async()
     return {"ok": True}
 
 
-@router.get("/{automation_id}/runs", dependencies=[Depends(_automations_request_scope)])
-async def automations_runs(automation_id: str, limit: int = 50):
-    uid = _user_id()
-    if not await async_ops.get_automation(uid, automation_id):
+@router.get("/{automation_id}/runs")
+async def automations_runs(
+    automation_id: str,
+    limit: int = 50,
+    auth: AutomationsAuth = Depends(_automations_request_scope),
+):
+    if not await async_ops.get_automation(auth.user_id, automation_id, org_id=auth.org_id):
         raise HTTPException(status_code=404, detail="Automation not found")
-    return {"items": await async_ops.list_runs(uid, automation_id, limit=limit)}
+    return {
+        "items": await async_ops.list_runs(
+            auth.user_id, auth.org_id, automation_id, limit=limit
+        )
+    }
 
 
-@router.post("/{automation_id}/run", dependencies=[Depends(_automations_request_scope)])
-async def automations_run_now(automation_id: str, request: Request):
-    uid = _user_id()
+@router.post("/{automation_id}/run")
+async def automations_run_now(
+    automation_id: str,
+    request: Request,
+    auth: AutomationsAuth = Depends(_automations_request_scope),
+):
     enforce_rate_limit(
         RateLimit(
-            key=rate_limit_key(request, scope="automation-run", user_id=uid),
+            key=rate_limit_key(
+                request, scope="automation-run", user_id=auth.user_id, org_id=auth.org_id
+            ),
             limit=settings.automation_rate_limit_per_minute,
         )
     )
-    if not await async_ops.get_automation(uid, automation_id):
+    if not await async_ops.get_automation(auth.user_id, automation_id, org_id=auth.org_id):
         raise HTTPException(status_code=404, detail="Automation not found")
-    if not await _try_acquire_manual_run_slot(uid):
+    if not await _try_acquire_manual_run_slot(auth.user_id):
         raise HTTPException(
             status_code=429,
             detail=(
@@ -240,8 +279,9 @@ async def automations_run_now(automation_id: str, request: Request):
     agent = getattr(request.app.state, "koraku_agent", None)
     try:
         return await automation_runner.execute_automation(
-            uid,
+            auth.user_id,
             automation_id,
+            org_id=auth.org_id,
             agent=agent,
             trigger_summary="Manual run from the Automations page.",
         )
@@ -250,4 +290,4 @@ async def automations_run_now(automation_id: str, request: Request):
             status_code=500, detail=f"Automation run crashed: {e!s}"
         ) from e
     finally:
-        await _release_manual_run_slot(uid)
+        await _release_manual_run_slot(auth.user_id)

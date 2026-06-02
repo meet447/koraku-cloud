@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from koraku.integrations.sendblue_client import (
     chunk_text,
+    configured,
     normalize_e164,
     resolve_inbound_sender,
     strip_markdown_for_imessage,
+    verify_webhook_secret,
 )
 
 
@@ -36,3 +38,24 @@ def test_chunk_text_splits_long_body() -> None:
     parts = chunk_text("a" * 5000, size=2900)
     assert len(parts) >= 2
     assert sum(len(p) for p in parts) >= 5000
+
+
+def test_verify_webhook_secret_fail_closed_when_configured(monkeypatch) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "sendblue_api_key", "key")
+    monkeypatch.setattr(settings, "sendblue_api_secret", "secret")
+    monkeypatch.setattr(settings, "sendblue_from_number", "+15551234567")
+    monkeypatch.setattr(settings, "sendblue_webhook_secret", "")
+    assert configured()
+    assert verify_webhook_secret({}) is False
+
+
+def test_verify_webhook_secret_accepts_matching_header(monkeypatch) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "sendblue_api_key", "key")
+    monkeypatch.setattr(settings, "sendblue_api_secret", "secret")
+    monkeypatch.setattr(settings, "sendblue_from_number", "+15551234567")
+    monkeypatch.setattr(settings, "sendblue_webhook_secret", "whsec-test")
+    assert verify_webhook_secret({"x-webhook-secret": "whsec-test"}) is True

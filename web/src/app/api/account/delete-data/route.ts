@@ -1,4 +1,4 @@
-import { invalidateUserThreadList } from "@/lib/koraku-redis";
+import { invalidateAllUserThreadLists } from "@/lib/koraku-redis";
 import { KORAKU_COPY } from "@/lib/korakuBrand";
 import { requireSupabaseAuth } from "@/lib/supabase/server";
 
@@ -11,8 +11,8 @@ export async function POST() {
   }
   const { supabase, userId } = auth;
 
+  // chat_message rows cascade when chat_thread is deleted; scope every delete to user_id.
   const results = await Promise.all([
-    supabase.from("chat_message").delete().neq("id", "__never__"),
     supabase.from("chat_thread").delete().eq("user_id", userId),
     supabase.from("koraku_personalization").delete().eq("user_id", userId),
     supabase.from("koraku_automation_run").delete().eq("user_id", userId),
@@ -28,7 +28,7 @@ export async function POST() {
     return Response.json({ error: "Delete failed", details: errors }, { status: 500 });
   }
 
-  await invalidateUserThreadList(userId);
+  await invalidateAllUserThreadLists(userId);
   return Response.json({
     ok: true,
     note: KORAKU_COPY.deleteApiNote,

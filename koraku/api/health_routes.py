@@ -1,7 +1,7 @@
 """Process health and configuration snapshot."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Header, HTTPException, Request
 
 from koraku.automations import scheduler as automation_scheduler
 from koraku.automations.supabase_store import supabase_automations_configured
@@ -11,6 +11,7 @@ from koraku.integrations.supabase_personalization import supabase_personalizatio
 from koraku.integrations import composio as composio_runtime
 from koraku.integrations.blaxel_runtime import cloud_blaxel_block_reason
 from koraku.core import redis_client
+from koraku.core.detached_run_store import RedisDetachedRunStore, get_detached_run_store
 from koraku.core.session_store import active_session_count
 from koraku.core.config import settings
 from koraku.llm.catalog import any_llm_configured, configured_provider_ids, default_chat_model
@@ -18,8 +19,47 @@ from koraku.llm.catalog import any_llm_configured, configured_provider_ids, defa
 router = APIRouter(tags=["health"])
 
 
+def _health_detail_authorized(authorization: str | None, x_health_token: str | None) -> bool:
+    expected = (settings.health_detail_token or "").strip()
+    if not expected:
+        return False
+    for raw in (authorization, x_health_token):
+        if not raw:
+            continue
+        token = raw.strip()
+        if token.lower().startswith("bearer "):
+            token = token[7:].strip()
+        if token == expected:
+            return True
+    return False
+
+
 @router.get("/health")
 async def health(request: Request):
+    """Public liveness + fields required by the web UI."""
+    mode = getattr(request.app.state, "server_mode", "unconfigured")
+    store = get_detached_run_store()
+    return {
+        "status": "ok",
+        "agent": settings.agent_name,
+        "version": settings.version,
+        "mode": mode,
+        "llm_configured": any_llm_configured(),
+        "llm_provider": settings.llm_provider,
+        "detached_runs_redis": isinstance(store, RedisDetachedRunStore),
+    }
+
+
+@router.get("/health/detail")
+async def health_detail(
+    request: Request,
+    authorization: str | None = Header(None),
+    x_health_token: str | None = Header(None, alias="X-Health-Token"),
+):
+    """Operational snapshot — requires ``HEALTH_DETAIL_TOKEN`` (Bearer or X-Health-Token)."""
+    if not _health_detail_authorized(authorization, x_health_token):
+        raise HTTPException(status_code=401, detail="Health detail requires a valid token")
+
     mode = getattr(request.app.state, "server_mode", "unconfigured")
     return {
         "status": "ok",

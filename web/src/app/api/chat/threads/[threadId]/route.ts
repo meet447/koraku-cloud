@@ -1,5 +1,6 @@
 import { invalidateUserThreadList } from "@/lib/koraku-redis";
 import { safeError } from "@/lib/safe-log";
+import { resolveActiveOrgId } from "@/lib/tenant/server";
 import { requireSupabaseAuth } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -32,6 +33,7 @@ export async function DELETE(
     return Response.json({ error: "Database error" }, { status: 500 });
   }
 
-  await invalidateUserThreadList(userId);
+  const orgId = await resolveActiveOrgId(supabase, userId);
+  await invalidateUserThreadList(userId, orgId);
   return Response.json({ ok: true });
 }

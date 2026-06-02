@@ -1,9 +1,11 @@
-const SSE_HEADERS: HeadersInit = {
+export const KORAKU_SSE_RESPONSE_HEADERS: HeadersInit = {
   "Content-Type": "text/event-stream; charset=utf-8",
   "Cache-Control": "no-cache, no-transform",
   Connection: "keep-alive",
   "X-Accel-Buffering": "no",
 };
+
+const SSE_HEADERS = KORAKU_SSE_RESPONSE_HEADERS;
 
 const JSON_HEADERS: HeadersInit = {
   "Content-Type": "application/json",

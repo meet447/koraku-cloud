@@ -20,6 +20,7 @@ from koraku.api.workspace_routes import router as workspace_router
 from koraku.api.sendblue_routes import router as sendblue_router
 from koraku.automations import scheduler as automation_scheduler
 from koraku.integrations.supabase_tenant import supabase_tenant_configured
+from koraku.core.startup_checks import assert_redis_for_multi_worker
 from koraku.llm.catalog import any_llm_configured, default_model_for_provider
 from koraku.workspace.paths import workspace_dir
 
@@ -74,6 +75,7 @@ def _warn_tenant_storage() -> None:
 _assert_workspace_safe()
 _assert_cors_safe()
 _warn_tenant_storage()
+assert_redis_for_multi_worker()
 
 
 @asynccontextmanager

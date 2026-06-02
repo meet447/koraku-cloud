@@ -9,16 +9,24 @@ from koraku.automations import supabase_store
 from koraku.automations.supabase_store import AutomationStatus, TriggerMode
 
 
-async def list_automations(user_id: str) -> list[dict[str, Any]]:
-    return await asyncio.to_thread(supabase_store.list_automations, user_id)
+async def list_automations(user_id: str, org_id: str) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(supabase_store.list_automations, user_id, org_id)
 
 
-async def get_automation(user_id: str, automation_id: str) -> dict[str, Any] | None:
-    return await asyncio.to_thread(supabase_store.get_automation, user_id, automation_id)
+async def get_automation(
+    user_id: str,
+    automation_id: str,
+    *,
+    org_id: str | None = None,
+) -> dict[str, Any] | None:
+    return await asyncio.to_thread(
+        supabase_store.get_automation, user_id, automation_id, org_id=org_id
+    )
 
 
 async def insert_automation(
     user_id: str,
+    org_id: str,
     *,
     title: str,
     headline: str,
@@ -33,6 +41,7 @@ async def insert_automation(
     def _go() -> dict[str, Any]:
         return supabase_store.insert_automation(
             user_id,
+            org_id,
             title=title,
             headline=headline,
             natural_language_spec=natural_language_spec,
@@ -49,6 +58,7 @@ async def insert_automation(
 
 async def update_automation(
     user_id: str,
+    org_id: str,
     automation_id: str,
     *,
     title: str | None = None,
@@ -63,6 +73,7 @@ async def update_automation(
     def _go() -> dict[str, Any] | None:
         return supabase_store.update_automation(
             user_id,
+            org_id,
             automation_id,
             title=title,
             headline=headline,
@@ -77,22 +88,31 @@ async def update_automation(
     return await asyncio.to_thread(_go)
 
 
-async def delete_automation(user_id: str, automation_id: str) -> bool:
-    return await asyncio.to_thread(supabase_store.delete_automation, user_id, automation_id)
+async def delete_automation(user_id: str, org_id: str, automation_id: str) -> bool:
+    return await asyncio.to_thread(supabase_store.delete_automation, user_id, org_id, automation_id)
 
 
-async def list_runs(user_id: str, automation_id: str, limit: int = 50) -> list[dict[str, Any]]:
-    return await asyncio.to_thread(supabase_store.list_runs, user_id, automation_id, limit)
+async def list_runs(
+    user_id: str, org_id: str, automation_id: str, limit: int = 50
+) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(supabase_store.list_runs, user_id, org_id, automation_id, limit)
 
 
-async def insert_run_start(user_id: str, automation_id: str, *, trigger_summary: str) -> str:
+async def insert_run_start(
+    user_id: str, org_id: str, automation_id: str, *, trigger_summary: str
+) -> str:
     return await asyncio.to_thread(
-        supabase_store.insert_run_start, user_id, automation_id, trigger_summary=trigger_summary
+        supabase_store.insert_run_start,
+        user_id,
+        org_id,
+        automation_id,
+        trigger_summary=trigger_summary,
     )
 
 
 async def finish_run(
     user_id: str,
+    org_id: str,
     run_id: str,
     *,
     status: Literal["success", "failed"],
@@ -104,6 +124,7 @@ async def finish_run(
     await asyncio.to_thread(
         supabase_store.finish_run,
         user_id,
+        org_id,
         run_id,
         status=status,
         result_summary=result_summary,
@@ -115,6 +136,7 @@ async def finish_run(
 
 async def set_automation_run_times(
     user_id: str,
+    org_id: str,
     automation_id: str,
     *,
     last_run_at: datetime | None = None,
@@ -123,6 +145,7 @@ async def set_automation_run_times(
     await asyncio.to_thread(
         supabase_store.set_automation_run_times,
         user_id,
+        org_id,
         automation_id,
         last_run_at=last_run_at,
         next_run_at=next_run_at,

@@ -5,9 +5,8 @@ import logging
 import uuid
 from typing import Any
 
-import httpx
-
 from koraku.automations.supabase_store import _headers, _require_config, _rest_url
+from koraku.integrations.supabase_rest import get_http_client
 from koraku.core.config import settings
 from koraku.core.tenant import ORG_ID_HEADER
 from koraku.core.ttl_cache import TtlCache
@@ -37,14 +36,13 @@ def ensure_personal_org_sync(user_id: str) -> str | None:
     if not supabase_tenant_configured():
         return None
     try:
-        with httpx.Client(timeout=20.0) as client:
-            r = client.post(
-                _rest_url("/rpc/koraku_ensure_personal_org"),
-                headers=_headers(),
-                json={"p_user_id": uid},
-            )
-            r.raise_for_status()
-            data = r.json()
+        r = get_http_client().post(
+            _rest_url("/rpc/koraku_ensure_personal_org"),
+            headers=_headers(),
+            json={"p_user_id": uid},
+        )
+        r.raise_for_status()
+        data = r.json()
     except Exception as e:
         log.warning("koraku_ensure_personal_org failed user=%s: %s", uid, e)
         return None
@@ -64,10 +62,9 @@ def _member_org_ids_sync(user_id: str) -> list[str]:
             return list(cached)
     q = f"/koraku_org_member?user_id=eq.{uid}&select=org_id,is_default"
     try:
-        with httpx.Client(timeout=20.0) as client:
-            r = client.get(_rest_url(q), headers=_headers())
-            r.raise_for_status()
-            rows = r.json()
+        r = get_http_client().get(_rest_url(q), headers=_headers())
+        r.raise_for_status()
+        rows = r.json()
     except Exception as e:
         log.warning("org membership list failed user=%s: %s", uid, e)
         return []

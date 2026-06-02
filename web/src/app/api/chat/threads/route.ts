@@ -88,6 +88,6 @@ export async function POST(req: Request) {
     return Response.json({ error: "Database error" }, { status: 500 });
   }
 
-  await invalidateUserThreadList(userId);
+  await invalidateUserThreadList(userId, orgId);
   return Response.json({ id: data.id, title: data.title });
 }

@@ -5,11 +5,12 @@ import logging
 import os
 from pathlib import PurePosixPath
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
 from koraku.core.config import settings
+from koraku.integrations.inbound_media_url import validate_inbound_media_url, validate_redirect_url
 
 log = logging.getLogger(__name__)
 
@@ -75,15 +76,36 @@ def _filename_for_url(url: str, content_type: str | None) -> str:
     return f"voice{ext or '.caf'}"
 
 
+_REDIRECT_STATUS = frozenset({301, 302, 303, 307, 308})
+_MAX_REDIRECTS = 5
+
+
 async def download_media(url: str) -> tuple[bytes, str | None] | None:
+    current = validate_inbound_media_url(url)
+    if not current:
+        return None
     try:
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-            res = await client.get(url)
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
+            res: httpx.Response | None = None
+            for _ in range(_MAX_REDIRECTS + 1):
+                res = await client.get(current)
+                if res.status_code in _REDIRECT_STATUS:
+                    location = (res.headers.get("location") or "").strip()
+                    if not location:
+                        log.warning("inbound media redirect missing Location header")
+                        return None
+                    nxt = validate_redirect_url(urljoin(current, location))
+                    if not nxt:
+                        return None
+                    current = nxt
+                    continue
+                break
     except httpx.HTTPError as e:
         log.warning("voice media download failed: %s", e)
         return None
-    if not res.is_success:
-        log.warning("voice media download %s: %s", res.status_code, url[:120])
+    if res is None or not res.is_success:
+        code = res.status_code if res is not None else "?"
+        log.warning("voice media download %s: %s", code, url[:120])
         return None
     data = res.content
     if len(data) > MAX_AUDIO_BYTES:

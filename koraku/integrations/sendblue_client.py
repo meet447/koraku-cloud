@@ -235,7 +235,8 @@ class TypingLoop:
 def verify_webhook_secret(headers: dict[str, str]) -> bool:
     secret = (settings.sendblue_webhook_secret or "").strip()
     if not secret:
-        return True
+        # Fail closed when SendBlue is enabled — misconfigured deploys must not accept forged webhooks.
+        return not configured()
     for name in ("x-webhook-secret", "sb-signing-secret", "x-sendblue-signature"):
         val = headers.get(name) or headers.get(name.lower())
         if val and val.strip() == secret:
