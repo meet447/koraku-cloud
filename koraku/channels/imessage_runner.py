@@ -17,7 +17,8 @@ from koraku.integrations.cloud_user import reset_cloud_user_id, set_cloud_user_i
 from koraku.integrations import sendblue_client
 from koraku.integrations.sendblue_client import send_message
 from koraku.integrations.supabase_chat_history import hydrate_session_messages_from_db
-from koraku.integrations.supabase_external import append_thread_message_sync, lookup_user_by_phone_sync
+from koraku.integrations.supabase_external import append_thread_message_sync
+from koraku.integrations.supermemory_client import extract_last_assistant_text
 from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
 from koraku.agent.runtime_context import AgentRunContext
 from koraku.tools.channel_send_tool import CHANNEL_SEND_TOOL
@@ -57,13 +58,26 @@ async def run_imessage_turn(
         return
 
     stop_typing = asyncio.Event()
+    typing_task: asyncio.Task[None] | None = None
+
+    async def _halt_typing() -> None:
+        """Stop refreshing typing before outbound bubbles (iMessage lingers ~3s per ping)."""
+        if stop_typing.is_set():
+            return
+        stop_typing.set()
+        if typing_task is not None and not typing_task.done():
+            typing_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await typing_task
 
     async def _typing_task() -> None:
         await sendblue_client.send_typing_indicator(phone_e164)
         while not stop_typing.is_set():
             try:
-                await asyncio.wait_for(stop_typing.wait(), timeout=5.0)
+                await asyncio.wait_for(stop_typing.wait(), timeout=4.0)
             except asyncio.TimeoutError:
+                if stop_typing.is_set():
+                    return
                 await sendblue_client.send_typing_indicator(phone_e164)
 
     typing_task = asyncio.create_task(_typing_task())
@@ -74,6 +88,7 @@ async def run_imessage_turn(
         body = (msg or "").strip()
         if not body:
             return
+        await _halt_typing()
         await send_message(phone_e164, body)
         sent_parts.append(body)
         await asyncio.to_thread(
@@ -135,11 +150,9 @@ async def run_imessage_turn(
         ):
             pass
 
-        final = ""
-        for m in reversed(session.messages):
-            if m.role == "assistant" and isinstance(m.content, str) and m.content.strip():
-                final = m.content.strip()
-                break
+        await _halt_typing()
+
+        final = extract_last_assistant_text(session)
 
         if final:
             tail = final
@@ -148,8 +161,23 @@ async def run_imessage_turn(
                     tail = tail[len(part) :].lstrip()
             if tail.strip() and tail.strip() not in sent_parts:
                 await on_send(tail)
+
+        if not sent_parts and not final.strip():
+            log.warning("imessage turn produced no outbound text for thread %s", thread_id)
+            await send_message(
+                phone_e164,
+                "I finished but had nothing to send — try asking again in one short sentence.",
+            )
+        else:
+            log.info(
+                "imessage turn done thread=%s bubbles=%s final_chars=%s",
+                thread_id,
+                len(sent_parts),
+                len(final),
+            )
     except Exception:
         log.exception("imessage agent turn failed")
+        await _halt_typing()
         await send_message(
             phone_e164,
             "Something went wrong on my side — try again in a moment.",
@@ -163,7 +191,4 @@ async def run_imessage_turn(
             reset_cloud_user_id(cloud_tok)
         if tenant_tok is not None:
             reset_tenant_org_id(tenant_tok)
-        stop_typing.set()
-        typing_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await typing_task
+        await _halt_typing()

@@ -43,6 +43,12 @@ KORAKU_BACKEND_URL=http://127.0.0.1:8000
 
 Restart **`python main.py`** and **`npm run dev`** after changing env.
 
+**Local API reload:** If you see typing but no reply, disable hot reload so webhook work is not killed mid-turn:
+
+```bash
+UVICORN_RELOAD=false python main.py
+```
+
 ## 2. Verify your phone in SendBlue
 
 Use your **real** iMessage number (E.164, e.g. `+91…` or `+1…`). Do not use example numbers like `+14155551234`.
@@ -87,6 +93,12 @@ If you set a signing secret in SendBlue, add the same value to `.env` as `SENDBL
    - `sendblue inbound from +1…`
    - `sendblue inbound linked user …`
 3. You should get an iMessage reply from Koraku.
+
+## Typing indicator lingers after a reply
+
+iMessage keeps the “…” bubble visible for a few seconds after each typing signal (SendBlue has no “stop typing” API). Koraku stops pinging typing **before** it sends message bubbles.
+
+If typing still hangs too long, check SendBlue **Settings** for **auto typing on inbound** — turn it off when Koraku manages typing during agent turns (otherwise you get a second indicator from SendBlue).
 
 ## Troubleshooting
 
