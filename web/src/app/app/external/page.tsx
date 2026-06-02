@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { MessageCircle, Loader2, CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Loader2, MessageCircle, Phone } from "lucide-react";
 import { APP_BASE } from "@/lib/app-path";
+import { KORAKU_COPY } from "@/lib/korakuBrand";
+import { KorakuPageHeader } from "@/components/KorakuPageHeader";
 import { useKorakuChatShell } from "@/context/KorakuChatContext";
 
 type ExternalStatus = {
@@ -84,136 +86,183 @@ export default function ExternalPage() {
 
   if (!status) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-neutral-500">
-        <Loader2 className="h-6 w-6 animate-spin" />
-      </div>
+      <main className="flex min-h-0 flex-1 items-center justify-center bg-[#fbfaf6] px-6 py-10">
+        <Loader2 className="h-7 w-7 animate-spin text-koraku-muted" aria-label="Loading" />
+      </main>
     );
   }
 
   return (
-    <div className="mx-auto max-w-lg px-6 py-10">
-      <div className="mb-8 flex items-center gap-3">
-        <MessageCircle className="h-8 w-8 text-violet-600" strokeWidth={1.5} />
-        <div>
-          <h1 className="text-xl font-semibold text-neutral-900">External</h1>
-          <p className="text-sm text-neutral-500">
-            Text Koraku from iMessage or SMS after you verify your number.
+    <main className="min-h-0 flex-1 overflow-y-auto bg-[#fbfaf6] px-6 py-10">
+      <div className="mx-auto max-w-2xl">
+        <KorakuPageHeader
+          eyebrow="External"
+          title="Message Koraku from your phone"
+          description={KORAKU_COPY.externalIntro}
+        />
+
+        {error ? (
+          <p
+            className="mt-6 rounded-2xl bg-red-50 px-4 py-3 text-sm font-medium text-red-800 ring-1 ring-red-200/80"
+            role="alert"
+          >
+            {error}
           </p>
-        </div>
-      </div>
+        ) : null}
 
-      {!status.configured ? (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          SendBlue is not configured on this server. Add{" "}
-          <code className="text-xs">SENDBLUE_API_KEY</code>,{" "}
-          <code className="text-xs">SENDBLUE_API_SECRET</code>, and{" "}
-          <code className="text-xs">SENDBLUE_FROM_NUMBER</code> to the API environment.
-        </p>
-      ) : null}
-
-      {status.from_number ? (
-        <p className="mb-6 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
-          <span className="font-medium text-neutral-900">Koraku number: </span>
-          <a
-            href={`sms:${encodeURIComponent(status.from_number)}`}
-            className="text-violet-700 underline"
-          >
-            {status.from_number}
-          </a>
-        </p>
-      ) : null}
-
-      {status.linked ? (
-        <div className="space-y-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4">
-          <div className="flex items-center gap-2 text-emerald-800">
-            <CheckCircle2 className="h-5 w-5" />
-            <span className="font-medium">Phone linked</span>
-          </div>
-          <p className="text-sm text-emerald-900">{status.phone_e164}</p>
-          <Link
-            href={APP_BASE}
-            onClick={() => {
-              if (status.imessage_thread_id) {
-                shell.selectSession(status.imessage_thread_id);
-              }
-            }}
-            className="inline-block text-sm font-medium text-violet-700 underline"
-          >
-            Open iMessage chat in Koraku
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
-          <label className="block text-sm font-medium text-neutral-800">
-            Your phone (E.164, e.g. +14155551234)
-          </label>
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
-            placeholder="+1…"
-          />
-          <button
-            type="button"
-            disabled={busy || !phone.trim() || !status.configured}
-            onClick={() => void startVerify()}
-            className="w-full rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {busy ? "Sending…" : "Send verification code"}
-          </button>
-          {sent ? (
-            <p className="text-xs text-neutral-500">
-              Check iMessage/SMS for your code, or reply{" "}
-              <code className="rounded bg-neutral-100 px-1">KORAKU-######</code> to the Koraku
-              number.
-            </p>
+        <div className="mt-8 space-y-5">
+          {!status.configured ? (
+            <section
+              className="rounded-[28px] border border-amber-200/80 bg-amber-50/90 px-5 py-4 ring-1 ring-amber-200/60"
+              role="status"
+            >
+              <p className="text-sm font-medium leading-relaxed text-amber-950">
+                {KORAKU_COPY.externalNotConfigured}
+              </p>
+            </section>
           ) : null}
-          <label className="block pt-2 text-sm font-medium text-neutral-800">
-            Verification code
-          </label>
-          <input
-            type="text"
-            inputMode="numeric"
-            maxLength={12}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
-            placeholder="6 digits"
-          />
-          <button
-            type="button"
-            disabled={busy || !phone.trim() || !code.trim()}
-            onClick={() => void confirmVerify()}
-            className="w-full rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-900 disabled:opacity-50"
-          >
-            Confirm and link
-          </button>
+
+          {status.from_number ? (
+            <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-neutral-200/80">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 ring-1 ring-orange-200/70">
+                  <Phone className="h-5 w-5 text-orange-700" strokeWidth={2} aria-hidden />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold tracking-tight text-koraku-ink">
+                    Koraku number
+                  </h2>
+                  <p className="mt-1 text-sm font-medium text-koraku-muted">
+                    Save this contact to text Koraku from iMessage or SMS.
+                  </p>
+                  <a
+                    href={`sms:${encodeURIComponent(status.from_number)}`}
+                    className="mt-3 inline-block text-[15px] font-semibold text-orange-700 underline-offset-2 hover:underline"
+                  >
+                    {status.from_number}
+                  </a>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {status.linked ? (
+            <section className="rounded-[28px] border border-emerald-200/80 bg-emerald-50/80 p-6 ring-1 ring-emerald-200/60">
+              <div className="flex items-center gap-2 text-emerald-900">
+                <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden />
+                <h2 className="text-lg font-bold tracking-tight">Phone linked</h2>
+              </div>
+              <p className="mt-2 text-sm font-medium text-emerald-900/90">{status.phone_e164}</p>
+              <p className="mt-2 text-sm font-medium text-emerald-800/90">
+                {KORAKU_COPY.externalLinkedHint}
+              </p>
+              <Link
+                href={APP_BASE}
+                onClick={() => {
+                  if (status.imessage_thread_id) {
+                    shell.selectSession(status.imessage_thread_id);
+                  }
+                }}
+                className="mt-4 inline-flex items-center justify-center rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800"
+              >
+                Open message thread
+              </Link>
+            </section>
+          ) : (
+            <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-neutral-200/80">
+              <div className="mb-5 flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-koraku-panel ring-1 ring-neutral-200/80">
+                  <MessageCircle className="h-5 w-5 text-koraku-ink" strokeWidth={2} aria-hidden />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold tracking-tight text-koraku-ink">
+                    Link your number
+                  </h2>
+                  <p className="mt-1 text-sm font-medium text-koraku-muted">
+                    We send a short code to confirm you own the phone you text from.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    Your phone
+                  </label>
+                  <p className="mt-1 text-sm font-medium text-neutral-600">
+                    Use E.164 format, e.g. +14155551234
+                  </p>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="mt-3 w-full rounded-2xl border border-neutral-200/80 bg-koraku-panel px-4 py-3 text-[15px] font-medium text-koraku-ink outline-none focus:border-neutral-300 focus:bg-white focus:ring-2 focus:ring-neutral-200/80 disabled:opacity-50"
+                    placeholder="+1…"
+                    disabled={!status.configured}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  disabled={busy || !phone.trim() || !status.configured}
+                  onClick={() => void startVerify()}
+                  className="w-full rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {busy ? "Sending…" : "Send verification code"}
+                </button>
+
+                {sent ? (
+                  <p className="rounded-2xl bg-koraku-panel px-4 py-3 text-xs font-medium leading-relaxed text-neutral-600 ring-1 ring-neutral-200/80">
+                    Check iMessage or SMS for your code. You can also reply with{" "}
+                    <code className="rounded-md bg-white px-1.5 py-0.5 font-mono text-[12px] text-koraku-ink ring-1 ring-neutral-200/80">
+                      KORAKU-######
+                    </code>{" "}
+                    to the Koraku number.
+                  </p>
+                ) : null}
+
+                <div className="border-t border-neutral-200/80 pt-4">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    Verification code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={12}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    className="mt-3 w-full rounded-2xl border border-neutral-200/80 bg-koraku-panel px-4 py-3 text-[15px] font-medium text-koraku-ink outline-none focus:border-neutral-300 focus:bg-white focus:ring-2 focus:ring-neutral-200/80"
+                    placeholder="6 digits"
+                  />
+                  <button
+                    type="button"
+                    disabled={busy || !phone.trim() || !code.trim()}
+                    onClick={() => void confirmVerify()}
+                    className="mt-4 w-full rounded-full border border-neutral-200/90 bg-white px-5 py-2.5 text-sm font-semibold text-koraku-ink transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Confirm and link
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
+
+          <section className="rounded-[28px] bg-white/80 p-6 ring-1 ring-neutral-200/80">
+            <h2 className="text-sm font-bold text-koraku-ink">Getting started</h2>
+            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm font-medium leading-relaxed text-neutral-600">
+              <li>
+                Add the Koraku number to your contacts, then send one message from your real
+                phone.
+              </li>
+              <li>Link the same number here — not a placeholder or test line.</li>
+              <li>
+                Your administrator must point inbound messaging webhooks at this Koraku server
+                (see server docs for setup).
+              </li>
+            </ol>
+          </section>
         </div>
-      )}
-
-      {error ? (
-        <p className="mt-4 text-sm text-red-600" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      <div className="mt-8 space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-600">
-        <p className="font-medium text-neutral-800">SendBlue Free Tier (required for iMessage)</p>
-        <ol className="list-decimal space-y-1 pl-4">
-          <li>
-            <code className="rounded bg-white px-1">sendblue add-contact +1…</code> — your real
-            number, then text the Koraku line once.
-          </li>
-          <li>Link the same number here on External (not +14155551234).</li>
-          <li>
-            Webhook:{" "}
-            <code className="rounded bg-white px-1">sendblue webhooks set-receive https://…/sendblue/webhook</code>{" "}
-            → public API :8000 (e.g. ngrok). See{" "}
-            <code className="rounded bg-white px-1">docs/SENDBLUE.md</code>.
-          </li>
-        </ol>
       </div>
-    </div>
+    </main>
   );
 }

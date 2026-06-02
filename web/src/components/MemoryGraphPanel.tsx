@@ -122,13 +122,13 @@ export default function MemoryGraphPanel({ searchQuery = "" }: MemoryGraphPanelP
 
   if (error && !isLoading) {
     return (
-      <section className="rounded-3xl border border-red-200 bg-red-50 px-6 py-8 text-center">
+      <section className="rounded-[28px] border border-red-200/80 bg-red-50 px-6 py-8 text-center ring-1 ring-red-200/60">
         <p className="text-sm font-semibold text-red-900">Could not load memory</p>
         <p className="mt-2 text-sm font-medium text-red-800">{error.message}</p>
         <button
           type="button"
           onClick={() => void fetchPage(1, false)}
-          className="mt-4 rounded-full border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-900 hover:bg-red-50"
+          className="mt-4 rounded-full border border-red-300 bg-white px-5 py-2.5 text-sm font-semibold text-red-900 transition hover:bg-red-50"
         >
           Retry
         </button>
@@ -137,18 +137,18 @@ export default function MemoryGraphPanel({ searchQuery = "" }: MemoryGraphPanelP
   }
 
   return (
-    <section className="overflow-hidden rounded-3xl bg-neutral-950 ring-1 ring-neutral-800">
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-3">
-        <p className="text-xs font-semibold text-white/50">
+    <section className="overflow-hidden rounded-[28px] bg-white shadow-[0_24px_70px_-40px_rgb(0_0_0_/_0.2)] ring-1 ring-neutral-200/80">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200/80 bg-koraku-panel px-5 py-3.5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
           Learned memory · pan & zoom · click nodes for detail
         </p>
         {!isLoading && !error ? (
-          <span className="text-xs font-semibold text-white/40">
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-koraku-muted ring-1 ring-neutral-200/80">
             {filteredDocuments.length} source{filteredDocuments.length === 1 ? "" : "s"}
           </span>
         ) : null}
       </div>
-      <div className="relative h-[min(60vh,560px)] min-h-[360px] w-full bg-[#0a0a0a]">
+      <div className="relative h-[min(60vh,560px)] min-h-[360px] w-full bg-neutral-950">
         <MemoryGraph
           documents={filteredDocuments}
           isLoading={isLoading}

@@ -63,4 +63,10 @@ export const KORAKU_COPY = {
     "Koraku app data was deleted. Removing your sign-in account or disconnecting linked apps may require additional steps.",
   setupLlm:
     "No language model is configured yet. Add your model API key in the server environment, then restart the API.",
+  externalIntro:
+    "Text Koraku from iMessage or SMS after you verify your number. Linked threads appear in chat like any other conversation.",
+  externalNotConfigured:
+    "Phone messaging is not enabled on this server yet. Ask your administrator to complete messaging setup.",
+  externalLinkedHint:
+    "Open your linked thread in Koraku to continue the conversation on the web.",
 } as const;
