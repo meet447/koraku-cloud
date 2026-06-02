@@ -17,18 +17,11 @@ body {
 
 @layer utilities {
   .landing-pixel-headline {
+    @apply font-landing-pixel;
     -webkit-font-smoothing: none;
     -moz-osx-font-smoothing: grayscale;
     font-smooth: never;
     text-rendering: geometricPrecision;
-    font-kerning: none;
-    paint-order: stroke fill;
-    -webkit-text-stroke: 0.45px currentColor;
-    text-shadow:
-      1px 0 0 currentColor,
-      0 1px 0 currentColor,
-      2px 2px 0 rgba(36, 33, 31, 0.12),
-      3px 3px 0 rgba(36, 33, 31, 0.06);
   }
 }
 

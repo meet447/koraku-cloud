@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { navItems } from "@/components/landing/landing-data";
-import { LANDING_CONTAINER } from "@/components/landing/landing-layout";
+import { LANDING_CONTAINER, LANDING_FOOTER_BG } from "@/components/landing/landing-layout";
 import { APP_BASE } from "@/lib/app-path";
+import { cn } from "@/lib/cn";
 
 const footerColumns = [
   {
@@ -19,10 +20,7 @@ const footerColumns = [
   },
   {
     title: "Account",
-    links: [
-      { label: "Log in", href: "/sign-in" },
-      { label: "Sign up", href: "/sign-up" },
-    ],
+    links: [{ label: "Sign in", href: "/sign-in" }],
   },
   {
     title: "Legal",
@@ -35,7 +33,7 @@ const footerColumns = [
 
 export function PixelFooter() {
   return (
-    <footer className="border-t border-black/10 bg-[#f5f4f1]">
+    <footer className={cn("border-t border-black/10", LANDING_FOOTER_BG)}>
       <div className="h-1 bg-orange-600" aria-hidden />
 
       <div className={`${LANDING_CONTAINER} px-5 py-14 sm:px-8 lg:py-16`}>
@@ -69,7 +67,7 @@ export function PixelFooter() {
 
         <div className="overflow-hidden pt-10 lg:pt-12">
           <p
-            className="landing-pixel-headline pointer-events-none select-none font-landing-serif text-[clamp(5rem,18vw,12rem)] font-semibold leading-[0.82] tracking-[-0.07em] text-stone-900"
+            className="landing-pixel-headline pointer-events-none select-none text-[clamp(5rem,18vw,12rem)] font-semibold leading-[0.82] tracking-[-0.07em] text-stone-900"
             aria-hidden
           >
             Koraku

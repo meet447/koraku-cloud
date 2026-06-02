@@ -1,4 +1,4 @@
-import { Caveat, Cormorant_Garamond, DM_Sans, Inter, Outfit } from "next/font/google";
+import { Caveat, Cormorant_Garamond, DM_Sans, Inter, Outfit, Pixelify_Sans } from "next/font/google";
 import { cn } from "@/lib/cn";
 
 const inter = Inter({
@@ -36,6 +36,13 @@ const cormorant = Cormorant_Garamond({
   variable: "--font-cormorant",
 });
 
+const pixelify = Pixelify_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-pixelify",
+});
+
 export function landingFontClassName() {
   return cn(
     inter.variable,
@@ -43,8 +50,9 @@ export function landingFontClassName() {
     dmSans.variable,
     caveat.variable,
     cormorant.variable,
+    pixelify.variable,
     "font-landing-sans text-landing-body antialiased",
   );
 }
 
-export { inter, outfit, dmSans, caveat, cormorant };
+export { inter, outfit, dmSans, caveat, cormorant, pixelify };

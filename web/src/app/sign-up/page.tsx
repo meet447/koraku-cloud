@@ -1,24 +1,11 @@
-import Link from "next/link";
-import { OAuthSignInButtons } from "@/components/OAuthSignInButtons";
-import { KorakuAuthShell } from "@/components/KorakuAuthShell";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default function SignUpPage() {
-  return (
-    <KorakuAuthShell
-      title="Create account"
-      description={
-        <>
-          Sign in with Google or GitHub to create your Koraku account, then teach Koraku
-          how to help you. Already have one?{" "}
-          <Link href="/sign-in" className="font-semibold text-koraku-ink underline">
-            Sign in
-          </Link>
-        </>
-      }
-    >
-      <OAuthSignInButtons />
-    </KorakuAuthShell>
-  );
+type SearchParams = Promise<{ next?: string }>;
+
+export default async function SignUpPage({ searchParams }: { searchParams: SearchParams }) {
+  const params = await searchParams;
+  const next = params.next?.trim();
+  redirect(next ? `/sign-in?next=${encodeURIComponent(next)}` : "/sign-in");
 }

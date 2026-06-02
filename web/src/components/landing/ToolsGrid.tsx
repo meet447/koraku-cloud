@@ -1,5 +1,5 @@
 import { integrationShowcase } from "@/components/landing/landing-data";
-import { LANDING_CONTAINER, LANDING_SECTION } from "@/components/landing/landing-layout";
+import { LANDING_CONTAINER, LANDING_PAGE_BG, LANDING_SECTION, LANDING_SURFACE } from "@/components/landing/landing-layout";
 import { toolkitIconUrl } from "@/lib/toolkit-icons";
 
 function integrationIcon(iconSlug: string, hex?: string) {
@@ -8,9 +8,9 @@ function integrationIcon(iconSlug: string, hex?: string) {
 
 export function ToolsGrid() {
   return (
-    <section id="integrations" className={`bg-[#f8f8f7] ${LANDING_SECTION}`}>
+    <section id="integrations" className={`${LANDING_PAGE_BG} ${LANDING_SECTION}`}>
       <div className={LANDING_CONTAINER}>
-        <h2 className="landing-pixel-headline max-w-3xl font-landing-serif text-[3.2rem] font-semibold leading-[0.95] tracking-[-0.06em] text-[#282522] sm:text-[4.8rem]">
+        <h2 className="landing-pixel-headline max-w-3xl text-[3.2rem] font-semibold leading-[0.95] tracking-[-0.06em] text-[#282522] sm:text-[4.8rem]">
           Connect the tools agents need
         </h2>
         <p className="mt-4 max-w-2xl text-base leading-7 text-stone-500 sm:text-[17px]">
@@ -22,7 +22,7 @@ export function ToolsGrid() {
           {integrationShowcase.map((integration) => (
             <div
               key={integration.toolkit}
-              className="flex min-h-[108px] flex-col items-center justify-center rounded-lg border border-black/10 bg-[#f8f8f7] px-2 py-5 text-center transition hover:border-black/20 hover:bg-white"
+              className={`flex min-h-[108px] flex-col items-center justify-center rounded-lg border border-black/10 ${LANDING_SURFACE} px-2 py-5 text-center transition hover:border-black/20 hover:bg-white`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -39,7 +39,7 @@ export function ToolsGrid() {
           ))}
         </div>
         <p className="mt-5 text-sm text-stone-400">
-          Plus Stripe, Shopify, Salesforce, Trello, Confluence, and more.
+          Plus Stripe, Shopify, Salesforce, Slack, Confluence, and more.
         </p>
       </div>
     </section>

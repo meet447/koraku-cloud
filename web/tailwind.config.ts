@@ -35,6 +35,7 @@ export default {
         "landing-body": ["var(--font-dm-sans)", "DM Sans", "ui-sans-serif", "system-ui", "sans-serif"],
         "landing-hand": ["var(--font-caveat)", "Caveat", "cursive"],
         "landing-serif": ["var(--font-cormorant)", "Cormorant Garamond", "Georgia", "serif"],
+        "landing-pixel": ["var(--font-pixelify)", "Pixelify Sans", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       borderRadius: {
         "4xl": "2rem",

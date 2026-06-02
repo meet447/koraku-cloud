@@ -2,7 +2,7 @@
 
 import { Cpu } from "lucide-react";
 import { useEffect, useState } from "react";
-import { LANDING_CONTAINER, LANDING_SECTION } from "@/components/landing/landing-layout";
+import { LANDING_CONTAINER, LANDING_FOOTER_BG, LANDING_PAGE_BG, LANDING_SECTION, LANDING_SURFACE } from "@/components/landing/landing-layout";
 import {
   fetchLandingLlmModels,
   type LandingLlmModel,
@@ -51,9 +51,9 @@ export function ModelsSection() {
   }, []);
 
   return (
-    <section id="models" className={`bg-[#f8f8f7] ${LANDING_SECTION}`}>
+    <section id="models" className={`${LANDING_PAGE_BG} ${LANDING_SECTION}`}>
       <div className={LANDING_CONTAINER}>
-        <h2 className="landing-pixel-headline max-w-3xl font-landing-serif text-[3.2rem] font-semibold leading-[0.95] tracking-[-0.06em] text-[#282522] sm:text-[4.8rem]">
+        <h2 className="landing-pixel-headline max-w-3xl text-[3.2rem] font-semibold leading-[0.95] tracking-[-0.06em] text-[#282522] sm:text-[4.8rem]">
           Multiple LLMs, one composer
         </h2>
         <p className="mt-4 max-w-2xl text-base leading-7 text-stone-500 sm:text-[17px]">
@@ -66,7 +66,7 @@ export function ModelsSection() {
             ? Array.from({ length: 4 }, (_, index) => (
                 <div
                   key={`skeleton-${index}`}
-                  className="flex min-h-[160px] flex-col items-center justify-center rounded-lg border border-black/10 bg-[#f8f8f7] px-5 py-8"
+                  className={`flex min-h-[160px] flex-col items-center justify-center rounded-lg border border-black/10 ${LANDING_SURFACE} px-5 py-8`}
                 >
                   <div className="h-[52px] w-[52px] animate-pulse rounded-md bg-stone-200" />
                   <div className="mt-5 h-4 w-24 animate-pulse rounded bg-stone-200" />
@@ -75,7 +75,7 @@ export function ModelsSection() {
             : models.map((model) => (
                 <article
                   key={model.id}
-                  className="flex min-h-[160px] flex-col items-center justify-center rounded-lg border border-black/10 bg-[#f8f8f7] px-5 py-8 transition hover:border-black/20 hover:bg-white"
+                  className={`flex min-h-[160px] flex-col items-center justify-center rounded-lg border border-black/10 ${LANDING_SURFACE} px-5 py-8 transition hover:border-black/20 hover:bg-white`}
                 >
                   <ModelIcon model={model} />
                   <h3 className="mt-5 text-base font-semibold text-stone-900">{model.label}</h3>

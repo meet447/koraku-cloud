@@ -4,11 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { APP_BASE } from "@/lib/app-path";
-import { LANDING_CONTAINER, LANDING_SECTION } from "@/components/landing/landing-layout";
+import { LANDING_CONTAINER, LANDING_PAGE_BG, LANDING_SECTION } from "@/components/landing/landing-layout";
 
 export function HeroSection() {
   return (
-    <section className={`border-b border-black/10 bg-[#f8f8f7] ${LANDING_SECTION}`}>
+    <section className={`border-b border-black/10 ${LANDING_PAGE_BG} ${LANDING_SECTION}`}>
       <div className={LANDING_CONTAINER}>
         <motion.div
           initial={{ opacity: 0, y: 18 }}
@@ -16,7 +16,7 @@ export function HeroSection() {
           transition={{ duration: 0.7, ease: "easeOut" }}
           className="max-w-[820px] pt-2 sm:pt-4"
         >
-          <h1 className="landing-pixel-headline font-landing-serif text-[4.5rem] font-semibold leading-[0.88] tracking-[-0.075em] text-[#24211f] sm:text-[6rem] lg:text-[6.8rem]">
+          <h1 className="landing-pixel-headline text-[4.5rem] font-semibold leading-[0.88] tracking-[-0.075em] text-[#24211f] sm:text-[6rem] lg:text-[6.8rem]">
             Automate your work with natural language
           </h1>
           <p className="mt-6 max-w-[620px] text-base font-medium leading-7 text-[#252525] sm:text-[17px]">

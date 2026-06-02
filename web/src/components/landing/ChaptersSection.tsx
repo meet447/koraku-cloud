@@ -1,11 +1,13 @@
+import { LANDING_CONTAINER, LANDING_PAGE_BG, LANDING_SECTION, LANDING_SURFACE } from "@/components/landing/landing-layout";
+
 export function ChaptersSection() {
   return (
-    <section id="how-to" className="border-y border-black/10 bg-[#f8f8f7] px-5 py-16 font-landing-sans sm:px-8 lg:py-20">
+    <section id="how-to" className={`border-y border-black/10 ${LANDING_PAGE_BG} px-5 py-16 font-landing-sans sm:px-8 lg:py-20`}>
       <div className="mx-auto w-full max-w-[1120px]">
         <p className="mb-4 inline-block rounded bg-white px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 shadow-sm">
           Core Features
         </p>
-        <h2 className="landing-pixel-headline max-w-4xl font-landing-serif text-[3.2rem] font-semibold leading-[0.95] tracking-[-0.055em] text-[#282522] sm:text-[4.8rem]">
+        <h2 className="landing-pixel-headline max-w-4xl text-[3.2rem] font-semibold leading-[0.95] tracking-[-0.055em] text-[#282522] sm:text-[4.8rem]">
           Built for agent work that feels native
         </h2>
         <p className="mt-4 max-w-2xl text-base font-medium leading-7 text-stone-500 sm:text-[17px]">
@@ -52,7 +54,7 @@ export function ChaptersSection() {
 
           <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div
-              className="absolute inset-x-0 bottom-[70px] top-0 bg-[#f3f2ef] px-6 py-7"
+              className="absolute inset-x-0 bottom-[70px] top-0 bg-[#f7f7f7] px-6 py-7"
               style={{
                 backgroundImage:
                   "linear-gradient(#e8e4dd 1px, transparent 1px), linear-gradient(90deg, #e8e4dd 1px, transparent 1px)",
@@ -143,7 +145,7 @@ export function ChaptersSection() {
                 ].map(([position, label]) => (
                   <div
                     key={label}
-                    className={`absolute ${position} rounded-md border border-black/10 bg-[#f5f4f2] px-2 py-1 font-mono text-[10px] font-semibold text-stone-600`}
+                    className={`absolute ${position} rounded-md border border-black/10 bg-[#fafafa] px-2 py-1 font-mono text-[10px] font-semibold text-stone-600`}
                   >
                     {label}
                   </div>
@@ -166,7 +168,7 @@ export function ChaptersSection() {
           </article>
 
           <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
-            <div className="absolute inset-x-0 bottom-[70px] top-0 bg-[#f3f2ef] px-6 py-5">
+            <div className="absolute inset-x-0 bottom-[70px] top-0 bg-[#f7f7f7] px-6 py-5">
               <div className="mx-auto max-w-[210px] overflow-hidden rounded-[32px] border-[5px] border-stone-900 bg-stone-900 shadow-[8px_8px_0_rgba(0,0,0,0.1)]">
                 {/* Status bar */}
                 <div className="flex items-center justify-between bg-white px-4 pb-1 pt-2">
@@ -245,7 +247,7 @@ export function ChaptersSection() {
                   ["Preferences", "Concise + next steps"],
                   ["Persona", "Warm mentor, no fluff"],
                 ].map(([label, value]) => (
-                  <div key={label} className="rounded-md bg-[#f5f4f2] px-3 py-2">
+                  <div key={label} className="rounded-md bg-[#fafafa] px-3 py-2">
                     <p className="font-mono text-[9px] uppercase text-stone-400">{label}</p>
                     <p className="mt-1 text-xs font-semibold text-stone-700">{value}</p>
                   </div>
