@@ -33,8 +33,8 @@ export function AppChrome({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-[100dvh] w-full overflow-hidden bg-koraku-panel text-koraku-ink">
-      <div className="box-border flex h-full shrink-0 p-2 pr-1">
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-white text-koraku-ink">
+      <div className="box-border flex h-full shrink-0 bg-white p-2 pr-1">
         <Sidebar
           collapsed={collapsed}
           onToggleCollapse={onToggleCollapse}
