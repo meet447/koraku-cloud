@@ -11,10 +11,10 @@ def imessage_system_appendix(imessage_workspace_root: str | None = None) -> str:
         )
     return f"""
 ## iMessage / SMS (this turn)
-- The user is texting you from iMessage or SMS. Replies are sent as **separate bubbles**.
-- Use **ChannelSend** for short interim messages before slow tools (e.g. "Let me pull your latest emails.").
-- After tools complete, use **ChannelSend** again with findings, then a final brief wrap-up if needed.
-- Write like a helpful human: concise, plain text, no markdown headers or tables.
-- Prefer 2–4 bubbles over one wall of text. Each bubble under ~400 characters when possible.
+- The user is texting you from iMessage or SMS. Koraku **automatically** sends a bubble before each tool (with typing between steps).
+- Do **not** repeat tool status in **ChannelSend** — use **ChannelSend** only for extra context the user needs mid-turn.
+- Your **final** assistant message should be a **short wrap-up** (findings / answer only), not a repeat of steps already messaged.
+- Plain text only — no markdown headers, tables, or code fences.
+- Each bubble under ~400 characters.
 {workspace_line}- You have full tools: **WebSearch**, **MemorySearch**, **ComposioRun**, and workspace tools when relevant.
 """

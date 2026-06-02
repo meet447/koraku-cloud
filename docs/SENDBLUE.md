@@ -94,6 +94,10 @@ If you set a signing secret in SendBlue, add the same value to `.env` as `SENDBL
    - `sendblue inbound linked user …`
 3. You should get an iMessage reply from Koraku.
 
+## Progress bubbles
+
+During an iMessage turn, Koraku automatically sends a short bubble **before each tool** (e.g. “Searching the web…”, “Editing notes.md…”), with the typing indicator between steps. The **final** model message is a brief wrap-up only — not a repeat of those steps.
+
 ## File attachments
 
 When the agent **Write**s or **Edit**s a file during an iMessage turn, Koraku uploads it to SendBlue and sends it as an attachment (📎 filename) after the text reply. Limits: 8 files per turn, 20 MB each; secrets like `.env` are skipped.

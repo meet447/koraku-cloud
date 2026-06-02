@@ -15,6 +15,7 @@ from koraku.channels.file_attachments import (
     send_queued_imessage_attachments,
     start_imessage_file_capture,
 )
+from koraku.channels.imessage_progress import make_imessage_emit
 from koraku.channels.imessage_prompt import imessage_system_appendix
 from koraku.channels.imessage_sandbox import (
     imessage_blaxel_available,
@@ -185,8 +186,7 @@ async def run_imessage_turn(
             text=text.strip(),
         )
 
-        def emit(_ev: dict[str, Any]) -> None:
-            return
+        emit, drain_progress = make_imessage_emit(on_send)
 
         run_context = AgentRunContext(
             execution_target="cloud",
@@ -203,6 +203,7 @@ async def run_imessage_turn(
         ):
             pass
 
+        await drain_progress()
         await _halt_typing()
 
         final = extract_last_assistant_text(session)
