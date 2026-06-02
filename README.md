@@ -9,28 +9,28 @@ agent built on a streaming Python backend (FastAPI) and a Next.js web app,
 designed to be hosted on a small VM, on a free LLM provider, or with your own
 API keys.
 
-The project is **MIT-licensed** ([LICENSE](LICENSE)) and welcomes
-contributions — see [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Repo:** [github.com/meet447/koraku-cloud](https://github.com/meet447/koraku-cloud)
+- **License:** [MIT](LICENSE)
+- **Security:** [SECURITY.md](SECURITY.md) · **Conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Status:** public beta
 
-- Source: **github.com/meet447/koraku**
-- License: [MIT](LICENSE)
-- Security: [SECURITY.md](SECURITY.md) · Conduct:
-  [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- Status: **public beta**
-- **SDK:** embed the agent in Python apps or call it over HTTP — see [docs/SDK.md](docs/SDK.md)
+## Documentation
+
+| Doc | Purpose |
+|-----|---------|
+| [docs/SELF_HOST.md](docs/SELF_HOST.md) | Install (Docker / manual), env, production checklist |
+| [docs/SDK.md](docs/SDK.md) | Embed Koraku in Python or TypeScript |
+| [docs/DATA_LIFECYCLE.md](docs/DATA_LIFECYCLE.md) | What is stored where (privacy / ops) |
+| [docs/SENDBLUE.md](docs/SENDBLUE.md) | iMessage / SMS via SendBlue |
 
 ---
 
 ## Embed Koraku (SDK)
 
-Koraku ships as an **embeddable Python package** and an optional **TypeScript SSE client**:
-
 ```bash
-# Core agent (in-process)
-pip install -e .
-
-# Self-hosted API + integrations
-pip install -e ".[all]"
+pip install -e .              # in-process agent
+pip install -e ".[all]"       # API + integrations
 ```
 
 ```python
@@ -41,117 +41,87 @@ async for event in agent.stream("Summarize this repo"):
     print(event)
 ```
 
-For web/cloud apps, run `koraku-server` and use `@koraku/client` from
-`packages/koraku-client/`. Full guide: **[docs/SDK.md](docs/SDK.md)**.
+For web apps, run `koraku-server` and use `@koraku/client` from `packages/koraku-client/`. See **[docs/SDK.md](docs/SDK.md)**.
 
 ---
 
 ## What Koraku does
 
-- **AI buddy** — chats with you, streams its thinking, and uses tools
-  (web search, files, shell, your connected apps) to actually get things
-  done, not just answer.
-- **Second brain** — every chat can write to your personal
-  `Memory.md` and `Soul.md` (preferences and persona) so the agent remembers
-  what you like, how you work, and what matters across sessions.
-- **Automations** — turn any prompt into a scheduled job (cron-style) backed
-  by the same agent, with a UI to create, edit, pause, and inspect runs.
-- **Connected apps** — link Gmail, Calendar, Drive, Slack, and dozens more via
-  [Composio](https://composio.dev/); the agent can request scoped sub-tools
-  per toolkit instead of dumping every API into the prompt.
-- **Three places to run your agent** — see "Where the agent runs" below.
+- **AI buddy** — streaming chat with tools (web, files, shell, connected apps).
+- **Second brain** — `Memory.md` / `Soul.md` plus optional Supabase personalization per organization.
+- **Automations** — cron-style jobs using the same agent, with run history.
+- **Connected apps** — Gmail, Calendar, Slack, and more via [Composio](https://composio.dev/).
+- **iMessage (optional)** — inbound/outbound via [SendBlue](docs/SENDBLUE.md).
 
-## Where the agent runs (OSS self-host)
+## Where tools run
 
-The **brain** (LLM + ReAct loop) runs in the Python API. The **hands** (file and
-shell tools) run in one of two places you pick per chat — this is **not** the
-same as **Koraku Cloud** (hosted multi-tenant product; see [docs/PRODUCT.md](docs/PRODUCT.md)).
-
-| UI (OSS) | `execution_target` | Where tools run |
+| UI label | `execution_target` | Where tools run |
 |----------|-------------------|-----------------|
-| **This computer** | `local` / `server` | The machine running the Koraku API (your desktop when you self-host) |
-| **Sandbox** | `cloud` | Isolated [Blaxel](https://blaxel.ai/) VM (your Blaxel keys; not Koraku-operated) |
+| **This computer** | `local` / `server` | Host running the Python API |
+| **Sandbox** | `cloud` | Isolated [Blaxel](https://blaxel.ai/) VM (your keys) |
 
-- **This computer** — read/write your repos, run bash, use your PATH. Default when Blaxel is not configured.
-- **Sandbox** — fresh VM per session; nothing touches your main disk. Set `BLAXEL_CLOUD_SANDBOX_ENABLED` and `BL_*` in `.env`.
-
-A future linked desktop app may route `local` to another machine; today `local` uses the API host workspace.
+**Sandbox** means Blaxel, not a Koraku-operated cloud. Default without Blaxel: **This computer**.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────┐      SSE (text/event-stream)      ┌─────────────────────┐
-│   Browser   │ ◄────────────────────────────────► │   FastAPI server    │
-│  (Next.js)  │                                    │   (Python · koraku/)   │
-└─────────────┘                                    └──────────┬──────────┘
+┌─────────────┐   SSE / JSON via /koraku-api/*   ┌─────────────────────┐
+│   Browser   │ ◄──────────────────────────────► │   FastAPI (koraku/) │
+│  (Next.js)  │   + Supabase JWT + org header    │                     │
+└─────────────┘                                  └──────────┬──────────┘
                                                               │
-                ┌─────────────────────────────────────────────┼─────────────────────────────────────────┐
-                ▼                                             ▼                                         ▼
-       ┌────────────────┐                            ┌────────────────┐                       ┌──────────────────┐
-       │   LLM client   │                            │   ReAct loop   │                       │  Tool registry   │
-       │ Fireworks /    │◄──────────────────────────►│  koraku/agent  │◄─────────────────────►│  koraku/tools    │
-       │ Anthropic /    │                            └────────┬───────┘                       │  + Composio      │
-       │ OpenAI-compat  │                                     │                               │  + Blaxel VM     │
-       └────────────────┘                                     ▼                               └──────────────────┘
+                ┌─────────────────────────────────────────────┼──────────────────────────┐
+                ▼                                             ▼                          ▼
+       ┌────────────────┐                            ┌────────────────┐         ┌──────────────────┐
+       │   LLM client   │                            │   ReAct loop   │         │  Tool registry   │
+       └────────────────┘                            └────────────────┘         │  + Composio      │
+                                                                                  │  + Blaxel        │
+                                                                                  └──────────────────┘
+                                                              │
+                                                              ▼
                                                   ┌────────────────────┐
-                                                  │  Second-brain      │
-                                                  │  • Memory.md       │
-                                                  │  • Soul.md         │
-                                                  │  • Supabase chat   │
-                                                  │  • Automations DB  │
+                                                  │ Supabase (optional) │
+                                                  │ sessions · chat ·    │
+                                                  │ automations · orgs   │
                                                   └────────────────────┘
 ```
 
+The web app uses **route handlers** under `web/src/app/koraku-api/` (shared logic in `web/src/lib/koraku-backend-proxy.ts` and `koraku-api-routes.ts`) so auth cookies become upstream Bearer tokens without exposing service keys.
+
 ### ReAct loop
 
-1. **User** sends a message
-2. **LLM** thinks step-by-step (streamed live as `thinking_delta` events)
-3. **LLM** decides to use a **tool** (`tool_use` events with incremental JSON)
-4. **Tool** executes on the chosen target (cloud sandbox / linked desktop /
-   server) and the result is fed back
-5. **LLM** thinks again with the new context, optionally updates `Memory.md`
-6. Repeat until the LLM produces a **final answer**
+1. User message → 2. LLM thinks (streamed) → 3. Tool calls → 4. Results fed back → 5. Repeat until final answer.
 
 ---
 
 ## Quick start
 
-**Fastest path:** [Docker Compose](docs/SELF_HOST.md#docker-compose-recommended) — `docker compose up --build` → http://localhost:3000
+**Fastest:** [Docker Compose](docs/SELF_HOST.md#docker-compose-recommended) → http://localhost:3000
 
-### 1. Backend (Python API)
+### Backend
 
 ```bash
-git clone https://github.com/meet447/koraku.git
-cd koraku
-
-python3 -m venv venv
-source venv/bin/activate
+git clone https://github.com/meet447/koraku-cloud.git
+cd koraku-cloud
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-
 cp .env.example .env
-# Edit .env — at minimum pick an LLM provider (Fireworks recommended, or add
-# OpenAI-compatible providers via LLM_OPENAI_COMPAT_IDS)
-
-python main.py
-# API on http://127.0.0.1:8000  ·  health: GET /health
+python main.py   # http://127.0.0.1:8000
 ```
 
-### 2. Web app (Next.js)
+### Web
 
 ```bash
-cd web
-npm install
-cp ../.env.example .env.local  # then set NEXT_PUBLIC_SUPABASE_* if using auth
-npm run dev
-# UI on http://127.0.0.1:3000
+cd web && npm install
+cp ../.env.example .env.local   # NEXT_PUBLIC_SUPABASE_* when using auth
+npm run dev   # http://127.0.0.1:3000
 ```
 
-The web app proxies SSE and APIs to the Python backend via `next.config.ts`
-rewrites; override the backend with `KORAKU_BACKEND_URL` if needed.
+Set `KORAKU_BACKEND_URL` if the API is not on `http://127.0.0.1:8000`.
 
-### 3. (Optional) Supabase auth + persistence
+### Supabase (optional)
 
 ```bash
 cd web
@@ -159,210 +129,131 @@ supabase link --project-ref <your-ref>
 npm run db:migrate
 ```
 
-Migrations live in `web/supabase/migrations/`. Without Supabase, Koraku still
-runs single-user with files on disk under `.koraku/`.
+Without Supabase, Koraku can run in demo mode with local files under `.koraku/`.
 
 ---
 
 ## Tools
 
-Built-in tools the agent can call:
+| Tool | Description | API key |
+|------|-------------|---------|
+| `Bash`, `Glob`, `Grep`, `Read`, `Write`, `Edit` | Workspace file ops | No |
+| `WebSearch` | DuckDuckGo | No |
+| `WebFetch` | Simple HTML fetch | No |
+| `ExaSearch` | Neural search | exa.ai |
+| `Firecrawl` / `FirecrawlMap` | JS-aware scrape / map | firecrawl.dev |
+| `ComposioRun` | Scoped sub-agent per toolkit | composio.dev |
 
-| Tool          | Description                                                  | API key |
-|---------------|--------------------------------------------------------------|---------|
-| `Bash`        | Execute shell commands in the workspace                      | No      |
-| `Glob`        | Find files matching patterns (`*.py`, `src/**/*.ts`)         | No      |
-| `Grep`        | Search file contents with regex                              | No      |
-| `Read`        | Read file contents with line numbers                         | No      |
-| `Write`       | Create or overwrite files                                    | No      |
-| `Edit`        | Replace text in files (exact match)                          | No      |
-| `WebSearch`   | Search the web via DuckDuckGo                                | No      |
-| `WebFetch`    | Lightweight page fetch for simple HTML                       | No      |
-| `ExaSearch`   | Neural search — semantically relevant content                | exa.ai  |
-| `Firecrawl`   | JS-aware scraping — handles SPAs, dynamic content            | firecrawl.dev |
-| `FirecrawlMap`| Crawl a site to discover all linked URLs                     | firecrawl.dev |
-| `ComposioRun` | Spawns a scoped sub-agent for a connected toolkit (Gmail, …) | composio.dev |
-
-Add your own by appending to the tool registry — see
-[Extending the agent](#extending-the-agent).
+Add tools in `koraku/tools/registry.py` — see [Extending the agent](#extending-the-agent).
 
 ---
 
 ## Project layout
 
 ```
-koraku/
-├── main.py                  # Uvicorn entry (loads koraku.server:app)
-├── requirements.txt
-├── .env.example
-├── LICENSE                  # MIT
-├── CONTRIBUTING.md
-├── CODE_OF_CONDUCT.md
-├── SECURITY.md
-├── docs/                    # SDK.md, DATA_LIFECYCLE.md, PUBLIC_BETA_RUNBOOK.md
-├── examples/                # embed_python.py — minimal in-process SDK usage
-├── tests/                   # Pytest suite (mirrors koraku/ domains)
-│
-├── koraku/                  # Python package (`pip install -e .`)
-│   ├── sdk.py               # Koraku + KorakuConfig embed facade
-│   ├── server.py            # FastAPI app factory + routes (optional extra)
-│   ├── api/                 # HTTP routers (chat, runs, automations, …)
-│   ├── agent/               # ReAct loop, sessions, runtime context
-│   ├── llm/                 # Providers, streaming normalization
-│   ├── tools/               # Tool registry, policy, builtins
-│   ├── integrations/        # Composio, Blaxel, Supabase (optional extras)
-│   ├── streaming/           # Koraku SSE envelope
-│   ├── workspace/           # Paths, sandbox context, brain files
-│   ├── automations/         # Saved automation tools + scheduler
-│   └── core/                # Settings, auth, redact
-│
-├── packages/
-│   └── koraku-client/       # `@koraku/client` TypeScript SSE SDK
-│
-└── web/                     # Next.js 15 reference app (npm run dev on :3000)
-    └── src/
-        ├── app/             # Routes + koraku-api BFF proxies
-        ├── components/
-        ├── hooks/
-        └── lib/
+koraku-cloud/
+├── main.py                  # Uvicorn entry
+├── koraku/                  # Python package
+│   ├── api/                 # HTTP routers
+│   ├── agent/               # ReAct loop
+│   ├── automations/         # Scheduler + Supabase store
+│   ├── integrations/        # Composio, Blaxel, Supabase, SendBlue
+│   └── core/                # Config, auth, Redis, startup checks
+├── packages/koraku-client/  # TypeScript SSE client
+├── web/                     # Next.js app + Supabase migrations
+│   └── src/lib/             # BFF proxies, Redis thread cache
+├── docs/                    # SELF_HOST, SDK, DATA_LIFECYCLE, SENDBLUE
+└── tests/
 ```
 
 ---
 
 ## API endpoints
 
-| Endpoint                | Method | Description                                      |
-|-------------------------|--------|--------------------------------------------------|
-| `/`                     | GET    | Service metadata                                 |
-| `/health`               | GET    | Health, mode, configured providers               |
-| `/stream`               | POST   | SSE streaming chat                               |
-| `/runs`                 | POST   | Start a detached run (resume after disconnect)   |
-| `/runs/{id}/stream`     | GET    | Subscribe to a detached run's SSE                |
-| `/runs/{id}/status`     | GET    | `running` · `completed` · `not_found`            |
-| `/automations`          | CRUD   | Saved scheduled automations                      |
-| `/personalization`      | CRUD   | `Memory.md`, `Soul.md`, display name             |
-| `/composio/*`           | …      | List + link connected apps                       |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Public liveness (`detached_runs_redis`, LLM configured) |
+| `/health/detail` | GET | Ops snapshot (requires `HEALTH_DETAIL_TOKEN`) |
+| `/stream` | POST | SSE chat |
+| `/runs` | POST | Start detached run |
+| `/runs/{id}/stream` | GET | SSE replay / tail |
+| `/runs/{id}/status` | GET | Run state |
+| `/api/automations` | CRUD | Scheduled automations (org-scoped) |
+| `/api/personalization` | GET/PUT | Memory / soul / display name (per org) |
+| `/api/composio/*` | … | Connected apps |
+| `/sendblue/webhook` | POST | iMessage inbound |
 
-See [`docs/DATA_LIFECYCLE.md`](docs/DATA_LIFECYCLE.md) for what each endpoint
-reads and writes.
+Browser clients should call these via **`/koraku-api/...`** on the Next.js host. Details: [docs/DATA_LIFECYCLE.md](docs/DATA_LIFECYCLE.md).
 
 ---
 
 ## Configuration
 
-Set via environment variables or `.env`. Highlights — see
-[`.env.example`](.env.example) for the full list:
+See [`.env.example`](.env.example). Highlights:
 
-| Variable                       | Default        | Description                                |
-|--------------------------------|----------------|--------------------------------------------|
-| `LLM_PROVIDER`                 | `fireworks`    | Default provider id (`fireworks`, `anthropic`, or any registered OpenAI-compat id) |
-| `LLM_OPENAI_COMPAT_IDS`        | —              | Comma-separated OpenAI-compatible providers (`openai,groq,ollama`, …) |
-| `FIREWORKS_API_KEY`            | —              | Fireworks key (recommended provider)       |
-| `ANTHROPIC_API_KEY`            | —              | Claude API key                             |
-| `CUSTOM_BASE_URL`              | —              | Registers provider id `custom` when set  |
-| `EXA_API_KEY` / `FIRECRAWL_API_KEY` | —         | Premium research tools                     |
-| `COMPOSIO_API_KEY`             | —              | Connected-app toolkits                     |
-| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | —    | Persistence + automations          |
-| `SUPABASE_JWT_SECRET`          | —              | HS256 JWT verification (else JWKS)         |
-| `BLAXEL_CLOUD_SANDBOX_ENABLED` | `false`        | Enable `execution_target=cloud` sandboxes  |
-| `REQUIRE_AUTH_FOR_CHAT`        | `true`         | Require a signed-in user for chat          |
-| `CORS_ALLOWED_ORIGINS`         | localhost:3000 | Comma-separated browser origins            |
-| `CHAT_RATE_LIMIT_PER_MINUTE`   | `12`           | Per-user soft rate limit                   |
-| `PORT`                         | `8000`         | API port                                   |
+| Variable | Description |
+|----------|-------------|
+| `LLM_PROVIDER` / `FIREWORKS_API_KEY` | Default LLM |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Persistence (server only) |
+| `REDIS_URL` | Sessions, rate limits, detached runs, multi-worker |
+| `HEALTH_DETAIL_TOKEN` | Protects `/health/detail` |
+| `SENDBLUE_WEBHOOK_SECRET` | Required when SendBlue is configured |
+| `REQUIRE_AUTH_FOR_CHAT` | Default `true` |
+| `CORS_ALLOWED_ORIGINS` | Never `*` in production |
+| `BLAXEL_CLOUD_SANDBOX_ENABLED` | Cloud sandbox execution |
+
+Production checklist: [docs/SELF_HOST.md#production-checklist](docs/SELF_HOST.md#production-checklist).
 
 ---
 
 ## Self-hosting
 
-Koraku is designed to be self-hosted. The minimum useful deploy is:
+Minimum deploy:
 
-- One long-lived VM/container for the Python API (1 GB RAM is fine for
-  single-user)
-- A Next.js host (Vercel, Fly, your own VM) for `web/`
-- A Supabase project for auth, chat history, and automations
-- Optional: Upstash Redis for cross-worker rate limits, Blaxel for cloud
-  sandboxes, Composio for connected apps
-
-See [`docs/PUBLIC_BETA_RUNBOOK.md`](docs/PUBLIC_BETA_RUNBOOK.md) for the
-production checklist (env vars, CORS, rate limits, degraded modes, recovery).
+- Python API (long-lived; automations need a running scheduler)
+- Next.js host for `web/`
+- Supabase for auth + multi-device chat (recommended)
+- Redis for multi-worker or durable detached runs
 
 ---
 
 ## Extending the agent
 
-See [docs/SDK.md](docs/SDK.md) for embedding Koraku in other Python, web, and cloud projects.
+See [docs/SDK.md](docs/SDK.md).
 
-### Add a new tool
+### Add a tool
 
 ```python
-# koraku/tools/registry.py (or a new file imported by it)
 from koraku.tools.tool_def import Tool
-
-async def _my_tool(query: str) -> str:
-    return f"Result for {query}"
 
 my_tool = Tool(
     name="MyTool",
     description="Does something useful",
     input_schema={
         "type": "object",
-        "properties": {
-            "query": {"type": "string", "description": "What to query"},
-        },
+        "properties": {"query": {"type": "string"}},
         "required": ["query"],
     },
-    handler=_my_tool,
+    handler=lambda query: f"Result for {query}",
 )
-
-TOOLS.append(my_tool)
+# Append to TOOLS in koraku/tools/registry.py
 ```
 
-The agent discovers it automatically through `get_tool_schemas()`.
+### Custom LLM
 
-### Use a different LLM provider
-
-Replace or extend `koraku/llm/client.py` with your own client (Ollama, Bedrock,
-vLLM, …) as long as it yields events in the normalized Anthropic-style shape:
-
-```python
-{"type": "message_start",        "message": {...}}
-{"type": "content_block_start",  "index": N, "content_block": {...}}
-{"type": "content_block_delta",  "index": N, "delta": {...}}
-{"type": "content_block_stop",   "index": N}
-{"type": "message_delta",        "delta": {...}}
-{"type": "message_stop",         "message": {...}}
-```
+Implement a client that emits the normalized streaming event shape used in `koraku/llm/`.
 
 ---
 
-## Open-source principles
+## Open source
 
-Koraku is built to be a project the community can actually use, audit, and
-contribute to:
-
-- **Permissive license.** [MIT](LICENSE) — use it personally or commercially.
-- **No proprietary lock-in.** Every paid integration (Anthropic, Fireworks,
-  Blaxel, Composio, Supabase, Exa, Firecrawl) is **optional** and behind a
-  config flag. Multiple OpenAI-compatible providers can be registered side by side.
-- **Self-hostable by default.** No required Koraku-controlled service; you
-  bring your own keys and your own host.
-- **Transparent data lifecycle.** [`docs/DATA_LIFECYCLE.md`](docs/DATA_LIFECYCLE.md)
-  documents exactly what is stored where, including third parties.
-- **Welcoming community.** Code of Conduct ([CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md))
-  and clear contribution path ([CONTRIBUTING.md](CONTRIBUTING.md)).
-- **Coordinated security.** Private disclosure process in
-  [SECURITY.md](SECURITY.md).
-- **Public roadmap & issues.** All work happens on GitHub — file bugs,
-  propose features, send PRs.
+- [MIT](LICENSE) — use commercially or personally.
+- Optional paid integrations (LLM, Blaxel, Composio, Supabase) — all behind env flags.
+- [DATA_LIFECYCLE.md](docs/DATA_LIFECYCLE.md) documents storage and third parties.
+- Report security issues per [SECURITY.md](SECURITY.md).
 
 ---
-
-## Contributing
-
-Bug reports, ideas, new tools, integrations, and UI polish are all welcome.
-Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the open issues.
 
 ## License
 
 [MIT](LICENSE) © 2026 Meet Sonawane and Koraku contributors.
-# koraku-cloud

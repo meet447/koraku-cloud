@@ -18,7 +18,7 @@ If outbound fails with *"contact must be verified"*, add the contact in SendBlue
 ```bash
 npm install -g @sendblue/cli
 sendblue login
-# Email: meet.sonawane2015@gmail.com → enter OTP from email
+# Enter your SendBlue account email → OTP from email
 
 sendblue show-keys    # SENDBLUE_API_KEY, SENDBLUE_API_SECRET
 sendblue lines        # SENDBLUE_FROM_NUMBER

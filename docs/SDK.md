@@ -24,15 +24,21 @@ Set `AUTH_BACKEND` (or `KORAKU_AUTH_BACKEND`) on the server:
 
 Clients send `Authorization: Bearer <token>` for `supabase` and `api_key`.
 
-## Session store (multi-worker)
+## Session store and detached runs (multi-worker)
 
 | Backend | Env | Use when |
 |---------|-----|----------|
-| `memory` (default) | — | Single uvicorn worker / dev |
-| `redis` | `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Multiple API replicas |
+| `memory` | — | Single uvicorn worker / dev |
+| `redis` | `REDIS_URL` | Multiple API replicas |
 
-Set `SESSION_STORE_BACKEND=redis` so chat sessions survive load-balanced routing.
-Detached run buffers remain in-process (subscribe still needs sticky sessions or same worker).
+Set `SESSION_STORE_BACKEND=redis` when using `REDIS_URL` so chat sessions survive load balancing.
+
+Detached runs (`POST /runs`, `GET /runs/{id}/stream`):
+
+- `DETACHED_RUN_STORE_BACKEND=auto` (default) uses Redis when `REDIS_URL` is reachable (`detached_runs_redis` on `GET /health`).
+- Without Redis, buffers are in-process — use sticky sessions or a single worker.
+
+Ops snapshot: `GET /health/detail` with `HEALTH_DETAIL_TOKEN`.
 
 ## Publishing
 

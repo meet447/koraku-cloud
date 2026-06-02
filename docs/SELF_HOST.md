@@ -1,6 +1,6 @@
-# Self-host Koraku (OSS)
+# Self-host Koraku
 
-Run the full Koraku webapp on your laptop, home server, or VM — no Koraku Cloud account required.
+Run the full Koraku webapp on your laptop, home server, or VM.
 
 ## Quick pick
 
@@ -8,16 +8,17 @@ Run the full Koraku webapp on your laptop, home server, or VM — no Koraku Clou
 |-----------|-----|
 | Fastest try | [Docker Compose](#docker-compose-recommended) |
 | Dev / hacking | [Manual install](#manual-install) |
-| Production VM | Compose or manual + [runbook](PUBLIC_BETA_RUNBOOK.md) |
+| Production VM | Compose or manual + [production checklist](#production-checklist) |
 | Embed agent only | [SDK.md](SDK.md) — no `web/` required |
+| iMessage / SMS | [SENDBLUE.md](SENDBLUE.md) |
 
 ## Docker Compose (recommended)
 
 **Requirements:** Docker Desktop or Docker Engine + Compose v2.
 
 ```bash
-git clone https://github.com/meet447/koraku.git
-cd koraku
+git clone https://github.com/meet447/koraku-cloud.git
+cd koraku-cloud
 cp .env.example .env
 # Add at least one LLM key (Fireworks, Anthropic, or an OpenAI-compatible provider — see .env.example)
 
@@ -37,9 +38,9 @@ REQUIRE_AUTH_FOR_CHAT=false
 # Add FIREWORKS_API_KEY (or another provider below) for real model responses
 ```
 
-Without an LLM key, chat shows a configuration message from the agent. For a quick try, add `FIREWORKS_API_KEY` or configure an OpenAI-compatible provider (see `.env.example`).
+Without an LLM key, chat shows a configuration message from the agent.
 
-### With Supabase (sign-in + chat history)
+### With Supabase (sign-in + persistence)
 
 1. Create a Supabase project and run migrations from `web/supabase/migrations/` (`cd web && npm run db:migrate`).
 2. Set in `.env` (backend) and pass through Compose:
@@ -47,14 +48,16 @@ Without an LLM key, chat shows a configuration message from the agent. For a qui
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 3. Keep `REQUIRE_AUTH_FOR_CHAT=true`.
 
-### Where tools run (OSS default)
+Org-scoped data (chat, automations, personalization) uses `X-Koraku-Org-Id` from the web app cookie after migrations through `20250602160000`.
 
-The chat composer offers two **OSS** choices (not Koraku Cloud — see [PRODUCT.md](PRODUCT.md)):
+### Where tools run
+
+The chat composer offers:
 
 - **This computer** — tools on the machine running the API (your laptop when self-hosting).
 - **Sandbox** — isolated Blaxel VM when `BLAXEL_*` is configured.
 
-Without Blaxel, use **This computer** only.
+**Sandbox** is Blaxel isolation, not a Koraku-operated hosted product. Without Blaxel, use **This computer** only.
 
 ## Manual install
 
@@ -65,40 +68,82 @@ pip install -e ".[all]"
 cp .env.example .env   # edit LLM keys
 python main.py        # :8000
 
-# Web (second terminal) — Node 22 LTS recommended (see `.nvmrc`; avoid Node 23)
+# Web (second terminal) — Node 22 LTS recommended (see `.nvmrc`)
 cd packages/koraku-client && npm install && npm run build
-cd ../web && bash ../scripts/install-web.sh && cp ../.env.example .env.local
-# Or: `nvm use` (reads `.nvmrc` → Node 22) then `npm install` in web/
-# Do not run `npm audit fix --force` in web/ — it downgrades Next to 9.x and breaks React 19.
+cd ../web && npm install && cp ../.env.example .env.local
 npm run dev             # :3000
 ```
 
 Set `KORAKU_BACKEND_URL=http://127.0.0.1:8000` in `web/.env.local` if needed.
 
+The Next.js app proxies authenticated API traffic through **`/koraku-api/*` route handlers** (SSE and JSON). A few paths still rewrite directly (`/koraku-api/health`, `/koraku-api/api/chat-models`). See `web/src/lib/koraku-backend-proxy.ts` and `web/src/lib/koraku-api-routes.ts`.
+
 ## Environment highlights
 
-| Variable | OSS default | Notes |
-|----------|-------------|-------|
+| Variable | Default | Notes |
+|----------|---------|--------|
 | `REQUIRE_AUTH_FOR_CHAT` | `true` | Set `false` for local demo |
-| `AUTH_BACKEND` | `supabase` | `api_key` or `none` for embeds |
-| `SESSION_STORE_BACKEND` | `memory` | `redis` + Upstash for multi-worker |
-| `ALLOW_LOCAL_EXECUTION_IN_CHAT` | `true` | **This computer** — tools on the API host (no Blaxel) |
-| `ALLOW_SERVER_EXECUTION_IN_CHAT` | `true` | Same host tools via `execution_target=server` (API alias) |
-| `BLAXEL_CLOUD_SANDBOX_ENABLED` | `false` | Set `true` + keys for **Cloud** sandboxes |
+| `SESSION_STORE_BACKEND` | `redis` when `REDIS_URL` set | Required for multi-worker |
+| `DETACHED_RUN_STORE_BACKEND` | `auto` | Redis-backed detached runs when available |
+| `HEALTH_DETAIL_TOKEN` | — | Ops snapshot at `GET /health/detail` |
+| `SENDBLUE_WEBHOOK_SECRET` | — | Required when SendBlue is enabled |
+| `ALLOW_LOCAL_EXECUTION_IN_CHAT` | `true` | **This computer** |
+| `BLAXEL_CLOUD_SANDBOX_ENABLED` | `false` | **Sandbox** with Blaxel keys |
+
+Full list: [`.env.example`](../.env.example).
+
+## Production checklist
+
+Before inviting real users:
+
+### Deployment shape
+
+- Run the Python API as a long-lived process (automations use an in-process scheduler; serverless-only API will not run cron jobs reliably).
+- Prefer keeping the API private behind the Next.js BFF. If the API is public, set `CORS_ALLOWED_ORIGINS` to your web origin only and keep `REQUIRE_AUTH_FOR_CHAT=true`.
+- **Single worker** on small VMs (~1 GB RAM). For multiple workers, set `REDIS_URL`, `SESSION_STORE_BACKEND=redis`, and use Redis detached runs (`DETACHED_RUN_STORE_BACKEND=auto`) or sticky routing for `/runs*`.
+
+### Required production env
+
+- **Backend (secret):** `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET` (HS256), LLM keys, `COMPOSIO_API_KEY` if using connections, optional Blaxel keys, `HEALTH_DETAIL_TOKEN`, `SENDBLUE_WEBHOOK_SECRET` when SendBlue is on.
+- **Browser-safe:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` only.
+- **Safety:** tight `CORS_ALLOWED_ORIGINS`, `CHAT_RATE_LIMIT_PER_MINUTE`, `AUTOMATION_RATE_LIMIT_PER_MINUTE`.
+
+### Release verification
+
+- Run `cd web && npm run db:migrate`.
+- Check `GET /health` (UI) and `GET /health/detail` with your token (ops).
+- Exercise sign-up, chat, memory save, connections, automation create/run, data export, account deletion.
+- Confirm unauthenticated `POST /stream` and `POST /runs` return `401`.
+- Confirm logs redact secrets (`koraku/core/redact.py`).
+
+### Degraded modes
+
+| Failure | Behavior |
+|---------|----------|
+| LLM down | Clear provider error; pause traffic |
+| Composio down | Static tools only |
+| Blaxel down | Cloud execution blocked |
+| Scheduler down | Automations stored but not fired |
+
+### Manual recovery
+
+- **Stuck detached run:** `GET /runs/{id}/status`; buffers expire after `KORAKU_DETACHED_RUN_GC_SECONDS` (default 600).
+- **Failed automation:** inspect run row, fix connections, use Run now.
+- **Account deletion:** export then delete Supabase rows (chat, personalization per org, automations) before removing the auth user.
+
+See also [DATA_LIFECYCLE.md](DATA_LIFECYCLE.md) and [SECURITY.md](../SECURITY.md).
 
 ## SendBlue / iMessage
 
-See **[SENDBLUE.md](SENDBLUE.md)** for credentials (`sendblue login`), Free Tier contact rules, Koraku External linking, and ngrok webhook setup.
+See **[SENDBLUE.md](SENDBLUE.md)** for credentials, webhooks, and troubleshooting.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| Chat says Blaxel / sandbox error | Use **This computer** instead of **Sandbox**, or configure Blaxel keys |
-| `401` on chat | Sign in via Supabase or set `REQUIRE_AUTH_FOR_CHAT=false` for demo |
-| Web can't reach API | Check `KORAKU_BACKEND_URL` and `docker compose logs api` |
-| Automations don't run | Need Supabase + scheduler; API must stay running (not serverless) |
-
-## What's next
-
-See [ROADMAP.md](ROADMAP.md) for OSS vs Koraku Cloud scope.
+| Chat says Blaxel / sandbox error | Use **This computer**, or configure Blaxel |
+| `401` on chat | Sign in or set `REQUIRE_AUTH_FOR_CHAT=false` for demo |
+| Web can't reach API | `KORAKU_BACKEND_URL`, `docker compose logs api` |
+| Automations don't run | Supabase + API must stay running |
+| API won't start multi-worker | Set `REDIS_URL` (startup check fails without it) |
+| SendBlue webhook 401 | Set `SENDBLUE_WEBHOOK_SECRET` to match SendBlue dashboard |

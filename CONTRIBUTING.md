@@ -43,8 +43,9 @@ npm install
 npm run dev
 ```
 
-For full configuration (Supabase auth, Composio, Blaxel cloud sandboxes),
-see [`README.md`](README.md) and [`.env.example`](.env.example).
+For full configuration (Supabase auth, Composio, Blaxel, production checklist),
+see [`README.md`](README.md), [`docs/SELF_HOST.md`](docs/SELF_HOST.md), and
+[`.env.example`](.env.example).
 
 ## Running tests
 

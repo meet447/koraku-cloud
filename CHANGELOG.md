@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- Org-scoped automations and personalization (`user_id` + `org_id` composite PK)
+- Shared BFF proxy (`koraku-backend-proxy`, `koraku-api-routes`) for `/koraku-api/*`
+- `GET /health/detail` (token-gated ops snapshot); minimal public `/health`
+- SendBlue webhook fail-closed without `SENDBLUE_WEBHOOK_SECRET`; inbound media SSRF allowlist
+- Multi-worker Redis startup check; Redis iMessage dedup
 - Docker Compose stack for OSS self-host (`docker compose up`)
 - Server execution mode for chat without Blaxel (`ALLOW_SERVER_EXECUTION_IN_CHAT`)
 - Setup banner when API or LLM is misconfigured
@@ -10,6 +15,8 @@
 - Multi-provider OpenAI-compatible LLM registry (`LLM_OPENAI_COMPAT_IDS`)
 
 ### Changed
+- Docs: merged production runbook into `SELF_HOST.md`; removed stale `ROADMAP`, `PRODUCT`, `PUBLIC_BETA_RUNBOOK`
+- README updated for koraku-cloud repo, BFF architecture, and current health endpoints
 - Models settings page reads live provider catalog from the API
 - Legacy flat routes redirect via `next.config.ts` instead of stub pages
 

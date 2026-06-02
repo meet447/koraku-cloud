@@ -49,8 +49,8 @@ all = ["koraku[server,composio,blaxel,supermemory]"]
 dev = ["pytest>=8.0", "pytest-mock>=3.14", "pytest-asyncio>=0.23"]
 
 [project.urls]
-Homepage = "https://github.com/meet447/koraku"
-Repository = "https://github.com/meet447/koraku"
+Homepage = "https://github.com/meet447/koraku-cloud"
+Repository = "https://github.com/meet447/koraku-cloud"
 
 [project.scripts]
 koraku-server = "koraku.cli:main"

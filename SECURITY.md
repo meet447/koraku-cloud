@@ -48,7 +48,7 @@ Out of scope (please report to the upstream vendor):
 
 If you self-host Koraku, please also read:
 
-- [`docs/PUBLIC_BETA_RUNBOOK.md`](docs/PUBLIC_BETA_RUNBOOK.md) — required env,
+- [`docs/SELF_HOST.md`](docs/SELF_HOST.md#production-checklist) — required env,
   CORS, rate limits, auth checks
 - [`docs/DATA_LIFECYCLE.md`](docs/DATA_LIFECYCLE.md) — what data is stored
   where, retention, and export/delete handling

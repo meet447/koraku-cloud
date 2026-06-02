@@ -1,72 +1,74 @@
-# Koraku data lifecycle (Phase B — privacy & trust)
+# Koraku data lifecycle
 
-This document is the **engineering data map** for what the backend stores, processes, and depends on. Use it for security reviews, support answers, and retention/export design. It is **not** a legal privacy policy; pair it with your public policy and jurisdiction-specific requirements.
+Engineering map of what the backend stores, processes, and depends on. Use for security reviews, support, and export/delete design. **Not** a legal privacy policy.
 
 ## High-level flows
 
 | Flow | Primary stores | Third parties |
 |------|----------------|---------------|
-| Chat (`POST /stream`) | In-memory session; optional Supabase chat history; SSE to browser | LLM provider; optional Exa/Firecrawl; Composio when linked; Blaxel VM when cloud execution is on |
-| Detached runs (`POST /runs`) | Same as chat, plus in-process replay buffer until GC | Same |
-| Automations | Supabase `koraku_*` tables; scheduler triggers headless agent | LLM; tools as configured |
-| Personalization / memory snippets | Files under workspace and/or Supabase-backed fields when JWT present | Supabase |
+| Chat (`POST /stream`) | Session store (memory or Redis); optional Supabase chat history; SSE to browser | LLM; optional Exa/Firecrawl; Composio; Blaxel when `execution_target=cloud` |
+| Detached runs (`POST /runs`) | In-process or Redis buffer + replay | Same as chat |
+| Automations | Supabase `koraku_automation*` (scoped by `org_id`) | LLM; tools as configured |
+| Personalization | Supabase `koraku_personalization` **per `(user_id, org_id)`**; optional workspace files | Supabase |
+| iMessage | SendBlue webhook → agent; optional voice transcription | SendBlue; Whisper (Fireworks/OpenAI) |
 
-## Per-component notes
+## Components
 
-### Detached chat runs (`POST /runs`, `GET /runs/{id}/stream`, `GET /runs/{id}/status`)
+### Browser ↔ Next.js BFF (`/koraku-api/*`)
 
-- **What:** SSE chunks are buffered in RAM on the **API worker** that accepted `POST /runs` so the browser can disconnect and subscribe again with `?after=` or `Last-Event-ID`.
-- **Status:** `GET /runs/{id}/status` returns `running` | `completed` | `not_found` (and `last_event_id`) for reconnect UX. `not_found` is normal after in-process GC or if another worker handled the original run.
-- **Client:** The web app can persist `{ runId, after, threadId, assistantMsgId }` in `localStorage` to resume after refresh (see `useKorakuChat.ts`). This is **not** a durable server-side audit log.
+- Adds Supabase Bearer + `X-Koraku-Org-Id` from httpOnly cookies before proxying to the Python API.
+- Does not log or persist message bodies; streams SSE through without buffering where possible.
 
-### In-memory chat sessions (`koraku/agent/sessions.py` + optional Redis via `SESSION_STORE_BACKEND`)
+### Detached chat runs
 
-- **What:** Message list, todos, step counters for active browser sessions.
-- **TTL / cap:** `session_ttl_hours`, `session_store_max` in settings (see `/health`).
-- **Deletion:** Idle expiry and cap eviction; process restart clears all.
-- **PII:** Full user/assistant text may reside here for active sessions.
+- SSE chunks buffered on the API worker (or Redis when `DETACHED_RUN_STORE_BACKEND=auto` and Redis is up) for reconnect via `GET /runs/{id}/stream` with `?after=` or `Last-Event-ID`.
+- `GET /runs/{id}/status` → `running` | `completed` | `not_found`.
+- Web client may store `{ runId, after, threadId }` in `localStorage` (`useKorakuChat.ts`); not a server audit log.
+
+### Chat sessions
+
+- **What:** Messages, todos, step state (`koraku/agent/sessions.py` + optional Redis).
+- **TTL:** `session_ttl_hours`, `session_store_max` (see `/health/detail`).
+- **PII:** Full conversation text for active sessions.
 
 ### Supabase (when configured)
 
-- **Chat history** (`koraku/integrations/supabase_chat_history.py`): persisted messages for hydration across devices; content is application-defined JSON/text.
-- **Personalization** (`koraku/integrations/supabase_personalization.py`): optional display name, memory, “soul” text fields tied to auth subject.
-- **Automations** (`koraku/automations/` + `supabase_store.py`): cron specs, run history, user linkage via service role on the **server only**.
-- **Keys:** `SUPABASE_SERVICE_ROLE_KEY` must never ship to the browser; JWT verification uses `SUPABASE_JWT_SECRET` (or asymmetric JWKS as implemented).
+| Area | Module | Notes |
+|------|--------|--------|
+| Chat history | `supabase_chat_history.py` | `chat_thread` / `chat_message`, org-scoped |
+| Personalization | `supabase_personalization.py` | Composite key `(user_id, org_id)` |
+| Automations | `automations/supabase_store.py` | Cron specs + run history, org-scoped |
+| Phone link | `supabase_external.py` | iMessage number verification |
+
+`SUPABASE_SERVICE_ROLE_KEY` is server-only. JWT verification: `SUPABASE_JWT_SECRET` or JWKS.
 
 ### Composio
 
-- **What:** OAuth-linked toolkits (e.g. Gmail, Calendar) exposed as dynamic tools for the signed-in user.
-- **Tokens:** Held by Composio / connector per their model; Koraku does not store long-lived provider passwords in the agent repo, but tool **results** may flow through LLM context and logs—treat tool payloads as sensitive.
-- **Degraded mode:** If Composio tool load fails, the agent continues with static tools and emits a warning (see `koraku/agent/run.py`).
+OAuth toolkits; tokens held by Composio. Tool results may appear in LLM context and logs.
 
-### Blaxel cloud sandboxes
+### Blaxel sandboxes
 
-- **What:** Ephemeral VM workspace per chat session for file/shell tools when cloud execution is enabled.
-- **Data:** User files created during the session live in the sandbox path documented to the model; lifecycle is governed by Blaxel and your workspace settings—not Koraku’s Postgres.
-- **Operational:** See `cloud_chat_sandbox_block_reason` on `/health` when cloud chat cannot start.
+Ephemeral VM workspace for cloud execution. Lifecycle governed by Blaxel.
 
 ### LLM providers
 
-- **What:** Prompts (system + messages + tool definitions), images inline as configured.
-- **Retention:** Governed entirely by the provider’s terms; Koraku does not control provider-side logs.
+Prompts and tool definitions sent per provider terms; Koraku does not control provider retention.
 
-### Application logs
+### Logs
 
-- **What:** Standard Python logging (e.g. timeouts, detached worker failures, Composio skips).
-- **Hygiene:** Use `koraku/core/redact.py` before logging user-controlled strings or exceptions that may echo tokens. Prefer structured fields (`run_id`, `session_id`) over raw payloads.
+Use `koraku/core/redact.py` before logging user-controlled strings. Prefer `run_id`, `session_id` over raw payloads.
 
-## Suggested user-facing promises (product work)
+## User data operations (web)
 
-1. **Export:** Define what “export my data” includes (Supabase tables + any file workspace paths you expose).
-2. **Delete:** Account deletion should cascade chat rows, personalization, automations, and invalidate Composio connections per your integration design.
-3. **Retention defaults:** Document default chat retention and how to shorten it for regulated customers.
+- **Export:** `GET /api/account/export` — threads, messages, personalization rows (all orgs), automations, recent runs.
+- **Delete:** `POST /api/account/delete-data` — cascades user-owned Supabase rows; review Composio disconnect separately.
 
-## Configuration knobs related to reliability (Phase A)
+## Operational settings
 
-See `/health/detail` (with `HEALTH_DETAIL_TOKEN`) for live operational values; `/health` is minimal for the UI:
+Live values: `GET /health/detail` with `HEALTH_DETAIL_TOKEN`. Public UI liveness: `GET /health` (minimal fields including `detached_runs_redis`).
 
-- `agent_llm_stream_timeout_seconds` — wall-clock cap for one LLM streaming step in interactive chat.
-- `agent_tool_phase_timeout_seconds` — wall-clock cap for executing one batch of tool calls in a step.
-- `blaxel_sandbox_ready_timeout_seconds` — provisioning wait for cloud sandboxes.
+Key timeouts (env names mirror `koraku/core/config.py`):
 
-Environment variable names match the settings field names in uppercase with underscores (see `koraku/core/config.py`).
+- `agent_llm_stream_timeout_seconds`
+- `agent_tool_phase_timeout_seconds`
+- `blaxel_sandbox_ready_timeout_seconds`
