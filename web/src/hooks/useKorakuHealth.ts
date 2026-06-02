@@ -1,14 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { KorakuHealth } from "@/lib/koraku-health";
+import { fetchKorakuHealth } from "@/lib/koraku-health";
 
-export type KorakuHealth = {
-  llmConfigured: boolean;
-  mode: string;
-  llmProvider: string;
-  /** When true, detached runs survive refresh across API workers (Redis-backed). */
-  detachedRunsRedis: boolean;
-};
+export type { KorakuHealth };
 
 export function useKorakuHealth() {
   const [health, setHealth] = useState<KorakuHealth | null>(null);
@@ -16,26 +12,11 @@ export function useKorakuHealth() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch("/koraku-api/health", { cache: "no-store" });
-        if (!r.ok) throw new Error(String(r.status));
-        const data = (await r.json()) as Record<string, unknown>;
-        if (cancelled) return;
-        setHealth({
-          llmConfigured: Boolean(data.llm_configured),
-          mode: String(data.mode ?? "unknown"),
-          llmProvider: String(data.llm_provider ?? ""),
-          detachedRunsRedis: Boolean(data.detached_runs_redis),
-        });
-        setError(false);
-      } catch {
-        if (!cancelled) {
-          setHealth(null);
-          setError(true);
-        }
-      }
-    })();
+    void fetchKorakuHealth().then((data) => {
+      if (cancelled) return;
+      setHealth(data);
+      setError(!data);
+    });
     return () => {
       cancelled = true;
     };

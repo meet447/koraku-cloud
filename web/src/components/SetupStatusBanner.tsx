@@ -28,7 +28,7 @@ export function SetupStatusBanner() {
     >
       {KORAKU_COPY.setupLlm}{" "}
       <Link
-        href="https://github.com/meet447/koraku/blob/main/docs/SELF_HOST.md"
+        href="https://github.com/meet447/koraku-cloud/blob/main/docs/SELF_HOST.md"
         className="font-semibold underline"
         target="_blank"
         rel="noopener noreferrer"

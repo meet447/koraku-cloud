@@ -277,7 +277,7 @@ export function ChatConversation() {
         )}
       >
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex shrink-0 items-center justify-end gap-3 border-b border-neutral-100/90 bg-white/90 px-4 py-2">
+          <div className="flex shrink-0 items-center justify-end gap-3 border-b border-neutral-200/50 bg-white px-4 py-2">
             <button
               type="button"
               onClick={() => setWorkspaceOpen((o) => !o)}
@@ -386,7 +386,7 @@ export function ChatConversation() {
 
           <div
             className={clsx(
-              "shrink-0 bg-white/65 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-2xl backdrop-saturate-150",
+              "shrink-0 border-t border-neutral-200/50 bg-white pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3",
               chatMainLoading && "pointer-events-none opacity-60",
             )}
           >

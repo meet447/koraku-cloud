@@ -20,8 +20,10 @@ import {
 } from "@/lib/korakuReducer";
 import type { ComposerImage } from "@/components/Composer";
 import type { QueuedMessagePreview } from "@/components/MessageQueueBar";
-import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { safeError } from "@/lib/safe-log";
+import { isDetachedRunsRedisCapable } from "@/lib/koraku-health";
+import { supabaseAuthHeaders } from "@/lib/supabase/fetch-auth";
+import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 export type ChatMessage =
   | {
@@ -53,14 +55,7 @@ type DetachedChatMode = "default" | "off" | "always" | "heavy";
 let detachedRunsRedisCapable: boolean | null = null;
 
 async function refreshDetachedRunsCapability(): Promise<void> {
-  try {
-    const r = await fetch("/koraku-api/health", { cache: "no-store" });
-    if (!r.ok) return;
-    const data = (await r.json()) as { detached_runs_redis?: boolean };
-    detachedRunsRedisCapable = Boolean(data.detached_runs_redis);
-  } catch {
-    /* keep prior value */
-  }
+  detachedRunsRedisCapable = await isDetachedRunsRedisCapable();
 }
 
 function detachedChatMode(): DetachedChatMode {
@@ -973,16 +968,7 @@ export function useKorakuChat() {
             }, 0);
           }
 
-          const authHeaders: Record<string, string> = {};
-          try {
-            const supabase = createBrowserSupabaseClient();
-            const { data } = await supabase.auth.getSession();
-            if (data.session?.access_token) {
-              authHeaders.Authorization = `Bearer ${data.session.access_token}`;
-            }
-          } catch {
-            /* Supabase not configured in env — Composio falls back to backend default user */
-          }
+          const authHeaders = await supabaseAuthHeaders();
 
           let streamRes: Response;
           if (useDetached) {
@@ -1204,16 +1190,7 @@ export function useKorakuChat() {
           controller = new AbortController();
           abortBySessionRef.current[p.threadId] = controller;
 
-          const authHeaders: Record<string, string> = {};
-          try {
-            const supabase = createBrowserSupabaseClient();
-            const { data } = await supabase.auth.getSession();
-            if (data.session?.access_token) {
-              authHeaders.Authorization = `Bearer ${data.session.access_token}`;
-            }
-          } catch {
-            /* ignore */
-          }
+          const authHeaders = await supabaseAuthHeaders();
 
           updateAssistantRun(p.threadId, p.assistantMsgId, (r) => runStateForStreamReplay(r));
 

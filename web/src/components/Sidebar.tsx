@@ -13,7 +13,6 @@ import {
   Plus,
   Search,
   Settings2,
-  SlidersHorizontal,
   RefreshCw,
   Trash2,
   Wand2,
@@ -32,7 +31,6 @@ const nav = [
   { href: `${APP_BASE}/connections`, label: "Connections", icon: Plug },
   { href: `${APP_BASE}/external`, label: "External", icon: MessageCircle },
   { href: `${APP_BASE}/automations`, label: "Automations", icon: Wand2 },
-  { href: `${APP_BASE}/personalization`, label: "Profile", icon: SlidersHorizontal },
 ];
 
 const CHAT_SKELETON_KEYS = ["a", "b", "c", "d", "e", "f"] as const;
@@ -80,7 +78,7 @@ export function Sidebar({
   return (
     <aside
       className={clsx(
-        "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[28px] border border-neutral-200/90 bg-[#f7f7f7] transition-[width] duration-200 ease-out",
+        "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[28px] border border-neutral-200/80 bg-koraku-panel transition-[width] duration-200 ease-out",
         // Layered “pill input” border: hairline edge + white halo gap + soft outer stroke + float shadow
         "shadow-[0_0_0_3px_rgb(255_255_255),0_0_0_4px_rgb(229_229_229_/_0.55),0_14px_40px_-14px_rgb(0_0_0_/_0.09)]",
         collapsed ? "w-[3.75rem] px-1.5 py-2.5" : "w-[14rem] p-3",

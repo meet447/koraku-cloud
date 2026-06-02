@@ -4,11 +4,12 @@ import { useMemo, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { readPostAuthRedirect } from "@/lib/auth-redirect";
 import { KORAKU_COPY } from "@/lib/korakuBrand";
+import { KorakuAlert } from "@/components/KorakuAlert";
+import { KorakuButton } from "@/components/KorakuButton";
 
 type Provider = "google" | "github";
 
-const btn =
-  "flex w-full items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-800 shadow-sm hover:bg-neutral-50 disabled:opacity-50";
+const btn = "rounded-xl";
 
 export function OAuthSignInButtons() {
   const [error, setError] = useState<string | null>(null);
@@ -24,9 +25,9 @@ export function OAuthSignInButtons() {
 
   if (!supabase) {
     return (
-      <p className="text-sm text-amber-800" role="alert">
+      <KorakuAlert variant="warning" role="alert">
         {KORAKU_COPY.authNotConfigured}
-      </p>
+      </KorakuAlert>
     );
   }
 
@@ -63,26 +64,26 @@ export function OAuthSignInButtons() {
   return (
     <div className="flex flex-col gap-3">
       {error ? (
-        <p className="text-sm text-red-600" role="alert">
-          {error}
-        </p>
+        <KorakuAlert variant="error">{error}</KorakuAlert>
       ) : null}
-      <button
-        type="button"
+      <KorakuButton
+        variant="secondary"
+        fullWidth
         className={btn}
         disabled={loading !== null}
         onClick={() => void startOAuth("google")}
       >
         {loading === "google" ? "Redirecting…" : "Continue with Google"}
-      </button>
-      <button
-        type="button"
+      </KorakuButton>
+      <KorakuButton
+        variant="secondary"
+        fullWidth
         className={btn}
         disabled={loading !== null}
         onClick={() => void startOAuth("github")}
       >
         {loading === "github" ? "Redirecting…" : "Continue with GitHub"}
-      </button>
+      </KorakuButton>
     </div>
   );
 }

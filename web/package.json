@@ -22,6 +22,7 @@
     "@tanstack/react-virtual": "^3.13.24",
     "clsx": "^2.1.1",
     "ioredis": "^5.10.1",
+    "isomorphic-dompurify": "^2.36.0",
     "lucide-react": "^0.469.0",
     "mammoth": "^1.12.0",
     "next": "^15.5.18",
@@ -40,7 +41,7 @@
     "postcss": "^8.5.10",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.8"
   },
   "overrides": {
     "@typescript-eslint/visitor-keys": {
@@ -48,6 +49,7 @@
     },
     "eslint-visitor-keys": "4.2.1",
     "ws": "^8.20.1",
-    "brace-expansion": "^5.0.6"
+    "brace-expansion": "^5.0.6",
+    "postcss": "^8.5.10"
   }
 }

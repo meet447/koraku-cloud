@@ -3,23 +3,18 @@ import { ORG_ID_COOKIE } from "@/lib/tenant/constants";
 import {
   ensureDefaultOrgId,
   listUserOrgs,
-  resolveActiveOrgId,
 } from "@/lib/tenant/server";
+import { requireAuthedOrg } from "@/lib/supabase/route-auth";
 import { requireSupabaseAuth } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const auth = await requireSupabaseAuth();
-  if (!auth.ok) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const authed = await requireAuthedOrg();
+  if (!authed.ok) {
+    return authed.response;
   }
-  const { supabase, userId } = auth;
-
-  const orgId = await resolveActiveOrgId(supabase, userId);
-  if (!orgId) {
-    return Response.json({ error: "Could not resolve organization" }, { status: 503 });
-  }
+  const { supabase, userId, orgId } = authed.ctx;
 
   const jar = await cookies();
   if (!jar.get(ORG_ID_COOKIE)?.value?.trim()) {

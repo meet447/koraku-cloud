@@ -1,11 +1,13 @@
 "use client";
 
 import type { User } from "@supabase/supabase-js";
-import { LogIn, LogOut, User as UserIcon, UserPlus } from "lucide-react";
+import { LogIn, LogOut, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { UserAvatar } from "@/components/UserAvatar";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { getUserDisplayName } from "@/lib/user-profile";
 
 const iconStroke = 1.5;
 
@@ -48,7 +50,9 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
   if (user === undefined) {
     return (
       <span
-        className={collapsed ? "flex justify-center text-xs text-neutral-400" : "text-xs text-neutral-400"}
+        className={
+          collapsed ? "flex justify-center text-xs text-neutral-400" : "text-xs text-neutral-400"
+        }
         aria-live="polite"
       >
         …
@@ -97,10 +101,7 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
     );
   }
 
-  const label =
-    (user.user_metadata?.full_name as string | undefined)?.trim() ||
-    user.user_metadata?.name ||
-    user.email;
+  const label = getUserDisplayName(user);
 
   const signOut = () => {
     void (async () => {
@@ -117,9 +118,9 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
     return (
       <div
         className="flex flex-col items-center gap-1.5 py-0.5"
-        title={typeof label === "string" ? label : user.email ?? undefined}
+        title={label}
       >
-        <UserIcon className="h-4 w-4 shrink-0 text-neutral-600" strokeWidth={iconStroke} aria-hidden />
+        <UserAvatar user={user} size={32} />
         <button
           type="button"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-neutral-200 text-neutral-700 transition hover:bg-white/80"
@@ -134,12 +135,15 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-2">
-      <span
-        className="truncate text-[13px] font-medium text-neutral-800"
-        title={user.email ?? undefined}
-      >
-        {label}
-      </span>
+      <div className="flex min-w-0 items-center gap-2.5">
+        <UserAvatar user={user} size={32} />
+        <span
+          className="min-w-0 flex-1 truncate text-[13px] font-medium text-neutral-800"
+          title={user.email ?? undefined}
+        >
+          {label}
+        </span>
+      </div>
       <button
         type="button"
         className="w-full shrink-0 rounded-2xl border border-neutral-200 px-2.5 py-2 text-left text-[13px] font-semibold text-neutral-700 transition hover:bg-white/80"

@@ -1,7 +1,6 @@
 import { invalidateUserThreadList } from "@/lib/koraku-redis";
 import { safeError } from "@/lib/safe-log";
-import { resolveActiveOrgId } from "@/lib/tenant/server";
-import { requireSupabaseAuth } from "@/lib/supabase/server";
+import { requireAuthedOrg } from "@/lib/supabase/route-auth";
 
 export const runtime = "nodejs";
 
@@ -9,11 +8,11 @@ export async function DELETE(
   _req: Request,
   ctx: { params: Promise<{ threadId: string }> },
 ) {
-  const auth = await requireSupabaseAuth();
+  const auth = await requireAuthedOrg();
   if (!auth.ok) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+    return auth.response;
   }
-  const { supabase, userId } = auth;
+  const { supabase, userId, orgId } = auth.ctx;
   const { threadId } = await ctx.params;
 
   const { data: thread, error: selErr } = await supabase
@@ -33,7 +32,6 @@ export async function DELETE(
     return Response.json({ error: "Database error" }, { status: 500 });
   }
 
-  const orgId = await resolveActiveOrgId(supabase, userId);
   await invalidateUserThreadList(userId, orgId);
   return Response.json({ ok: true });
 }

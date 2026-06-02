@@ -3,6 +3,13 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { KorakuAppPage } from "@/components/KorakuAppPage";
+import { KorakuPageHeader } from "@/components/KorakuPageHeader";
+import { KorakuAlert } from "@/components/KorakuAlert";
+import { KorakuButton } from "@/components/KorakuButton";
+import { PersonalizationSection } from "@/components/PersonalizationSection";
+import { errorMessage } from "@/lib/error-message";
+import { korakuUi } from "@/lib/koraku-ui";
 import { KORAKU_COPY } from "@/lib/korakuBrand";
 
 export default function SettingsPage() {
@@ -30,7 +37,7 @@ export default function SettingsPage() {
       URL.revokeObjectURL(url);
       setMessage("Export generated.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Export failed");
+      setError(errorMessage(e, "Export failed"));
     } finally {
       setBusy(null);
     }
@@ -47,51 +54,47 @@ export default function SettingsPage() {
       if (!r.ok) throw new Error(data?.error || `Delete failed (${r.status})`);
       setMessage(data?.note || "Koraku app data deleted.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
+      setError(errorMessage(e, "Delete failed"));
     } finally {
       setBusy(null);
     }
   }
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto px-6 py-10">
-      <div className="mx-auto max-w-3xl">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-700">
-          Settings
-        </p>
-        <h1 className="mt-2 text-4xl font-bold tracking-tight text-neutral-950">
-          Trust and account controls.
-        </h1>
-        <p className="mt-3 text-sm font-medium leading-relaxed text-neutral-600">
-          Export your Koraku data, clear app data, and review beta privacy expectations.
-        </p>
+    <KorakuAppPage maxWidth="3xl">
+        <KorakuPageHeader
+          eyebrow="Settings"
+          title="Profile and account"
+          description="Personalize how Koraku talks to you, export data, and review privacy controls."
+        />
 
         {message ? (
-          <p className="mt-6 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 ring-1 ring-emerald-200">
+          <KorakuAlert variant="success" className="mt-6">
             {message}
-          </p>
+          </KorakuAlert>
         ) : null}
         {error ? (
-          <p className="mt-6 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 ring-1 ring-red-200">
+          <KorakuAlert variant="error" className="mt-6">
             {error}
-          </p>
+          </KorakuAlert>
         ) : null}
 
         <div className="mt-8 space-y-4">
-          <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-neutral-200/80">
-            <h2 className="text-lg font-bold text-neutral-950">Data export</h2>
-            <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-600">
+          <PersonalizationSection />
+
+          <section className={korakuUi.card}>
+            <h2 className="text-lg font-bold text-koraku-ink">Data export</h2>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-koraku-muted">
               Download chat threads, messages, personalization, automations, and run history{" "}
               {KORAKU_COPY.dataStoredInKoraku}.
             </p>
-            <button
-              type="button"
+            <KorakuButton
               onClick={() => void exportData()}
               disabled={busy !== null}
-              className="mt-4 rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+              className="mt-4"
             >
               {busy === "export" ? "Preparing..." : "Export JSON"}
-            </button>
+            </KorakuButton>
           </section>
 
           <section className="rounded-[28px] border border-red-200 bg-red-50 p-6">
@@ -101,14 +104,14 @@ export default function SettingsPage() {
               and disconnection of third-party providers may still need admin/support action
               in the public beta.
             </p>
-            <button
-              type="button"
+            <KorakuButton
+              variant="destructive"
               onClick={() => setConfirmDeleteOpen(true)}
               disabled={busy !== null}
-              className="mt-4 rounded-full bg-red-700 px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+              className="mt-4"
             >
               {busy === "delete" ? "Deleting..." : "Delete app data"}
-            </button>
+            </KorakuButton>
           </section>
 
           <ConfirmDialog
@@ -121,9 +124,9 @@ export default function SettingsPage() {
             onCancel={() => setConfirmDeleteOpen(false)}
           />
 
-          <section className="rounded-[28px] bg-[#fbfaf6] p-6 ring-1 ring-neutral-200/80">
-            <h2 className="text-lg font-bold text-neutral-950">Privacy and retention</h2>
-            <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-600">
+          <section className="rounded-[28px] bg-koraku-panel p-6 ring-1 ring-neutral-200/80">
+            <h2 className="text-lg font-bold text-koraku-ink">Privacy and retention</h2>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-koraku-muted">
               {KORAKU_COPY.privacyProcessing}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
@@ -136,7 +139,6 @@ export default function SettingsPage() {
             </div>
           </section>
         </div>
-      </div>
-    </main>
+    </KorakuAppPage>
   );
 }

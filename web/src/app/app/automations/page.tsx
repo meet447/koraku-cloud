@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { MoreHorizontal, Pause, Play, Plus, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MoreHorizontal, Pause, Play, Plus } from "lucide-react";
 import clsx from "clsx";
 import { APP_BASE } from "@/lib/app-path";
-import { supabaseAuthHeaders } from "@/lib/supabase/fetch-auth";
+import { errorMessage } from "@/lib/error-message";
+import { korakuFetch, korakuFetchJson, korakuFetchOk } from "@/lib/koraku-fetch";
+import { automationToolkitIconUrl } from "@/lib/toolkit-icons";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { KorakuAlert } from "@/components/KorakuAlert";
+import { KorakuButton, korakuButtonClass } from "@/components/KorakuButton";
+import { KorakuSearchInput } from "@/components/KorakuSearchInput";
 
 type ConfirmKind = "create" | "delete" | "run";
 
@@ -37,15 +42,6 @@ type RunRow = {
   duration_ms: number | null;
 };
 
-const TOOLKIT_ICONS: Record<string, { slug: string; hex: string }> = {
-  GMAIL: { slug: "gmail", hex: "EA4335" },
-  NOTION: { slug: "notion", hex: "000000" },
-  GOOGLEDRIVE: { slug: "googledrive", hex: "4285F4" },
-  SLACK: { slug: "slack", hex: "4A154B" },
-  AIRTABLE: { slug: "airtable", hex: "18BFFF" },
-  ASANA: { slug: "asana", hex: "F06A6A" },
-  BOX: { slug: "box", hex: "0061D5" },
-};
 
 const AUTOMATION_TEMPLATES = [
   {
@@ -74,11 +70,6 @@ const AUTOMATION_TEMPLATES = [
   },
 ] as const;
 
-function iconUrl(toolkit: string) {
-  const u = toolkit.toUpperCase();
-  const m = TOOLKIT_ICONS[u] ?? { slug: u.toLowerCase(), hex: "737373" };
-  return `https://cdn.simpleicons.org/${m.slug}/${m.hex}`;
-}
 
 function formatDayLabel(iso: string): string {
   const d = new Date(iso);
@@ -136,6 +127,7 @@ export default function AutomationsPage() {
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const [pendingConfirm, setPendingConfirm] = useState<ConfirmKind | null>(null);
 
@@ -146,20 +138,24 @@ export default function AutomationsPage() {
   const [formCron, setFormCron] = useState("0 9 * * *");
   const [formToolkits, setFormToolkits] = useState("");
 
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [menuOpen]);
+
   const loadList = useCallback(async () => {
     setError(null);
     try {
-      const r = await fetch("/koraku-api/api/automations", {
-        cache: "no-store",
-        headers: await supabaseAuthHeaders(),
-      });
-      if (!r.ok) {
-        throw new Error(`Failed to load (${r.status})`);
-      }
-      const data = (await r.json()) as { items: Automation[] };
+      const data = await korakuFetchJson<{ items: Automation[] }>("/koraku-api/api/automations");
       setItems(data.items ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Load failed");
+      setError(errorMessage(e, "Load failed"));
     } finally {
       setLoading(false);
     }
@@ -210,14 +206,9 @@ export default function AutomationsPage() {
   const loadRuns = useCallback(async (id: string) => {
     setRunsLoading(true);
     try {
-      const r = await fetch(`/koraku-api/api/automations/${id}/runs`, {
-        cache: "no-store",
-        headers: await supabaseAuthHeaders(),
-      });
-      if (!r.ok) {
-        return;
-      }
-      const data = (await r.json()) as { items: RunRow[] };
+      const data = await korakuFetchJson<{ items: RunRow[] }>(
+        `/koraku-api/api/automations/${id}/runs`,
+      );
       setRuns(data.items ?? []);
     } finally {
       setRunsLoading(false);
@@ -268,19 +259,10 @@ export default function AutomationsPage() {
         cron_expression: formCron.trim(),
         toolkits,
       };
-      const r = await fetch("/koraku-api/api/automations", {
+      const created = await korakuFetchJson<Automation>("/koraku-api/api/automations", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(await supabaseAuthHeaders()),
-        },
-        body: JSON.stringify(body),
+        json: body,
       });
-      if (!r.ok) {
-        const t = await r.text();
-        throw new Error(t || `Create failed (${r.status})`);
-      }
-      const created = (await r.json()) as Automation;
       setShowCreate(false);
       setFormTitle("");
       setFormHeadline("");
@@ -288,7 +270,7 @@ export default function AutomationsPage() {
       await loadList();
       setSelectedId(created.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Create failed");
+      setError(errorMessage(e, "Create failed"));
     } finally {
       setSaving(false);
     }
@@ -300,21 +282,14 @@ export default function AutomationsPage() {
     }
     setError(null);
     try {
-      const r = await fetch(`/koraku-api/api/automations/${selectedId}`, {
+      await korakuFetchOk(`/koraku-api/api/automations/${selectedId}`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(await supabaseAuthHeaders()),
-        },
-        body: JSON.stringify({ status: paused ? "paused" : "active" }),
+        json: { status: paused ? "paused" : "active" },
       });
-      if (!r.ok) {
-        throw new Error(await r.text());
-      }
       await loadList();
       setMenuOpen(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Update failed");
+      setError(errorMessage(e, "Update failed"));
     }
   }
 
@@ -328,18 +303,12 @@ export default function AutomationsPage() {
     if (!selectedId) return;
     setError(null);
     try {
-      const r = await fetch(`/koraku-api/api/automations/${selectedId}`, {
-        method: "DELETE",
-        headers: await supabaseAuthHeaders(),
-      });
-      if (!r.ok) {
-        throw new Error(await r.text());
-      }
+      await korakuFetchOk(`/koraku-api/api/automations/${selectedId}`, { method: "DELETE" });
       setSelectedId(null);
       setMenuOpen(false);
       await loadList();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
+      setError(errorMessage(e, "Delete failed"));
     }
   }
 
@@ -354,9 +323,8 @@ export default function AutomationsPage() {
     setRunning(true);
     setError(null);
     try {
-      const r = await fetch(`/koraku-api/api/automations/${selectedId}/run`, {
+      const r = await korakuFetch(`/koraku-api/api/automations/${selectedId}/run`, {
         method: "POST",
-        headers: await supabaseAuthHeaders(),
       });
       if (!r.ok) {
         let msg = await r.text();
@@ -373,7 +341,7 @@ export default function AutomationsPage() {
       await loadRuns(selectedId);
       await loadList();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Run failed");
+      setError(errorMessage(e, "Run failed"));
     } finally {
       setRunning(false);
     }
@@ -383,23 +351,26 @@ export default function AutomationsPage() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 items-center justify-between border-b border-neutral-200/80 px-6 py-4">
-          <h1 className="text-xl font-bold tracking-tight text-neutral-900">Automations</h1>
+        <header className="flex shrink-0 items-center justify-between border-b border-neutral-200/50 bg-white px-6 py-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-700">Automations</p>
+            <h1 className="mt-1 text-xl font-bold tracking-tight text-koraku-ink">Scheduled workflows</h1>
+          </div>
           <div className="flex items-center gap-2">
             <Link
               href={APP_BASE}
-              className="rounded-full border border-neutral-200/90 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 shadow-sm transition hover:bg-neutral-50"
+              className={korakuButtonClass({ variant: "secondary", size: "sm" })}
             >
               Open chat
             </Link>
-            <button
-              type="button"
+            <KorakuButton
+              size="sm"
               onClick={() => setShowCreate((s) => !s)}
-              className="inline-flex items-center gap-2 rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800"
+              className="inline-flex gap-2"
             >
               <Plus className="h-4 w-4" strokeWidth={2} />
               New
-            </button>
+            </KorakuButton>
           </div>
         </header>
 
@@ -496,44 +467,34 @@ export default function AutomationsPage() {
               </p>
             ) : null}
             <div className="mt-4 flex gap-2">
-              <button
-                type="button"
+              <KorakuButton
                 disabled={saving || !formSpec.trim()}
                 onClick={requestCreate}
-                className="rounded-full bg-neutral-900 px-5 py-2 text-sm font-semibold text-white disabled:opacity-40"
               >
                 {saving ? "Saving…" : "Save automation"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowCreate(false)}
-                className="rounded-full border border-neutral-200 px-5 py-2 text-sm font-semibold text-neutral-700"
-              >
+              </KorakuButton>
+              <KorakuButton variant="secondary" onClick={() => setShowCreate(false)}>
                 Cancel
-              </button>
+              </KorakuButton>
             </div>
           </div>
         ) : null}
 
         {error ? (
-          <p className="mx-6 mt-3 rounded-xl bg-red-50 px-4 py-2 text-sm font-medium text-red-800 ring-1 ring-red-200/80" role="alert">
+          <KorakuAlert variant="error" className="mx-6 mt-3">
             {error}
-          </p>
+          </KorakuAlert>
         ) : null}
 
         <div className="flex min-h-0 flex-1">
           <aside className="flex w-full max-w-sm shrink-0 flex-col border-r border-neutral-200/80 bg-neutral-50/50">
             <div className="p-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" strokeWidth={2} />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search automations…"
-                  className="w-full rounded-xl border border-neutral-200/90 bg-white py-2.5 pl-9 pr-3 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-200/80"
-                />
-              </div>
+              <KorakuSearchInput
+                variant="compact"
+                value={search}
+                onChange={setSearch}
+                placeholder="Search automations…"
+              />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
               {loading ? (
@@ -568,7 +529,7 @@ export default function AutomationsPage() {
                                 /* eslint-disable-next-line @next/next/no-img-element */
                                 <img
                                   key={tk}
-                                  src={iconUrl(tk)}
+                                  src={automationToolkitIconUrl(tk)}
                                   alt=""
                                   className="h-6 w-6 rounded-md border border-white bg-white object-contain ring-1 ring-neutral-100"
                                   width={24}
@@ -665,7 +626,7 @@ export default function AutomationsPage() {
                         </>
                       )}
                     </button>
-                    <div className="relative">
+                    <div className="relative" ref={menuRef}>
                       <button
                         type="button"
                         onClick={() => setMenuOpen((o) => !o)}

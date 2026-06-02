@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
 import type { TimelineRow } from "@/lib/korakuReducer";
+import { korakuFetch } from "@/lib/koraku-fetch";
 import { collectRunWorkspaceFileTouches } from "@/lib/workspaceAttachmentsFromTimeline";
 
 function fileName(path: string) {
@@ -61,9 +62,7 @@ export function RunWorkspaceAttachments({
           session_id: serverSessionId,
           path: relPath,
         });
-        const res = await fetch(`/koraku-api/api/workspace/file/blob?${q}`, {
-          credentials: "include",
-        });
+        const res = await korakuFetch(`/koraku-api/api/workspace/file/blob?${q}`);
         if (!res.ok) {
           setDownloadError("Could not download this file.");
           return;

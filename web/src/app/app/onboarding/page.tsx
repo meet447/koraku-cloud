@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { APP_BASE } from "@/lib/app-path";
+import { errorMessage } from "@/lib/error-message";
+import { savePersonalization } from "@/lib/koraku-personalization";
+import { KorakuAppPage } from "@/components/KorakuAppPage";
+import { KorakuPageHeader } from "@/components/KorakuPageHeader";
+import { KorakuAlert } from "@/components/KorakuAlert";
+import { KorakuButton } from "@/components/KorakuButton";
 
 const helperOptions = [
   "Remember my preferences and context",
@@ -58,51 +64,39 @@ export default function OnboardingPage() {
         : "Suggest three useful starter automations for me.",
     ];
     try {
-      const r = await fetch("/koraku-api/api/personalization", {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agent_name: "Koraku",
-          memory,
-          soul: tone.trim(),
-        }),
+      await savePersonalization({
+        agent_name: "Koraku",
+        memory,
+        soul: tone.trim(),
       });
-      if (!r.ok) throw new Error(`Save failed (${r.status})`);
       window.localStorage.setItem("koraku_onboarding_done", "1");
       window.localStorage.setItem("koraku_starter_prompts", JSON.stringify(starterPrompts));
       router.push(APP_BASE);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save onboarding");
+      setError(errorMessage(e, "Could not save onboarding"));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto bg-[#fbfaf6] px-6 py-10">
-      <div className="mx-auto max-w-4xl">
-        <p className="mb-4 text-xs font-bold uppercase tracking-[0.22em] text-orange-700">
-          First run
-        </p>
-        <h1 className="text-4xl font-bold tracking-tight text-neutral-950">
-          Teach Koraku how to be useful from day one.
-        </h1>
-        <p className="mt-3 max-w-2xl text-[15px] font-medium leading-relaxed text-neutral-600">
-          These answers become your initial memory and persona. You can edit them
-          later from Personalization.
-        </p>
+    <KorakuAppPage maxWidth="4xl">
+        <KorakuPageHeader
+          eyebrow="First run"
+          title="Teach Koraku how to be useful from day one"
+          description="These answers become your initial memory and persona. You can edit them later in Settings."
+        />
 
         {error ? (
-          <p className="mt-6 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 ring-1 ring-red-200">
+          <KorakuAlert variant="error" className="mt-6">
             {error}
-          </p>
+          </KorakuAlert>
         ) : null}
 
         <div className="mt-8 grid gap-5 lg:grid-cols-[1fr_0.85fr]">
           <section className="space-y-5 rounded-[32px] bg-white p-6 shadow-sm ring-1 ring-neutral-200/80">
             <label className="block">
-              <span className="text-sm font-bold text-neutral-900">What should Koraku call you?</span>
+              <span className="text-sm font-bold text-koraku-ink">What should Koraku call you?</span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -112,7 +106,7 @@ export default function OnboardingPage() {
             </label>
 
             <div>
-              <p className="text-sm font-bold text-neutral-900">What should Koraku help with?</p>
+              <p className="text-sm font-bold text-koraku-ink">What should Koraku help with?</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {helperOptions.map((item) => (
                   <button
@@ -132,7 +126,7 @@ export default function OnboardingPage() {
             </div>
 
             <label className="block">
-              <span className="text-sm font-bold text-neutral-900">Preferred companion style</span>
+              <span className="text-sm font-bold text-koraku-ink">Preferred companion style</span>
               <textarea
                 value={tone}
                 onChange={(e) => setTone(e.target.value)}
@@ -173,17 +167,16 @@ export default function OnboardingPage() {
               />
             </label>
 
-            <button
-              type="button"
+            <KorakuButton
+              fullWidth
               onClick={() => void save()}
               disabled={saving}
-              className="w-full rounded-full bg-orange-300 px-6 py-3 text-sm font-bold text-neutral-950 transition hover:bg-orange-200 disabled:opacity-60"
+              className="bg-orange-300 text-koraku-ink hover:bg-orange-200 disabled:opacity-60"
             >
               {saving ? "Saving..." : "Start with Koraku"}
-            </button>
+            </KorakuButton>
           </section>
         </div>
-      </div>
-    </main>
+    </KorakuAppPage>
   );
 }

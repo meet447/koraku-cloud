@@ -5,7 +5,13 @@ import Link from "next/link";
 import { CheckCircle2, Loader2, MessageCircle, Phone } from "lucide-react";
 import { APP_BASE } from "@/lib/app-path";
 import { KORAKU_COPY } from "@/lib/korakuBrand";
+import { errorMessage } from "@/lib/error-message";
+import { korakuFetchJson } from "@/lib/koraku-fetch";
+import { korakuUi } from "@/lib/koraku-ui";
+import { KorakuAppPage } from "@/components/KorakuAppPage";
 import { KorakuPageHeader } from "@/components/KorakuPageHeader";
+import { KorakuAlert } from "@/components/KorakuAlert";
+import { KorakuButton, korakuButtonClass } from "@/components/KorakuButton";
 import { useKorakuChatShell } from "@/context/KorakuChatContext";
 
 type ExternalStatus = {
@@ -26,9 +32,11 @@ export default function ExternalPage() {
   const [sent, setSent] = useState(false);
 
   const load = useCallback(async () => {
-    const r = await fetch("/api/external/status", { credentials: "include" });
-    if (!r.ok) return;
-    setStatus((await r.json()) as ExternalStatus);
+    try {
+      setStatus(await korakuFetchJson<ExternalStatus>("/api/external/status"));
+    } catch {
+      /* ignore — page shows loading until status resolves */
+    }
   }, []);
 
   useEffect(() => {
@@ -39,18 +47,13 @@ export default function ExternalPage() {
     setError(null);
     setBusy(true);
     try {
-      const r = await fetch("/koraku-api/sendblue/verify/start", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.trim() }),
-      });
-      const j = (await r.json()) as { detail?: string; sent?: boolean };
-      if (!r.ok) {
-        setError(j.detail || "Could not send verification code");
-        return;
-      }
+      const j = await korakuFetchJson<{ detail?: string; sent?: boolean }>(
+        "/koraku-api/sendblue/verify/start",
+        { method: "POST", json: { phone: phone.trim() } },
+      );
       setSent(Boolean(j.sent));
+    } catch (e) {
+      setError(errorMessage(e, "Could not send verification code"));
     } finally {
       setBusy(false);
     }
@@ -60,25 +63,20 @@ export default function ExternalPage() {
     setError(null);
     setBusy(true);
     try {
-      const r = await fetch("/koraku-api/sendblue/verify/confirm", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phone.trim(), code: code.trim() }),
-      });
-      const j = (await r.json()) as {
+      const j = await korakuFetchJson<{
         detail?: string;
         imessage_thread_id?: string;
-      };
-      if (!r.ok) {
-        setError(j.detail || "Invalid code");
-        return;
-      }
+      }>("/koraku-api/sendblue/verify/confirm", {
+        method: "POST",
+        json: { phone: phone.trim(), code: code.trim() },
+      });
       await load();
       await shell.reloadSessions();
       if (j.imessage_thread_id) {
         shell.selectSession(j.imessage_thread_id);
       }
+    } catch (e) {
+      setError(errorMessage(e, "Invalid code"));
     } finally {
       setBusy(false);
     }
@@ -86,15 +84,14 @@ export default function ExternalPage() {
 
   if (!status) {
     return (
-      <main className="flex min-h-0 flex-1 items-center justify-center bg-[#fbfaf6] px-6 py-10">
+      <KorakuAppPage maxWidth="2xl" className="flex items-center justify-center">
         <Loader2 className="h-7 w-7 animate-spin text-koraku-muted" aria-label="Loading" />
-      </main>
+      </KorakuAppPage>
     );
   }
 
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto bg-[#fbfaf6] px-6 py-10">
-      <div className="mx-auto max-w-2xl">
+    <KorakuAppPage maxWidth="2xl">
         <KorakuPageHeader
           eyebrow="External"
           title="Message Koraku from your phone"
@@ -102,12 +99,9 @@ export default function ExternalPage() {
         />
 
         {error ? (
-          <p
-            className="mt-6 rounded-2xl bg-red-50 px-4 py-3 text-sm font-medium text-red-800 ring-1 ring-red-200/80"
-            role="alert"
-          >
+          <KorakuAlert variant="error" className="mt-6">
             {error}
-          </p>
+          </KorakuAlert>
         ) : null}
 
         <div className="mt-8 space-y-5">
@@ -123,7 +117,7 @@ export default function ExternalPage() {
           ) : null}
 
           {status.from_number ? (
-            <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-neutral-200/80">
+            <section className={korakuUi.card}>
               <div className="flex items-start gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-50 ring-1 ring-orange-200/70">
                   <Phone className="h-5 w-5 text-orange-700" strokeWidth={2} aria-hidden />
@@ -163,13 +157,13 @@ export default function ExternalPage() {
                     shell.selectSession(status.imessage_thread_id);
                   }
                 }}
-                className="mt-4 inline-flex items-center justify-center rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800"
+                className={korakuButtonClass({ className: "mt-4" })}
               >
                 Open message thread
               </Link>
             </section>
           ) : (
-            <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-neutral-200/80">
+            <section className={korakuUi.card}>
               <div className="mb-5 flex items-start gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-koraku-panel ring-1 ring-neutral-200/80">
                   <MessageCircle className="h-5 w-5 text-koraku-ink" strokeWidth={2} aria-hidden />
@@ -196,20 +190,19 @@ export default function ExternalPage() {
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className="mt-3 w-full rounded-2xl border border-neutral-200/80 bg-koraku-panel px-4 py-3 text-[15px] font-medium text-koraku-ink outline-none focus:border-neutral-300 focus:bg-white focus:ring-2 focus:ring-neutral-200/80 disabled:opacity-50"
+                    className={korakuUi.input}
                     placeholder="+1…"
                     disabled={!status.configured}
                   />
                 </div>
 
-                <button
-                  type="button"
+                <KorakuButton
+                  fullWidth
                   disabled={busy || !phone.trim() || !status.configured}
                   onClick={() => void startVerify()}
-                  className="w-full rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy ? "Sending…" : "Send verification code"}
-                </button>
+                </KorakuButton>
 
                 {sent ? (
                   <p className="rounded-2xl bg-koraku-panel px-4 py-3 text-xs font-medium leading-relaxed text-neutral-600 ring-1 ring-neutral-200/80">
@@ -234,14 +227,15 @@ export default function ExternalPage() {
                     className="mt-3 w-full rounded-2xl border border-neutral-200/80 bg-koraku-panel px-4 py-3 text-[15px] font-medium text-koraku-ink outline-none focus:border-neutral-300 focus:bg-white focus:ring-2 focus:ring-neutral-200/80"
                     placeholder="6 digits"
                   />
-                  <button
-                    type="button"
+                  <KorakuButton
+                    variant="secondary"
+                    fullWidth
                     disabled={busy || !phone.trim() || !code.trim()}
                     onClick={() => void confirmVerify()}
-                    className="mt-4 w-full rounded-full border border-neutral-200/90 bg-white px-5 py-2.5 text-sm font-semibold text-koraku-ink transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-4"
                   >
                     Confirm and link
-                  </button>
+                  </KorakuButton>
                 </div>
               </div>
             </section>
@@ -262,7 +256,6 @@ export default function ExternalPage() {
             </ol>
           </section>
         </div>
-      </div>
-    </main>
+    </KorakuAppPage>
   );
 }

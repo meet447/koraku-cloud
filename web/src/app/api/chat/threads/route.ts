@@ -5,21 +5,16 @@ import {
 } from "@/lib/koraku-redis";
 import { fetchChatThreadsForOrg } from "@/lib/chat-threads-query";
 import { safeError } from "@/lib/safe-log";
-import { resolveActiveOrgId } from "@/lib/tenant/server";
-import { requireSupabaseAuth } from "@/lib/supabase/server";
+import { requireAuthedOrg } from "@/lib/supabase/route-auth";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  const auth = await requireSupabaseAuth();
-  if (!auth.ok) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const authed = await requireAuthedOrg();
+  if (!authed.ok) {
+    return authed.response;
   }
-  const { supabase, userId } = auth;
-  const orgId = await resolveActiveOrgId(supabase, userId);
-  if (!orgId) {
-    return Response.json({ error: "Organization unavailable" }, { status: 503 });
-  }
+  const { supabase, userId, orgId } = authed.ctx;
 
   const cacheKey = `threads:${orgId}:${userId}`;
   const cached = await getCachedJson<
@@ -46,15 +41,11 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const auth = await requireSupabaseAuth();
-  if (!auth.ok) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const authed = await requireAuthedOrg();
+  if (!authed.ok) {
+    return authed.response;
   }
-  const { supabase, userId } = auth;
-  const orgId = await resolveActiveOrgId(supabase, userId);
-  if (!orgId) {
-    return Response.json({ error: "Organization unavailable" }, { status: 503 });
-  }
+  const { supabase, userId, orgId } = authed.ctx;
 
   let title = "New chat";
   let id = crypto.randomUUID();

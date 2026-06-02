@@ -33,8 +33,8 @@ export function AppChrome({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-[100dvh] w-full overflow-hidden bg-white text-koraku-ink">
-      <div className="box-border flex h-full shrink-0 rounded-[28px] bg-white p-2 pr-2">
+    <div className="flex h-[100dvh] w-full overflow-hidden bg-koraku-panel text-koraku-ink">
+      <div className="box-border flex h-full shrink-0 p-2 pr-1">
         <Sidebar
           collapsed={collapsed}
           onToggleCollapse={onToggleCollapse}
@@ -50,9 +50,7 @@ export function AppChrome({
           onRefreshChat={onRefreshChat}
         />
       </div>
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-white">
-        {children}
-      </div>
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-white">{children}</div>
     </div>
   );
 }

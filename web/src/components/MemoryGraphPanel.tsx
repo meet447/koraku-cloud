@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { MemoryGraph } from "@supermemory/memory-graph";
 import type { DocumentWithMemories, GraphApiDocument } from "@supermemory/memory-graph";
+import { KorakuAlert } from "@/components/KorakuAlert";
+import { KorakuButton } from "@/components/KorakuButton";
+import { errorMessage } from "@/lib/error-message";
+import { korakuFetchJson } from "@/lib/koraku-fetch";
 
 type GraphResponse = {
   documents: DocumentWithMemories[];
@@ -62,15 +66,9 @@ export default function MemoryGraphPanel({ searchQuery = "" }: MemoryGraphPanelP
     else setIsLoadingMore(true);
     setError(null);
     try {
-      const res = await fetch(
+      const data = await korakuFetchJson<GraphResponse>(
         `/koraku-api/api/memory/graph?page=${pageNum}&limit=80`,
-        { cache: "no-store", credentials: "include" },
       );
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error(body || `Graph load failed (${res.status})`);
-      }
-      const data = (await res.json()) as GraphResponse;
       setDocuments((prev) =>
         append ? [...prev, ...(data.documents ?? [])] : (data.documents ?? []),
       );
@@ -78,7 +76,7 @@ export default function MemoryGraphPanel({ searchQuery = "" }: MemoryGraphPanelP
       setHasMore(Boolean(p && p.currentPage < p.totalPages));
       setPage(pageNum);
     } catch (e) {
-      setError(e instanceof Error ? e : new Error("Could not load memory graph"));
+      setError(new Error(errorMessage(e, "Could not load memory graph")));
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
@@ -122,16 +120,11 @@ export default function MemoryGraphPanel({ searchQuery = "" }: MemoryGraphPanelP
 
   if (error && !isLoading) {
     return (
-      <section className="rounded-[28px] border border-red-200/80 bg-red-50 px-6 py-8 text-center ring-1 ring-red-200/60">
-        <p className="text-sm font-semibold text-red-900">Could not load memory</p>
-        <p className="mt-2 text-sm font-medium text-red-800">{error.message}</p>
-        <button
-          type="button"
-          onClick={() => void fetchPage(1, false)}
-          className="mt-4 rounded-full border border-red-300 bg-white px-5 py-2.5 text-sm font-semibold text-red-900 transition hover:bg-red-50"
-        >
+      <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-neutral-200/80">
+        <KorakuAlert variant="error">{error.message}</KorakuAlert>
+        <KorakuButton variant="secondary" className="mt-4" onClick={() => void fetchPage(1, false)}>
           Retry
-        </button>
+        </KorakuButton>
       </section>
     );
   }
