@@ -33,7 +33,7 @@ from koraku.agent.composio_delegate_context import (
 )
 from koraku.tools.composio_delegate_tool import COMPOSIO_RUN_TOOL
 from koraku.agent.blaxel_scope import blaxel_sandbox_scope, blaxel_session_workspace_scope
-from koraku.integrations.blaxel_runtime import session_workspace_root_posix
+from koraku.integrations.blaxel_runtime import resolve_blaxel_session_root
 from koraku.integrations.cloud_user import effective_cloud_user_id
 from koraku.workspace.agent_workspace import agent_workspace_scope
 from koraku.agent.prompt_builder import build_tiered_system_prompt, prefetch_learned_memory_volatile
@@ -409,21 +409,29 @@ class Agent:
         blaxel_active = cloud_sandbox is not None or blaxel_lazy
         env_note: str | None = None
         session_root: str | None = None
+        blaxel_root_override = (
+            (run_context.blaxel_session_root or "").strip() if run_context else None
+        ) or None
         if cloud_sandbox is not None or blaxel_lazy:
-            session_root = session_workspace_root_posix(
-                effective_cloud_user_id(),
+            session_root = resolve_blaxel_session_root(
                 session.session_id,
                 settings,
+                override_root=blaxel_root_override,
             )
         if cloud_sandbox is not None:
             try:
                 sname = cloud_sandbox.metadata.name
             except Exception:
                 sname = "sandbox"
+            scope_label = (
+                "iMessage workspace"
+                if blaxel_root_override and "/imessage/" in blaxel_root_override
+                else "this chat's folder"
+            )
             env_note = (
                 f"- **Blaxel sandbox `{sname}`** (one VM per user): **Read**, **Write**, **Edit**, **Bash**, "
-                f"**Glob**, and **Grep** run under this chat's folder `{session_root}`. "
-                "Use paths relative to that folder (e.g. `notes.md`, `src/app.ts`)."
+                f"**Glob**, and **Grep** run under {scope_label} `{session_root}`. "
+                "Use paths relative to that folder (e.g. `notes.md`, `todo.txt`)."
             )
         elif blaxel_lazy and session_root:
             env_note = (
@@ -919,10 +927,15 @@ class Agent:
         session_root: str | None = None
         if ctx.cloud_sandbox is not None:
             try:
-                session_root = session_workspace_root_posix(
-                    effective_cloud_user_id(),
+                override = (
+                    (ctx.run_context.blaxel_session_root or "").strip()
+                    if ctx.run_context
+                    else None
+                ) or None
+                session_root = resolve_blaxel_session_root(
                     ctx.session.session_id,
                     settings,
+                    override_root=override,
                 )
             except Exception:
                 session_root = None

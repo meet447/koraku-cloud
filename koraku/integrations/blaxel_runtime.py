@@ -135,12 +135,38 @@ def _path_segment_session(session_id: str) -> str:
         return safe or "session"
 
 
+def _koraku_workdir_base(settings: Settings) -> str:
+    return (settings.blaxel_sandbox_workdir or "/tmp").strip().replace("\\", "/").rstrip("/") or "/tmp"
+
+
 def session_workspace_root_posix(user_id: str, session_id: str, settings: Settings) -> str:
     """Per-chat folder inside the VM: ``{workdir}/koraku/users/{user}/sessions/{session}/``."""
-    base = (settings.blaxel_sandbox_workdir or "/tmp").strip().replace("\\", "/").rstrip("/") or "/tmp"
+    base = _koraku_workdir_base(settings)
     uid = _path_segment_user(user_id)
     sid = _path_segment_session(session_id)
     return posixpath.join(base, "koraku", "users", uid, "sessions", sid)
+
+
+def imessage_workspace_root_posix(user_id: str, thread_id: str, settings: Settings) -> str:
+    """Dedicated iMessage folder (separate from web chat sessions): ``.../users/{user}/imessage/{thread}/``."""
+    base = _koraku_workdir_base(settings)
+    uid = _path_segment_user(user_id)
+    tid = _path_segment_session(thread_id)
+    return posixpath.join(base, "koraku", "users", uid, "imessage", tid)
+
+
+def resolve_blaxel_session_root(
+    session_id: str,
+    settings: Settings,
+    *,
+    user_id: str | None = None,
+    override_root: str | None = None,
+) -> str:
+    """POSIX workspace root for file tools this turn."""
+    if (override_root or "").strip():
+        return override_root.strip()
+    uid = (user_id or effective_cloud_user_id()).strip() or effective_cloud_user_id()
+    return session_workspace_root_posix(uid, session_id, settings)
 
 
 async def _mkdir_p_in_sandbox(sb: Any, session_root: str, settings: Settings) -> None:
@@ -159,13 +185,13 @@ async def _mkdir_p_in_sandbox(sb: Any, session_root: str, settings: Settings) ->
         log.exception("Blaxel mkdir -p failed path=%s wd=%s", session_root, wd)
 
 
-async def ensure_chat_sandbox(
-    session_id: str,
-    settings: Settings,
+async def _ensure_user_blaxel_vm(
+    user_id: str,
     *,
-    user_id: str | None = None,
+    label_session: str,
+    settings: Settings,
 ) -> Any:
-    """Create or resume the user's Blaxel VM and ensure this chat's session directory exists."""
+    """Create or resume the per-user Blaxel VM (shared by web chat and iMessage)."""
     if _SandboxInstance is None:
         raise RuntimeError(
             "blaxel package is not installed. Add `blaxel` to the environment (see requirements.txt)."
@@ -183,26 +209,60 @@ async def ensure_chat_sandbox(
         "labels": {
             "app": "koraku",
             "koraku_user": uid[:48],
-            "koraku_session": (session_id or "")[:36],
+            "koraku_session": (label_session or "")[:36],
         },
     }
-    log.info("Blaxel sandbox ensure name=%s user=%s session=%s", name, uid, session_id[:12] if session_id else "")
+    log.info(
+        "Blaxel sandbox ensure name=%s user=%s label_session=%s",
+        name,
+        uid,
+        label_session[:12] if label_session else "",
+    )
     ttl = max(60.0, float(getattr(settings, "blaxel_sandbox_cache_ttl_seconds", 600.0)))
     now = time.monotonic()
     cached = _sandbox_cache.get(name)
     if cached is not None and (now - cached[1]) < ttl:
-        sb = cached[0]
-    else:
-        try:
-            sb = await _SandboxInstance.create_if_not_exists(spec)
-        except Exception as e:
-            if _blaxel_error_looks_like_auth_failure(e):
-                raise RuntimeError(_BLAXEL_AUTH_HELP) from e
-            raise
-        _sandbox_cache[name] = (sb, now)
+        return cached[0]
+    try:
+        sb = await _SandboxInstance.create_if_not_exists(spec)
+    except Exception as e:
+        if _blaxel_error_looks_like_auth_failure(e):
+            raise RuntimeError(_BLAXEL_AUTH_HELP) from e
+        raise
+    _sandbox_cache[name] = (sb, now)
+    return sb
+
+
+async def ensure_chat_sandbox(
+    session_id: str,
+    settings: Settings,
+    *,
+    user_id: str | None = None,
+) -> Any:
+    """Create or resume the user's Blaxel VM and ensure this chat's session directory exists."""
+    uid = (user_id or effective_cloud_user_id()).strip() or effective_cloud_user_id()
+    sb = await _ensure_user_blaxel_vm(uid, label_session=session_id, settings=settings)
     root = session_workspace_root_posix(uid, session_id, settings)
     await _mkdir_p_in_sandbox(sb, root, settings)
     return sb
+
+
+async def ensure_imessage_sandbox(
+    thread_id: str,
+    settings: Settings,
+    *,
+    user_id: str | None = None,
+) -> tuple[Any, str]:
+    """Ensure the user's VM and a dedicated iMessage workspace folder for this thread."""
+    uid = (user_id or effective_cloud_user_id()).strip() or effective_cloud_user_id()
+    tid = (thread_id or "").strip()
+    if not tid:
+        raise ValueError("thread_id required for iMessage sandbox")
+    label = f"imessage-{tid[:12]}"
+    sb = await _ensure_user_blaxel_vm(uid, label_session=label, settings=settings)
+    root = imessage_workspace_root_posix(uid, tid, settings)
+    await _mkdir_p_in_sandbox(sb, root, settings)
+    return sb, root
 
 
 def get_cached_user_sandbox(user_id: str | None = None) -> Any | None:

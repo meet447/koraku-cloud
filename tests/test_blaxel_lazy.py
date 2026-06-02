@@ -24,7 +24,7 @@ async def test_warm_blaxel_session_background_noops_without_lazy_session(monkeyp
 @pytest.mark.asyncio
 async def test_warm_blaxel_session_background_uses_lazy_session(monkeypatch) -> None:
     called = {"n": 0}
-    tok = bl.set_lazy_blaxel_session("sess-1")
+    sid_tok, _root_tok = bl.set_lazy_blaxel_session("sess-1")
 
     async def fake_ensure() -> bool:
         called["n"] += 1
@@ -35,5 +35,38 @@ async def test_warm_blaxel_session_background_uses_lazy_session(monkeypatch) -> 
     try:
         await bl.warm_blaxel_session_background()
     finally:
-        bl.clear_lazy_blaxel_session(tok)
+        bl.clear_lazy_blaxel_session(sid_tok)
     assert called["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_lazy_ensure_uses_imessage_session_root_override(monkeypatch) -> None:
+    import koraku.integrations.blaxel_lazy as bl
+    from types import SimpleNamespace
+
+    bound: list[str] = []
+
+    class FakeSb:
+        pass
+
+    async def fake_ensure_chat_sandbox(sid: str, settings: object, *, user_id: str | None = None) -> FakeSb:
+        return FakeSb()
+
+    def fake_bind(sb: object, root: str) -> tuple[object, object]:
+        bound.append(root)
+        return (object(), object())
+
+    monkeypatch.setattr(bl, "cloud_blaxel_block_reason", lambda _s: None)
+    monkeypatch.setattr(bl, "ensure_chat_sandbox", fake_ensure_chat_sandbox)
+    monkeypatch.setattr(bl, "bind_blaxel_sandbox", fake_bind)
+    monkeypatch.setattr(bl, "settings", SimpleNamespace(blaxel_cloud_sandbox_enabled=True))
+    monkeypatch.setattr(bl, "effective_cloud_user_id", lambda: "user-1")
+
+    imessage_root = "/tmp/koraku/users/user-1/imessage/thread-1"
+    sid_tok, root_tok = bl.set_lazy_blaxel_session("web-session-id", session_root=imessage_root)
+    try:
+        ok = await bl.ensure_blaxel_for_file_tool()
+    finally:
+        bl.clear_lazy_blaxel_session(sid_tok, root_tok)
+    assert ok is True
+    assert bound == [imessage_root]

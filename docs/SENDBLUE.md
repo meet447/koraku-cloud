@@ -100,9 +100,17 @@ When the agent **Write**s or **Edit**s a file during an iMessage turn, Koraku up
 
 ## Typing indicator lingers after a reply
 
-iMessage keeps the “…” bubble visible for a few seconds after each typing signal (SendBlue has no “stop typing” API). Koraku stops pinging typing **before** it sends message bubbles.
+iMessage keeps the “…” bubble visible for a few seconds after each typing signal (SendBlue has no “stop typing” API). Koraku pauses typing refresh **before** each outbound bubble, then **resumes** it while tools are still running (so you see “…” between interim `ChannelSend` messages and the final reply).
 
 If typing still hangs too long, check SendBlue **Settings** for **auto typing on inbound** — turn it off when Koraku manages typing during agent turns (otherwise you get a second indicator from SendBlue).
+
+## File tools in iMessage turns
+
+When `BLAXEL_CLOUD_SANDBOX_ENABLED=true`, each iMessage thread gets its own folder on the user's Blaxel VM:
+
+`{workdir}/koraku/users/{user}/imessage/{thread_id}/`
+
+Koraku provisions that sandbox **at the start of each iMessage turn** (not lazy-only), so **Write** / **Edit** work reliably and files can be sent as iMessage attachments. Web chat sessions stay under `.../sessions/{session_id}/` and do not share that folder.
 
 ## Troubleshooting
 

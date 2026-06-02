@@ -38,3 +38,5 @@ class AgentRunContext:
     execution_target: ExecutionTarget = "cloud"
     extra_tools: tuple["Tool", ...] = field(default_factory=tuple)
     system_appendix: str | None = None
+    #: When set (e.g. iMessage), file tools use this VM folder instead of ``sessions/{id}/``.
+    blaxel_session_root: str | None = None

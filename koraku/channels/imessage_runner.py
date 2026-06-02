@@ -16,9 +16,15 @@ from koraku.channels.file_attachments import (
     start_imessage_file_capture,
 )
 from koraku.channels.imessage_prompt import imessage_system_appendix
+from koraku.channels.imessage_sandbox import (
+    imessage_blaxel_available,
+    imessage_workspace_root,
+    prepare_imessage_sandbox,
+)
 from koraku.core.config import settings
 from koraku.integrations import composio as composio_runtime
 from koraku.integrations.cloud_user import reset_cloud_user_id, set_cloud_user_id
+from koraku.integrations.blaxel_lazy import clear_lazy_blaxel_session, set_lazy_blaxel_session
 from koraku.integrations import sendblue_client
 from koraku.integrations.sendblue_client import send_message
 from koraku.integrations.supabase_chat_history import hydrate_session_messages_from_db
@@ -65,15 +71,33 @@ async def run_imessage_turn(
     stop_typing = asyncio.Event()
     typing_task: asyncio.Task[None] | None = None
 
-    async def _halt_typing() -> None:
-        """Stop refreshing typing before outbound bubbles (iMessage lingers ~3s per ping)."""
-        if stop_typing.is_set():
-            return
-        stop_typing.set()
+    async def _cancel_typing_task() -> None:
+        nonlocal typing_task
         if typing_task is not None and not typing_task.done():
             typing_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await typing_task
+        typing_task = None
+
+    async def _halt_typing() -> None:
+        """Stop typing for the rest of this turn."""
+        if stop_typing.is_set():
+            return
+        stop_typing.set()
+        await _cancel_typing_task()
+
+    async def _pause_typing_for_bubble() -> None:
+        """Pause refresh before an outbound bubble (iMessage lingers ~3s per ping)."""
+        await _cancel_typing_task()
+
+    async def _resume_typing() -> None:
+        """Resume typing while the agent is still working after a bubble."""
+        nonlocal typing_task
+        if stop_typing.is_set():
+            return
+        if typing_task is not None and not typing_task.done():
+            return
+        typing_task = asyncio.create_task(_typing_task())
 
     async def _typing_task() -> None:
         await sendblue_client.send_typing_indicator(phone_e164)
@@ -93,7 +117,7 @@ async def run_imessage_turn(
         body = (msg or "").strip()
         if not body:
             return
-        await _halt_typing()
+        await _pause_typing_for_bubble()
         await send_message(phone_e164, body)
         sent_parts.append(body)
         await asyncio.to_thread(
@@ -102,6 +126,7 @@ async def run_imessage_turn(
             role="assistant",
             text=body,
         )
+        await _resume_typing()
 
     channel = ActiveChannel(
         kind="imessage",
@@ -120,12 +145,32 @@ async def run_imessage_turn(
     prev_cm = agent.context_manager
     agent.context_manager = imessage_cm
 
+    lazy_sid_tok = None
+    lazy_root_tok = None
+    cloud_sandbox = None
+    imessage_root: str | None = None
+    blaxel_on = imessage_blaxel_available()
+
     try:
         session = get_or_create_chat_session(
             thread_id,
             owner_sub=user_id,
             owner_org_id=org_id,
         )
+        if blaxel_on:
+            cloud_sandbox, imessage_root = await prepare_imessage_sandbox(user_id, thread_id)
+            if not imessage_root:
+                imessage_root = imessage_workspace_root(user_id, thread_id)
+            lazy_sid_tok, lazy_root_tok = set_lazy_blaxel_session(
+                session.session_id,
+                session_root=imessage_root,
+            )
+            if cloud_sandbox is None:
+                log.warning(
+                    "imessage turn deferred sandbox attach thread=%s root=%s",
+                    thread_id[:12],
+                    imessage_root,
+                )
         await hydrate_session_messages_from_db(
             session,
             incoming_user_text=text.strip(),
@@ -146,13 +191,15 @@ async def run_imessage_turn(
         run_context = AgentRunContext(
             execution_target="cloud",
             extra_tools=(CHANNEL_SEND_TOOL,),
-            system_appendix=imessage_system_appendix(),
+            system_appendix=imessage_system_appendix(imessage_root),
+            blaxel_session_root=imessage_root,
         )
         async for _ in agent.run(
             text.strip(),
             session,
             emit,
             run_context=run_context,
+            cloud_sandbox=cloud_sandbox,
         ):
             pass
 
@@ -166,7 +213,15 @@ async def run_imessage_turn(
                 if tail.startswith(part):
                     tail = tail[len(part) :].lstrip()
             if tail.strip() and tail.strip() not in sent_parts:
-                await on_send(tail)
+                await _pause_typing_for_bubble()
+                await send_message(phone_e164, tail)
+                sent_parts.append(tail)
+                await asyncio.to_thread(
+                    append_thread_message_sync,
+                    thread_id=thread_id,
+                    role="assistant",
+                    text=tail,
+                )
 
         if not sent_parts and not final.strip():
             log.warning("imessage turn produced no outbound text for thread %s", thread_id)
@@ -189,6 +244,7 @@ async def run_imessage_turn(
             "Something went wrong on my side — try again in a moment.",
         )
     finally:
+        clear_lazy_blaxel_session(lazy_sid_tok, lazy_root_tok)
         agent.context_manager = prev_cm
         with contextlib.suppress(Exception):
             await send_queued_imessage_attachments(phone_e164)

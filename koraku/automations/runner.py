@@ -250,7 +250,7 @@ async def execute_automation(
                 spec_query=auto.get("natural_language_spec"),
             )
 
-            lazy_tok = set_lazy_blaxel_session(session.session_id)
+            lazy_tok, lazy_root_tok = set_lazy_blaxel_session(session.session_id)
 
             def _emit(ev: dict[str, Any]) -> None:
                 if emit is not None:
@@ -271,7 +271,7 @@ async def execute_automation(
                     run_id=run_id,
                 )
             finally:
-                clear_lazy_blaxel_session(lazy_tok)
+                clear_lazy_blaxel_session(lazy_tok, lazy_root_tok)
 
             finished = utcnow()
             summary = _last_assistant_summary(session)

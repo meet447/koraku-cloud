@@ -310,7 +310,9 @@ async def _stream_agent_sse(
                 eff_cancel.set()
 
     async def run_agent() -> None:
-        lazy_tok = set_lazy_blaxel_session(session.session_id) if blaxel_lazy else None
+        lazy_tok, lazy_root_tok = (
+            set_lazy_blaxel_session(session.session_id) if blaxel_lazy else (None, None)
+        )
         warm_task: asyncio.Task[None] | None = None
         if blaxel_lazy and user_sandbox_is_cached(effective_cloud_user_id()):
             warm_task = asyncio.create_task(warm_blaxel_session_background())
@@ -356,7 +358,7 @@ async def _stream_agent_sse(
                         session_id=session.session_id,
                         run_id=stream_state.run_id,
                     )
-            clear_lazy_blaxel_session(lazy_tok)
+            clear_lazy_blaxel_session(lazy_tok, lazy_root_tok)
             try:
                 queue.put_nowait(None)
             except asyncio.QueueFull:

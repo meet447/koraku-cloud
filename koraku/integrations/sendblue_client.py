@@ -199,13 +199,15 @@ async def send_typing_indicator(to_number: str) -> None:
         return
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            await client.post(
+            res = await client.post(
                 f"{api_base()}/send-typing-indicator",
                 headers=h,
                 json={"number": to, "from_number": from_num},
             )
-    except httpx.HTTPError:
-        pass
+        if not res.is_success:
+            log.debug("sendblue typing %s: %s", res.status_code, res.text[:200])
+    except httpx.HTTPError as e:
+        log.debug("sendblue typing failed: %s", e)
 
 
 class TypingLoop:

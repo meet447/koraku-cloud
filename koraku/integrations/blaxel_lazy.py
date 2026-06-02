@@ -10,7 +10,7 @@ from koraku.core.config import settings
 from koraku.integrations.blaxel_runtime import (
     cloud_blaxel_block_reason,
     ensure_chat_sandbox,
-    session_workspace_root_posix,
+    resolve_blaxel_session_root,
 )
 from koraku.integrations.cloud_user import effective_cloud_user_id
 
@@ -20,18 +20,35 @@ _lazy_session_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "koraku_lazy_blaxel_session",
     default=None,
 )
+_lazy_session_root: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "koraku_lazy_blaxel_session_root",
+    default=None,
+)
 _ensure_locks: dict[str, asyncio.Lock] = {}
 
 
-def set_lazy_blaxel_session(session_id: str | None) -> contextvars.Token[str | None] | None:
-    if not (session_id or "").strip():
-        return None
-    return _lazy_session_id.set(session_id.strip())
+def set_lazy_blaxel_session(
+    session_id: str | None,
+    *,
+    session_root: str | None = None,
+) -> tuple[contextvars.Token[str | None] | None, contextvars.Token[str | None] | None]:
+    sid_tok: contextvars.Token[str | None] | None = None
+    root_tok: contextvars.Token[str | None] | None = None
+    if (session_id or "").strip():
+        sid_tok = _lazy_session_id.set(session_id.strip())
+    if (session_root or "").strip():
+        root_tok = _lazy_session_root.set(session_root.strip())
+    return sid_tok, root_tok
 
 
-def clear_lazy_blaxel_session(token: contextvars.Token[str | None] | None) -> None:
-    if token is not None:
-        _lazy_session_id.reset(token)
+def clear_lazy_blaxel_session(
+    session_token: contextvars.Token[str | None] | None,
+    root_token: contextvars.Token[str | None] | None = None,
+) -> None:
+    if session_token is not None:
+        _lazy_session_id.reset(session_token)
+    if root_token is not None:
+        _lazy_session_root.reset(root_token)
 
 
 def lazy_blaxel_session_active() -> bool:
@@ -71,7 +88,13 @@ async def ensure_blaxel_for_file_tool() -> bool:
     if cloud_blaxel_block_reason(settings):
         return False
     uid = effective_cloud_user_id()
-    session_root = session_workspace_root_posix(uid, sid, settings)
+    override = (_lazy_session_root.get() or "").strip() or None
+    session_root = resolve_blaxel_session_root(
+        sid,
+        settings,
+        user_id=uid,
+        override_root=override,
+    )
     async with _lock_for_user():
         if get_active_blaxel_sandbox() is not None:
             return True
