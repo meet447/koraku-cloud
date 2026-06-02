@@ -141,6 +141,9 @@ async def _write(file_path: str, content: str) -> str:
         os.makedirs(os.path.dirname(fpath), exist_ok=True)
         with open(fpath, "w", encoding="utf-8") as f:
             f.write(content)
+        from koraku.channels.file_attachments import record_host_file_if_imessage
+
+        record_host_file_if_imessage(fpath, logical_path=file_path)
         return f"Wrote {len(content)} chars to {file_path}"
     except Exception as e:
         return f"Error: {e}"
@@ -184,6 +187,9 @@ async def _edit(file_path: str, old_string: str, new_string: str) -> str:
         content = content.replace(old_string, new_string, 1)
         with open(fpath, "w", encoding="utf-8") as f:
             f.write(content)
+        from koraku.channels.file_attachments import record_host_file_if_imessage
+
+        record_host_file_if_imessage(fpath, logical_path=file_path)
         return f"Edited {file_path}"
     except Exception as e:
         return f"Error: {e}"

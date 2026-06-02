@@ -107,6 +107,9 @@ async def blaxel_write_if_active(file_path: str, content: str) -> str | None:
         await sb.fs.write(path, content)
     except Exception as e:
         return f"Error (Blaxel write): {e}"
+    from koraku.channels.file_attachments import export_blaxel_file_if_imessage
+
+    await export_blaxel_file_if_imessage(sb, path, file_path)
     return f"Wrote {len(content)} chars to {file_path}"
 
 
@@ -129,6 +132,9 @@ async def blaxel_edit_if_active(file_path: str, old_string: str, new_string: str
         await sb.fs.write(path, updated)
     except Exception as e:
         return f"Error (Blaxel edit): {e}"
+    from koraku.channels.file_attachments import export_blaxel_file_if_imessage
+
+    await export_blaxel_file_if_imessage(sb, path, file_path)
     return f"Edited {file_path}"
 
 

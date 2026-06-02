@@ -94,6 +94,10 @@ If you set a signing secret in SendBlue, add the same value to `.env` as `SENDBL
    - `sendblue inbound linked user …`
 3. You should get an iMessage reply from Koraku.
 
+## File attachments
+
+When the agent **Write**s or **Edit**s a file during an iMessage turn, Koraku uploads it to SendBlue and sends it as an attachment (📎 filename) after the text reply. Limits: 8 files per turn, 20 MB each; secrets like `.env` are skipped.
+
 ## Typing indicator lingers after a reply
 
 iMessage keeps the “…” bubble visible for a few seconds after each typing signal (SendBlue has no “stop typing” API). Koraku stops pinging typing **before** it sends message bubbles.

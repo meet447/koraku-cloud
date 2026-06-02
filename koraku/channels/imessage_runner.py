@@ -10,6 +10,11 @@ from koraku.agent import Agent
 from koraku.agent.context_manager import ContextManager
 from koraku.agent.sessions import get_or_create_chat_session
 from koraku.channels.context import ActiveChannel, reset_active_channel, set_active_channel
+from koraku.channels.file_attachments import (
+    end_imessage_file_capture,
+    send_queued_imessage_attachments,
+    start_imessage_file_capture,
+)
 from koraku.channels.imessage_prompt import imessage_system_appendix
 from koraku.core.config import settings
 from koraku.integrations import composio as composio_runtime
@@ -106,6 +111,7 @@ async def run_imessage_turn(
         org_id=org_id,
     )
     t_ch, t_send = set_active_channel(channel, on_send=on_send)
+    file_cap_tok = start_imessage_file_capture()
     composio_tok = composio_runtime.set_composio_request_user(user_id)
     cloud_tok = set_cloud_user_id(user_id)
     tenant_tok = set_tenant_org_id(org_id)
@@ -184,6 +190,9 @@ async def run_imessage_turn(
         )
     finally:
         agent.context_manager = prev_cm
+        with contextlib.suppress(Exception):
+            await send_queued_imessage_attachments(phone_e164)
+        end_imessage_file_capture(file_cap_tok)
         reset_active_channel(t_ch, t_send)
         if composio_tok is not None:
             composio_runtime.reset_composio_request_user(composio_tok)

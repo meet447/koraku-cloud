@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Any
 
@@ -103,24 +104,74 @@ def chunk_text(text: str, size: int = MAX_CHUNK) -> list[str]:
     return out
 
 
-async def send_message(to_number: str, text: str) -> bool:
+async def upload_file_path(local_path: str) -> str | None:
+    """Upload a local file to SendBlue CDN; returns ``media_url`` on success."""
+    h = _headers()
+    if not h:
+        return None
+    path = os.path.abspath(local_path)
+    if not os.path.isfile(path):
+        return None
+    auth = {k: v for k, v in h.items() if k.lower() != "content-type"}
+    try:
+        with open(path, "rb") as fh:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                res = await client.post(
+                    f"{api_base()}/upload-file",
+                    headers=auth,
+                    files={"file": (os.path.basename(path), fh)},
+                )
+    except httpx.HTTPError as e:
+        log.warning("sendblue upload failed: %s", e)
+        return None
+    if not res.is_success:
+        log.warning("sendblue upload %s: %s", res.status_code, res.text[:400])
+        return None
+    try:
+        body = res.json()
+    except Exception:
+        return None
+    if isinstance(body, dict):
+        url = body.get("media_url")
+        if isinstance(url, str) and url.strip():
+            return url.strip()
+    return None
+
+
+async def send_message(
+    to_number: str,
+    text: str,
+    *,
+    media_url: str | None = None,
+) -> bool:
     h = _headers()
     from_num = normalize_e164(settings.sendblue_from_number)
     to = normalize_e164(to_number)
     if not h or not from_num or not to:
         log.warning("sendblue send skipped: missing credentials or numbers")
         return False
-    plain = strip_markdown_for_imessage(text)
-    if not plain:
+    media = (media_url or "").strip() or None
+    plain = strip_markdown_for_imessage(text) if text else ""
+    if not plain and not media:
         return False
+    if media and not plain:
+        plain = " "
+    parts = chunk_text(plain) if plain.strip() else [" "]
     ok = True
     async with httpx.AsyncClient(timeout=30.0) as client:
-        for part in chunk_text(plain):
+        for i, part in enumerate(parts):
+            payload: dict[str, str] = {
+                "number": to,
+                "content": part,
+                "from_number": from_num,
+            }
+            if media and i == 0:
+                payload["media_url"] = media
             try:
                 res = await client.post(
                     f"{api_base()}/send-message",
                     headers=h,
-                    json={"number": to, "content": part, "from_number": from_num},
+                    json=payload,
                 )
             except httpx.HTTPError as e:
                 log.warning("sendblue send failed: %s", e)
