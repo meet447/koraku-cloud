@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { KORAKU_COPY } from "@/lib/korakuBrand";
 
 export default function SettingsPage() {
   const [busy, setBusy] = useState<"export" | "delete" | null>(null);
@@ -80,8 +81,8 @@ export default function SettingsPage() {
           <section className="rounded-[28px] bg-white p-6 shadow-sm ring-1 ring-neutral-200/80">
             <h2 className="text-lg font-bold text-neutral-950">Data export</h2>
             <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-600">
-              Download chat threads, messages, personalization, automations, and run history
-              stored in Supabase for your account.
+              Download chat threads, messages, personalization, automations, and run history{" "}
+              {KORAKU_COPY.dataStoredInKoraku}.
             </p>
             <button
               type="button"
@@ -113,7 +114,7 @@ export default function SettingsPage() {
           <ConfirmDialog
             open={confirmDeleteOpen}
             title="Delete Koraku app data?"
-            message="This removes chat history, personalization, automations, and automation runs stored in Koraku. Learned memory in Supermemory may be retained separately and is not deleted by this action. It does not delete your Supabase auth account or provider-side data."
+            message={KORAKU_COPY.deleteDataNote}
             confirmLabel="Delete"
             destructive
             onConfirm={() => void deleteData()}
@@ -123,8 +124,7 @@ export default function SettingsPage() {
           <section className="rounded-[28px] bg-[#fbfaf6] p-6 ring-1 ring-neutral-200/80">
             <h2 className="text-lg font-bold text-neutral-950">Privacy and retention</h2>
             <p className="mt-2 text-sm font-medium leading-relaxed text-neutral-600">
-              Koraku sends prompts and tool context to configured LLM providers and may route
-              connected-app actions through Composio or workspace execution through Blaxel.
+              {KORAKU_COPY.privacyProcessing}
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link href="/privacy" className="text-sm font-bold text-orange-700 underline">

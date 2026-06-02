@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { KORAKU_COPY } from "@/lib/korakuBrand";
 
 export default function PrivacyPage() {
   return (
@@ -10,16 +11,8 @@ export default function PrivacyPage() {
         Privacy and data handling
       </h1>
       <div className="mt-8 space-y-5 text-sm font-medium leading-relaxed text-neutral-700">
-        <p>
-          Koraku stores chat history, personalization memory, automation definitions,
-          and automation run history in Supabase when configured. Active chat sessions
-          and detached run buffers may also live temporarily in backend memory.
-        </p>
-        <p>
-          Prompts, messages, tool definitions, and tool results may be sent to the
-          configured LLM provider. Connected app actions may be processed by Composio,
-          and cloud workspace execution may use Blaxel sandboxes when enabled.
-        </p>
+        <p>{KORAKU_COPY.privacyStorage}</p>
+        <p>{KORAKU_COPY.privacyProcessing}</p>
         <p>
           Do not save secrets as memory. Koraku is designed to ask for confirmation
           before high-impact external actions such as sending messages, changing

@@ -10,8 +10,7 @@ export default function SignInPage() {
         Sign in
       </h1>
       <p className="mb-8 text-sm text-neutral-600">
-        Use Google or GitHub (configure providers in your Supabase project). New
-        accounts are created on first sign-in.{" "}
+        Use Google or GitHub to sign in. New accounts are created on first sign-in.{" "}
         <Link href="/sign-up" className="text-koraku-accent underline">
           Sign up
         </Link>

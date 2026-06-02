@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useState } from "react";
 import Link from "next/link";
 import { APP_BASE } from "@/lib/app-path";
+import { KORAKU_COPY } from "@/lib/korakuBrand";
 
 const MemoryGraphPanel = dynamic(() => import("@/components/MemoryGraphPanel"), {
   ssr: false,
@@ -24,8 +25,7 @@ export default function MemoryPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-neutral-950">Memory</h1>
             <p className="mt-2 max-w-xl text-sm font-medium leading-relaxed text-neutral-600">
-              What Koraku remembers across chats (Supermemory). Name, tone, and explicit
-              preferences are edited in Personalization.
+              {KORAKU_COPY.memoryIntro}
             </p>
           </div>
           <Link

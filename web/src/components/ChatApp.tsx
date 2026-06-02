@@ -15,6 +15,7 @@ import { BrandMark } from "./BrandMark";
 import { WorkspacePanel } from "./WorkspacePanel";
 import { RunWorkspaceAttachments } from "./RunWorkspaceAttachments";
 import { StreamingReplySkeleton } from "./StreamingReplySkeleton";
+import { initialRunState } from "@/lib/korakuReducer";
 import { shouldShowRunFooterStatus } from "@/lib/runStatusText";
 
 /** Use windowed rendering when a thread has at least this many rows. */
@@ -59,69 +60,68 @@ function ChatMessageRow({
   serverChatSessionId: string | null;
   onRetry?: () => void;
 }) {
-  const isLastAssistant = m.role === "assistant" && lastAssistant?.id === m.id;
+  if (m.role === "user") {
+    return (
+      <div className="mb-6 flex justify-end">
+        <div className="max-w-[85%] space-y-2 rounded-3xl bg-neutral-100 px-4 py-3 text-[15px] font-medium text-koraku-ink">
+          {m.images && m.images.length > 0 ? (
+            <div className="flex flex-wrap justify-end gap-2">
+              {m.images.map((im) => (
+                <div
+                  key={im.id}
+                  className="h-28 w-28 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={im.previewUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {m.text ? <p className="whitespace-pre-wrap">{m.text}</p> : null}
+        </div>
+      </div>
+    );
+  }
+
+  const run = m.run ?? initialRunState();
+  const isLastAssistant = lastAssistant?.id === m.id;
   const streamCollapsed =
-    m.role === "assistant" &&
-    m.run.assistantBubbleMode === "step" &&
-    busy &&
-    isLastAssistant;
+    run.assistantBubbleMode === "step" && busy && isLastAssistant;
   const showFullAssistantMarkdown =
-    m.role === "assistant" &&
-    Boolean(m.run.assistantMarkdown.trim()) &&
-    !streamCollapsed;
+    Boolean(run.assistantMarkdown.trim()) && !streamCollapsed;
   /** Workspace file strip: only after this turn finishes (avoid live-updating during stream). */
-  const showWorkspaceAttachments =
-    m.role === "assistant" && !(busy && isLastAssistant);
+  const showWorkspaceAttachments = !(busy && isLastAssistant);
 
   const showStreamingSkeleton =
     busy &&
     isLastAssistant &&
-    !m.run.assistantMarkdown.trim() &&
-    m.run.timeline.length === 0 &&
-    !m.run.activeThought;
+    !run.assistantMarkdown.trim() &&
+    run.timeline.length === 0 &&
+    !run.activeThought;
 
   const showRunFooter =
-    shouldShowRunFooterStatus(m.run.statusText) ||
-    (m.run.error != null && m.run.error.length > 0);
+    shouldShowRunFooterStatus(run.statusText) ||
+    (run.error != null && run.error.length > 0);
 
-  return m.role === "user" ? (
-    <div className="mb-6 flex justify-end">
-      <div className="max-w-[85%] space-y-2 rounded-3xl bg-neutral-100 px-4 py-3 text-[15px] font-medium text-koraku-ink">
-        {m.images && m.images.length > 0 ? (
-          <div className="flex flex-wrap justify-end gap-2">
-            {m.images.map((im) => (
-              <div
-                key={im.id}
-                className="h-28 w-28 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={im.previewUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {m.text ? <p className="whitespace-pre-wrap">{m.text}</p> : null}
-      </div>
-    </div>
-  ) : (
+  return (
     <div className="mb-10">
       <ToolTimeline
-        rows={m.run.timeline}
-        activeThought={m.run.activeThought}
-        toolCallCount={m.run.toolInvocations}
+        rows={run.timeline}
+        activeThought={run.activeThought}
+        toolCallCount={run.toolInvocations}
         streamingExpand={busy && isLastAssistant}
       />
       {streamCollapsed ? (
         <p
           className="mb-2 truncate text-[13px] font-medium text-neutral-500"
-          title={m.run.stepCaption ?? undefined}
+          title={run.stepCaption ?? undefined}
         >
-          {m.run.stepCaption?.trim()
-            ? m.run.stepCaption
+          {run.stepCaption?.trim()
+            ? run.stepCaption
             : busy && isLastAssistant
               ? "…"
               : ""}
@@ -130,34 +130,34 @@ function ChatMessageRow({
       {showStreamingSkeleton ? <StreamingReplySkeleton /> : null}
       {showFullAssistantMarkdown ? (
         <MarkdownBody
-          source={m.run.assistantMarkdown}
+          source={run.assistantMarkdown}
           deferHeavyParse={busy && isLastAssistant}
         />
       ) : null}
       {showWorkspaceAttachments ? (
         <RunWorkspaceAttachments
-          timeline={m.run.timeline}
+          timeline={run.timeline}
           serverSessionId={serverChatSessionId}
         />
       ) : null}
       {busy && isLastAssistant ? (
         <AgentBusyRow
-          startedAtMs={m.run.streamStartedAt!}
-          statusText={m.run.statusText}
+          startedAtMs={run.streamStartedAt!}
+          statusText={run.statusText}
         />
       ) : null}
-      {!m.run.assistantMarkdown.trim() && !busy && isLastAssistant ? (
+      {!run.assistantMarkdown.trim() && !busy && isLastAssistant ? (
         <p className="mt-2 text-sm text-neutral-400">
-          {m.run.statusText?.includes("Reconnect") ||
-          m.run.statusText?.includes("Subscribe") ||
-          m.run.error
+          {run.statusText?.includes("Reconnect") ||
+          run.statusText?.includes("Subscribe") ||
+          run.error
             ? "This reply was interrupted (for example after a page refresh). Use Retry or send your message again."
             : "No assistant text was returned."}
         </p>
       ) : null}
-      {m.run.error ? (
+      {run.error ? (
         <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-          <p>{m.run.error}</p>
+          <p>{run.error}</p>
           {onRetry && isLastAssistant && !busy ? (
             <button
               type="button"
@@ -171,9 +171,9 @@ function ChatMessageRow({
       ) : null}
       {showRunFooter ? (
         <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-          {m.run.statusText}
-          {m.run.dropdownModelLabel && m.run.statusText === "Done"
-            ? ` · ${m.run.dropdownModelLabel}`
+          {run.statusText}
+          {run.dropdownModelLabel && run.statusText === "Done"
+            ? ` · ${run.dropdownModelLabel}`
             : ""}
         </p>
       ) : null}

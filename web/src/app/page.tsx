@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BrandMark } from "@/components/BrandMark";
 import { APP_BASE } from "@/lib/app-path";
 import { isSupabaseConfigured } from "@/lib/supabase/is-configured";
+import { KORAKU_COPY } from "@/lib/korakuBrand";
 
 export default function LandingPage() {
   const supabaseConfigured = isSupabaseConfigured();
@@ -80,7 +81,7 @@ export default function LandingPage() {
             </>
           ) : (
             <>
-              Running locally without Supabase?{" "}
+              {KORAKU_COPY.localDevNoAuth}{" "}
               <Link href={APP_BASE} className="font-medium text-koraku-accent underline">
                 Open the app directly
               </Link>

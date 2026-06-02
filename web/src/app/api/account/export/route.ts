@@ -1,3 +1,4 @@
+import { KORAKU_COPY } from "@/lib/korakuBrand";
 import { requireSupabaseAuth } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -34,8 +35,7 @@ export async function GET() {
   return Response.json({
     exported_at: new Date().toISOString(),
     user_id: userId,
-    retention_note:
-      "This export includes Supabase-backed Koraku data available to the signed-in user. Provider-side LLM, Composio, and sandbox retention is governed by those services.",
+    retention_note: KORAKU_COPY.exportNote,
     chat_threads: threads.data ?? [],
     chat_messages: messages.data ?? [],
     personalization: personalization.data ?? null,

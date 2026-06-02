@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { readPostAuthRedirect } from "@/lib/auth-redirect";
+import { KORAKU_COPY } from "@/lib/korakuBrand";
 
 type Provider = "google" | "github";
 
@@ -24,9 +25,7 @@ export function OAuthSignInButtons() {
   if (!supabase) {
     return (
       <p className="text-sm text-amber-800" role="alert">
-        Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and
-        NEXT_PUBLIC_SUPABASE_ANON_KEY in web/.env.local, then enable Google and/or
-        GitHub under Authentication → Providers in the Supabase dashboard.
+        {KORAKU_COPY.authNotConfigured}
       </p>
     );
   }

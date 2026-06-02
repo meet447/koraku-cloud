@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import type { RunState, TimelineRow } from "@/lib/korakuReducer";
+import { KORAKU_COPY } from "@/lib/korakuBrand";
 
 function iconFor(row: TimelineRow) {
   if (row.kind === "thought") return Brain;
@@ -155,8 +156,8 @@ function SubagentGroup({
   const [open, setOpen] = useState(true);
   const tk = row.toolkits.length ? row.toolkits.join(", ") : "integrations";
   const label = row.open
-    ? `Integration worker · ${tk}`
-    : `Integration worker · ${tk} (done)`;
+    ? `${KORAKU_COPY.connectedAppsWorker} · ${tk}`
+    : `${KORAKU_COPY.connectedAppsWorker} · ${tk} (done)`;
   return (
     <div className="text-[13px] leading-snug">
       <button

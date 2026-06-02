@@ -44,7 +44,8 @@ const VERB: Record<string, string> = {
   WebFetch: "Fetched page",
   Firecrawl: "Scraped page",
   FirecrawlMap: "Mapped site",
-  ExaSearch: "Neural search",
+  ExaSearch: "Web search",
+  ComposioRun: "Connected apps",
 };
 
 function fallbackLabel(tool: string): string {
@@ -107,7 +108,7 @@ export function humanizeToolExecution(
       if (tool === "Edit") return { label: "Editing file" };
       if (tool === "Bash") return { label: "Running shell command" };
       if (tool === "WebSearch") return { label: "Searching the web" };
-      if (tool === "ComposioRun") return { label: "Running integration worker" };
+      if (tool === "ComposioRun") return { label: "Using connected apps" };
     }
     return { label: fallbackLabel(tool) };
   }
@@ -127,10 +128,10 @@ export function humanizeToolExecution(
       const q = s(o.query);
       return q
         ? {
-            label: pending ? "Searching the web" : "Neural search",
+            label: pending ? "Searching the web" : "Web search",
             detail: trunc(q, 140),
           }
-        : { label: pending ? "Searching the web" : "Neural search" };
+        : { label: pending ? "Searching the web" : "Web search" };
     }
     case "Glob": {
       const pattern = s(o.pattern) ?? "*";

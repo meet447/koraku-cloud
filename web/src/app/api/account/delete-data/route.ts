@@ -1,4 +1,5 @@
 import { invalidateUserThreadList } from "@/lib/koraku-redis";
+import { KORAKU_COPY } from "@/lib/korakuBrand";
 import { requireSupabaseAuth } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -30,7 +31,6 @@ export async function POST() {
   await invalidateUserThreadList(userId);
   return Response.json({
     ok: true,
-    note:
-      "Koraku app data was deleted. Auth account removal, Composio disconnection, and provider-side retention may require separate support/admin action.",
+    note: KORAKU_COPY.deleteApiNote,
   });
 }

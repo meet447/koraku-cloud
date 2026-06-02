@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useKorakuHealth } from "@/hooks/useKorakuHealth";
+import { KORAKU_COPY } from "@/lib/korakuBrand";
 
 export function SetupStatusBanner() {
   const { health, error } = useKorakuHealth();
@@ -25,9 +26,7 @@ export function SetupStatusBanner() {
       role="status"
       className="border-b border-orange-200 bg-orange-50 px-4 py-3 text-center text-sm font-medium leading-relaxed text-orange-950"
     >
-      No language model is configured yet. Add{" "}
-      <code className="rounded bg-orange-100/80 px-1">FIREWORKS_API_KEY</code> or an OpenAI-compatible
-      provider in <code className="rounded bg-orange-100/80 px-1">.env</code>, then restart the API.{" "}
+      {KORAKU_COPY.setupLlm}{" "}
       <Link
         href="https://github.com/meet447/koraku/blob/main/docs/SELF_HOST.md"
         className="font-semibold underline"

@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import clsx from "clsx";
+import { modelProviderDisplayName } from "@/lib/korakuBrand";
 
 const STORAGE_KEY = "koraku_provider_model";
 
@@ -48,10 +49,7 @@ export type ModelOption = {
 };
 
 function providerLabel(id: string, block?: Block): string {
-  if (block?.label?.trim()) return block.label.trim();
-  if (id === "custom") return "Custom endpoint";
-  if (id === "fireworks") return "Fireworks";
-  return id.charAt(0).toUpperCase() + id.slice(1);
+  return modelProviderDisplayName(id, block?.label);
 }
 
 function shortModelTitle(raw: string): string {

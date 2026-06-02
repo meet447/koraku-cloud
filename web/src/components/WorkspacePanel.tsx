@@ -453,7 +453,7 @@ export function WorkspacePanel({
               Session
             </p>
             <h2 className="truncate text-[13px] font-semibold text-neutral-900">
-              Sandbox workspace
+              Workspace
             </h2>
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
@@ -486,7 +486,7 @@ export function WorkspacePanel({
               Send a message in chat first.
             </p>
             <p className="text-xs text-neutral-400">
-              Your Blaxel session folder appears here after the first reply streams.
+              Your Koraku workspace folder appears here after the first reply streams.
             </p>
           </div>
         ) : (
