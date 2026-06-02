@@ -64,7 +64,7 @@ export const KORAKU_COPY = {
   setupLlm:
     "No language model is configured yet. Add your model API key in the server environment, then restart the API.",
   externalIntro:
-    "Text Koraku from iMessage or SMS after you verify your number. Linked threads appear in chat like any other conversation.",
+    "Text or send voice notes from iMessage or SMS after you verify your number. Linked threads appear in chat like any other conversation.",
   externalNotConfigured:
     "Phone messaging is not enabled on this server yet. Ask your administrator to complete messaging setup.",
   externalLinkedHint:

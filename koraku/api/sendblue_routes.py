@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from koraku.channels.imessage_runner import claim_message_handle, run_imessage_turn
+from koraku.channels.inbound_media import build_imessage_user_text
 from koraku.core.config import settings
 from koraku.core.request_auth import resolve_request_auth
 from koraku.integrations import sendblue_client
@@ -82,16 +83,20 @@ async def sendblue_webhook(request: Request) -> dict[str, Any]:
 
     async def _process() -> None:
         try:
+            text_use = await build_imessage_user_text(text=text, media_urls=media_urls)
+            if not text_use.strip():
+                return
+
             linked = await asyncio.to_thread(lookup_user_by_phone_sync, str(from_number))
             if linked:
                 log.info("sendblue inbound linked user %s", linked.get("user_id"))
             elif text.strip():
                 log.info("sendblue inbound: no koraku_phone_link for %s", from_number)
-            if not linked and text.strip():
+            if not linked:
                 linked = await asyncio.to_thread(
                     try_confirm_from_inbound_message_sync,
                     phone_e164=str(from_number),
-                    body=text.strip(),
+                    body=text_use.strip(),
                 )
                 if linked:
                     await sendblue_client.send_message(
@@ -108,10 +113,6 @@ async def sendblue_webhook(request: Request) -> dict[str, Any]:
                     hint = f"Open Koraku → External to link your phone. Koraku line: {line}. {hint}"
                 await sendblue_client.send_message(str(from_number), hint)
                 return
-            if media_urls and not text.strip():
-                text_use = "[User sent an image — image handling coming soon.]"
-            else:
-                text_use = text.strip()
             await run_imessage_turn(
                 agent=agent,
                 phone_e164=str(from_number),

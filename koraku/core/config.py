@@ -414,6 +414,21 @@ class Settings(BaseSettings):
         default="https://api.sendblue.co/api",
         validation_alias=AliasChoices("SENDBLUE_API_BASE", "sendblue_api_base"),
     )
+    imessage_voice_transcription_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "IMESSAGE_VOICE_TRANSCRIPTION_ENABLED",
+            "imessage_voice_transcription_enabled",
+        ),
+    )
+    voice_transcription_base_url: str = Field(
+        default="https://audio-prod.api.fireworks.ai/v1",
+        validation_alias=AliasChoices("VOICE_TRANSCRIPTION_BASE_URL", "voice_transcription_base_url"),
+    )
+    voice_transcription_model: str = Field(
+        default="whisper-large-v3",
+        validation_alias=AliasChoices("VOICE_TRANSCRIPTION_MODEL", "voice_transcription_model"),
+    )
 
     # Short conversational turns skip upfront sandbox provisioning (tools provision lazily).
     chat_defer_blaxel_provision: bool = Field(

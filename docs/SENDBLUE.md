@@ -94,6 +94,12 @@ If you set a signing secret in SendBlue, add the same value to `.env` as `SENDBL
    - `sendblue inbound linked user …`
 3. You should get an iMessage reply from Koraku.
 
+## Voice notes
+
+Users can send **iMessage voice memos** instead of typing. Koraku downloads the audio from SendBlue, transcribes it with **Whisper** (Fireworks `FIREWORKS_API_KEY` by default, or `OPENAI_API_KEY`), and runs the agent on the transcript.
+
+Disable with `IMESSAGE_VOICE_TRANSCRIPTION_ENABLED=false`. Optional: `VOICE_TRANSCRIPTION_BASE_URL`, `VOICE_TRANSCRIPTION_MODEL` (default `whisper-large-v3` on Fireworks).
+
 ## Progress bubbles
 
 During an iMessage turn, Koraku automatically sends a short bubble **before each tool** (e.g. “Searching the web…”, “Editing notes.md…”), with the typing indicator between steps. The **final** model message is a brief wrap-up only — not a repeat of those steps.
