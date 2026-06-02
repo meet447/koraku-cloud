@@ -474,6 +474,10 @@ export function useKorakuChat() {
   const [streamingSessionIds, setStreamingSessionIds] = useState<string[]>([]);
   /** Session ids currently running ``deleteSession`` (sidebar loading). */
   const [deletingSessionIds, setDeletingSessionIds] = useState<string[]>([]);
+  /** Session ids running ``refreshSession`` (iMessage history reload). */
+  const [refreshingSessionIds, setRefreshingSessionIds] = useState<string[]>([]);
+  /** Bumped to reload workspace tree for the active session (e.g. after iMessage sync). */
+  const [workspaceRefreshToken, setWorkspaceRefreshToken] = useState(0);
   /** Session ids waiting on ``GET /messages`` (main column skeleton). */
   const [messagesLoadingSessionIds, setMessagesLoadingSessionIds] = useState<string[]>([]);
   const [queuedMessages, setQueuedMessages] = useState<QueuedMessagePreview[]>([]);
@@ -1363,31 +1367,21 @@ export function useKorakuChat() {
     }
   }, []);
 
-  const selectSession = useCallback((id: string) => {
-    const prev = activeIdRef.current;
-    if (prev && prev !== id) {
-      void discardEmptySession(prev);
-    }
-    setActiveId(id);
-    const q = queuesRef.current[id] ?? [];
-    setQueuedMessages(q.map((j) => ({ id: j.id, text: jobPreviewText(j) })));
-
-    if (!persistenceEnabledRef.current) return;
-    if (messagesLoadedForThreadRef.current.has(id)) {
-      setTimeout(() => resumeStreamingTurnsRef.current(), 0);
-      return;
-    }
-    if (messagesLoadInflightRef.current.has(id)) return;
-    messagesLoadInflightRef.current.add(id);
-    setMessagesLoadingSessionIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-
-    void (async () => {
+  const fetchThreadMessages = useCallback(
+    async (id: string, options?: { force?: boolean }): Promise<boolean> => {
+      if (!persistenceEnabledRef.current) return false;
+      if (!options?.force && messagesLoadedForThreadRef.current.has(id)) {
+        return true;
+      }
+      if (messagesLoadInflightRef.current.has(id)) return false;
+      messagesLoadInflightRef.current.add(id);
+      setMessagesLoadingSessionIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
       try {
         const res = await fetch(`/api/chat/threads/${id}/messages`, {
           credentials: "include",
         });
         if (!res.ok) {
-          return;
+          return false;
         }
         const body = (await res.json()) as {
           messages?: { id: string; role: string; contentJson: unknown }[];
@@ -1401,15 +1395,39 @@ export function useKorakuChat() {
           return next;
         });
         messagesLoadedForThreadRef.current.add(id);
-        setTimeout(() => resumeStreamingTurnsRef.current(), 0);
+        if (activeIdRef.current === id) {
+          setTimeout(() => resumeStreamingTurnsRef.current(), 0);
+        }
+        return true;
       } catch {
-        /* not marked loaded */
+        return false;
       } finally {
         messagesLoadInflightRef.current.delete(id);
         setMessagesLoadingSessionIds((prev) => prev.filter((x) => x !== id));
       }
-    })();
-  }, [discardEmptySession]);
+    },
+    [],
+  );
+
+  const selectSession = useCallback(
+    (id: string) => {
+      const prev = activeIdRef.current;
+      if (prev && prev !== id) {
+        void discardEmptySession(prev);
+      }
+      setActiveId(id);
+      const q = queuesRef.current[id] ?? [];
+      setQueuedMessages(q.map((j) => ({ id: j.id, text: jobPreviewText(j) })));
+
+      if (!persistenceEnabledRef.current) return;
+      if (messagesLoadedForThreadRef.current.has(id)) {
+        setTimeout(() => resumeStreamingTurnsRef.current(), 0);
+        return;
+      }
+      void fetchThreadMessages(id);
+    },
+    [discardEmptySession, fetchThreadMessages],
+  );
 
   const deleteSession = useCallback(
     async (id: string) => {
@@ -1520,6 +1538,27 @@ export function useKorakuChat() {
     }
   }, []);
 
+  const refreshSession = useCallback(
+    async (id: string) => {
+      const target = sessionsRef.current.find((s) => s.id === id);
+      if (!target) return;
+      if (target.channel !== "imessage" && !target.pinned) return;
+
+      setRefreshingSessionIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      try {
+        await reloadSessions();
+        messagesLoadedForThreadRef.current.delete(id);
+        await fetchThreadMessages(id, { force: true });
+        if (activeIdRef.current === id) {
+          setWorkspaceRefreshToken((t) => t + 1);
+        }
+      } finally {
+        setRefreshingSessionIds((prev) => prev.filter((x) => x !== id));
+      }
+    },
+    [fetchThreadMessages, reloadSessions],
+  );
+
   const shell = useMemo(
     (): KorakuChatShellApi => ({
       hydrated,
@@ -1527,9 +1566,11 @@ export function useKorakuChat() {
       activeId,
       streamingSessionIds,
       deletingSessionIds,
+      refreshingSessionIds,
       selectSession,
       newChat,
       deleteSession,
+      refreshSession,
       discardEmptyActiveSession,
       reloadSessions,
     }),
@@ -1539,9 +1580,11 @@ export function useKorakuChat() {
       activeId,
       streamingSessionIds,
       deletingSessionIds,
+      refreshingSessionIds,
       selectSession,
       newChat,
       deleteSession,
+      refreshSession,
       discardEmptyActiveSession,
       reloadSessions,
     ],
@@ -1558,6 +1601,7 @@ export function useKorakuChat() {
       removeQueuedMessage,
       send,
       serverChatSessionByUi,
+      workspaceRefreshToken,
     }),
     [
       hydrated,
@@ -1569,6 +1613,7 @@ export function useKorakuChat() {
       removeQueuedMessage,
       send,
       serverChatSessionByUi,
+      workspaceRefreshToken,
     ],
   );
 
@@ -1584,9 +1629,11 @@ export type KorakuChatShellApi = {
   activeId: string;
   streamingSessionIds: string[];
   deletingSessionIds: string[];
+  refreshingSessionIds: string[];
   selectSession: (id: string) => void;
   newChat: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
+  refreshSession: (id: string) => Promise<void>;
   discardEmptyActiveSession: () => Promise<void>;
   reloadSessions: () => Promise<void>;
 };
@@ -1607,6 +1654,7 @@ export type KorakuChatThreadApi = {
     images?: ComposerImage[],
   ) => void;
   serverChatSessionByUi: Record<string, string>;
+  workspaceRefreshToken: number;
 };
 
 export type KorakuChatStore = ReturnType<typeof useKorakuChat>;

@@ -195,6 +195,7 @@ export function ChatConversation() {
     removeQueuedMessage,
     send,
     serverChatSessionByUi,
+    workspaceRefreshToken,
   } = useKorakuChatThread();
 
   const backendChatSessionId = serverChatSessionByUi[activeId] ?? null;
@@ -403,6 +404,7 @@ export function ChatConversation() {
           visible={workspaceOpen}
           onClose={() => setWorkspaceOpen(false)}
           serverSessionId={backendChatSessionId}
+          workspaceRefreshToken={workspaceRefreshToken}
         />
       </div>
     </main>

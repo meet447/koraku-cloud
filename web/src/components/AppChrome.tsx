@@ -11,9 +11,11 @@ export function AppChrome({
   activeId,
   streamingSessionIds = [],
   deletingSessionIds = [],
+  refreshingSessionIds = [],
   onSelectSession,
   onNewChat,
   onDeleteChat,
+  onRefreshChat,
   children,
 }: {
   collapsed: boolean;
@@ -23,9 +25,11 @@ export function AppChrome({
   activeId: string;
   streamingSessionIds?: string[];
   deletingSessionIds?: string[];
+  refreshingSessionIds?: string[];
   onSelectSession: (id: string) => void;
   onNewChat: () => void | Promise<void>;
   onDeleteChat: (id: string) => void | Promise<void>;
+  onRefreshChat: (id: string) => void | Promise<void>;
   children: React.ReactNode;
 }) {
   return (
@@ -39,9 +43,11 @@ export function AppChrome({
           activeId={activeId}
           streamingSessionIds={streamingSessionIds}
           deletingSessionIds={deletingSessionIds}
+          refreshingSessionIds={refreshingSessionIds}
           onSelectSession={onSelectSession}
           onNewChat={onNewChat}
           onDeleteChat={onDeleteChat}
+          onRefreshChat={onRefreshChat}
         />
       </div>
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-white">

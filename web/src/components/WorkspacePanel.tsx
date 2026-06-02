@@ -182,10 +182,12 @@ export function WorkspacePanel({
   visible,
   onClose,
   serverSessionId,
+  workspaceRefreshToken = 0,
 }: {
   visible: boolean;
   onClose: () => void;
   serverSessionId: string | null;
+  workspaceRefreshToken?: number;
 }) {
   const innerSplitRef = useRef<HTMLDivElement>(null);
 
@@ -411,7 +413,7 @@ export function WorkspacePanel({
   useEffect(() => {
     if (!visible || !serverSessionId) return;
     void loadTree();
-  }, [visible, serverSessionId, relPath, loadTree]);
+  }, [visible, serverSessionId, relPath, loadTree, workspaceRefreshToken]);
 
   const segments = relPath ? relPath.split("/").filter(Boolean) : [];
 

@@ -36,6 +36,16 @@ export function KorakuAppShell({ children }: { children: ReactNode }) {
     await chat.shell.deleteSession(id);
   }, [chat]);
 
+  const onRefreshChat = useCallback(
+    async (id: string) => {
+      await chat.shell.refreshSession(id);
+      if (chat.shell.activeId === id && !isAppChatRoute(pathname)) {
+        router.push(APP_BASE);
+      }
+    },
+    [chat, pathname, router],
+  );
+
   useEffect(() => {
     void fetch("/api/org/current", { method: "POST" }).catch(() => {});
   }, []);
@@ -60,9 +70,11 @@ export function KorakuAppShell({ children }: { children: ReactNode }) {
         activeId={chat.shell.activeId}
         streamingSessionIds={chat.shell.streamingSessionIds}
         deletingSessionIds={chat.shell.deletingSessionIds}
+        refreshingSessionIds={chat.shell.refreshingSessionIds}
         onSelectSession={onSelectSession}
         onNewChat={onNewChat}
         onDeleteChat={onDeleteChat}
+        onRefreshChat={onRefreshChat}
       >
         {isAppChatRoute(pathname) ? <ChatConversation /> : children}
       </AppChrome>
