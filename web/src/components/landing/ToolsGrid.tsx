@@ -1,43 +1,46 @@
-import { integrationCards } from "@/components/landing/landing-data";
-import { automationToolkitIconUrl, toolkitIconUrl } from "@/lib/toolkit-icons";
+import { integrationShowcase } from "@/components/landing/landing-data";
+import { LANDING_CONTAINER, LANDING_SECTION } from "@/components/landing/landing-layout";
+import { toolkitIconUrl } from "@/lib/toolkit-icons";
 
-function integrationIcon(toolkit: string) {
-  if (toolkit === "imessage") {
-    return toolkitIconUrl("imessage", "34C759");
-  }
-  return automationToolkitIconUrl(toolkit);
+function integrationIcon(iconSlug: string, hex?: string) {
+  return toolkitIconUrl(iconSlug, hex);
 }
 
 export function ToolsGrid() {
   return (
-    <section id="integrations" className="bg-[#f8f8f7] px-5 py-28 sm:px-8">
-      <div className="mx-auto max-w-[980px] text-center">
-        <h2 className="landing-pixel-headline font-landing-serif text-4xl font-semibold leading-[0.95] tracking-[-0.06em] text-[#282522] sm:text-5xl">
+    <section id="integrations" className={`bg-[#f8f8f7] ${LANDING_SECTION}`}>
+      <div className={LANDING_CONTAINER}>
+        <h2 className="landing-pixel-headline max-w-3xl font-landing-serif text-[3.2rem] font-semibold leading-[0.95] tracking-[-0.06em] text-[#282522] sm:text-[4.8rem]">
           Connect the tools agents need
         </h2>
-        <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-stone-500">
-          Koraku agents can read context from your apps, prepare drafts, and keep every
-          high-impact external action behind approval.
+        <p className="mt-4 max-w-2xl text-base leading-7 text-stone-500 sm:text-[17px]">
+          Koraku supports <span className="font-semibold text-stone-700">35+ connections</span>{" "}
+          across email, docs, chat, CRM, dev tools, and more — so agents can read context
+          and act inside the apps you already use.
         </p>
-        <div className="mx-auto mt-12 grid max-w-4xl grid-cols-2 gap-3 rounded-lg border border-black/10 bg-white p-3 shadow-[10px_10px_0_rgba(0,0,0,0.04)] sm:grid-cols-4">
-          {integrationCards.map((integration) => (
+        <div className="mt-10 grid grid-cols-4 gap-3 rounded-xl border border-black/10 bg-white p-4 shadow-[10px_10px_0_rgba(0,0,0,0.04)] sm:grid-cols-8">
+          {integrationShowcase.map((integration) => (
             <div
-              key={integration.name}
-              className="rounded-md border border-black/10 bg-[#f8f8f7] p-4 text-left"
+              key={integration.toolkit}
+              className="flex min-h-[108px] flex-col items-center justify-center rounded-lg border border-black/10 bg-[#f8f8f7] px-2 py-5 text-center transition hover:border-black/20 hover:bg-white"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={integrationIcon(integration.toolkit)}
+                src={integrationIcon(integration.iconSlug, "hex" in integration ? integration.hex : undefined)}
                 alt=""
-                width={28}
-                height={28}
-                className="h-7 w-7 object-contain"
+                width={32}
+                height={32}
+                className="h-8 w-8 object-contain"
               />
-              <p className="mt-4 text-sm font-semibold text-stone-800">{integration.name}</p>
-              <p className="mt-1 text-xs leading-5 text-stone-500">{integration.detail}</p>
+              <p className="mt-3 text-xs font-semibold leading-4 text-stone-700">
+                {integration.name}
+              </p>
             </div>
           ))}
         </div>
+        <p className="mt-5 text-sm text-stone-400">
+          Plus Stripe, Shopify, Salesforce, Trello, Confluence, and more.
+        </p>
       </div>
     </section>
   );

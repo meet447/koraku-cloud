@@ -2,7 +2,6 @@ export const navItems = [
   { label: "Use cases", href: "#how-to" },
   { label: "Models", href: "#models" },
   { label: "Integrations", href: "#integrations" },
-  { label: "Safety", href: "#safety" },
 ] as const;
 
 export const chapters = [
@@ -12,40 +11,22 @@ export const chapters = [
   ["Use case 4", "Second brain", "Turn recurring facts and preferences into memory your agents can use."],
 ] as const;
 
-export const modelCards = [
-  {
-    name: "Fast",
-    description: "Quick triage, summaries, and small edits.",
-    badge: "low latency",
-    color: "bg-lime-100 text-lime-900",
-  },
-  {
-    name: "Advanced",
-    description: "Planning, reasoning, and complex agent runs.",
-    badge: "deep work",
-    color: "bg-sky-100 text-sky-900",
-  },
-  {
-    name: "Hosted",
-    description: "Default Koraku hosted model lane.",
-    badge: "balanced",
-    color: "bg-orange-100 text-orange-900",
-  },
-  {
-    name: "Custom",
-    description: "Bring your own provider and routing rules.",
-    badge: "BYO key",
-    color: "bg-violet-100 text-violet-900",
-  },
-] as const;
-
-export const integrationCards = [
-  { name: "Gmail", toolkit: "GMAIL", detail: "Inbox context and drafts" },
-  { name: "Google Drive", toolkit: "GOOGLEDRIVE", detail: "Docs, folders, and files" },
-  { name: "Slack", toolkit: "SLACK", detail: "Team context and updates" },
-  { name: "Notion", toolkit: "NOTION", detail: "Pages and knowledge base" },
-  { name: "Airtable", toolkit: "AIRTABLE", detail: "Tables and records" },
-  { name: "Asana", toolkit: "ASANA", detail: "Tasks and project status" },
-  { name: "Box", toolkit: "BOX", detail: "Enterprise file access" },
-  { name: "iMessage", toolkit: "imessage", detail: "Phone and voice-note threads" },
+/** 16 integrations shown on the landing page (from the ~40-tool curated catalog). */
+export const integrationShowcase = [
+  { name: "Gmail", toolkit: "GMAIL", iconSlug: "gmail", hex: "EA4335" },
+  { name: "Google Drive", toolkit: "GOOGLEDRIVE", iconSlug: "googledrive", hex: "4285F4" },
+  { name: "Google Docs", toolkit: "GOOGLEDOCS", iconSlug: "googledocs", hex: "4285F4" },
+  { name: "Calendar", toolkit: "GOOGLECALENDAR", iconSlug: "googlecalendar", hex: "4285F4" },
+  { name: "Slack", toolkit: "SLACK", iconSlug: "slack" },
+  { name: "Notion", toolkit: "NOTION", iconSlug: "notion", hex: "000000" },
+  { name: "GitHub", toolkit: "GITHUB", iconSlug: "github", hex: "181717" },
+  { name: "Linear", toolkit: "LINEAR", iconSlug: "linear", hex: "5E6AD2" },
+  { name: "Jira", toolkit: "JIRA", iconSlug: "jira", hex: "0052CC" },
+  { name: "Airtable", toolkit: "AIRTABLE", iconSlug: "airtable", hex: "18BFFF" },
+  { name: "Asana", toolkit: "ASANA", iconSlug: "asana", hex: "F06A6A" },
+  { name: "Discord", toolkit: "DISCORD", iconSlug: "discord", hex: "5865F2" },
+  { name: "Outlook", toolkit: "OUTLOOK", iconSlug: "microsoftoutlook" },
+  { name: "Zoom", toolkit: "ZOOM", iconSlug: "zoom", hex: "0B5CFF" },
+  { name: "HubSpot", toolkit: "HUBSPOT", iconSlug: "hubspot", hex: "FF7A59" },
+  { name: "iMessage", toolkit: "imessage", iconSlug: "imessage", hex: "34C759" },
 ] as const;

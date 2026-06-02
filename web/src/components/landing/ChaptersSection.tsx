@@ -1,21 +1,19 @@
 export function ChaptersSection() {
   return (
-    <section id="how-to" className="border-y border-black/10 bg-[#f8f8f7] px-5 py-24 font-landing-sans sm:px-8">
-      <div className="mx-auto w-full max-w-[1100px] text-center">
-        <p className="mb-4 inline-block rounded bg-white px-2 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 shadow-sm">
+    <section id="how-to" className="border-y border-black/10 bg-[#f8f8f7] px-5 py-16 font-landing-sans sm:px-8 lg:py-20">
+      <div className="mx-auto w-full max-w-[1120px]">
+        <p className="mb-4 inline-block rounded bg-white px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 shadow-sm">
           Core Features
         </p>
-        <h2 className="landing-pixel-headline mx-auto mb-3 max-w-2xl font-landing-serif text-[3rem] font-semibold leading-[0.95] tracking-[-0.055em] text-[#282522] sm:text-[4.5rem]">
+        <h2 className="landing-pixel-headline max-w-4xl font-landing-serif text-[3.2rem] font-semibold leading-[0.95] tracking-[-0.055em] text-[#282522] sm:text-[4.8rem]">
           Built for agent work that feels native
         </h2>
-        <p className="mx-auto mb-[50px] max-w-xl text-[15px] font-medium leading-7 text-stone-500">
-          Everything your agents need to go
-          <br />
-          from personal context to finished workspace output
+        <p className="mt-4 max-w-2xl text-base font-medium leading-7 text-stone-500 sm:text-[17px]">
+          Everything your agents need to go from personal context to finished workspace output.
         </p>
 
-        <div className="grid grid-cols-1 gap-6 min-[600px]:grid-cols-2 min-[900px]:grid-cols-3">
-          <article className="relative flex h-[340px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+        <div className="mt-10 grid grid-cols-1 gap-5 min-[600px]:grid-cols-2 min-[900px]:grid-cols-3">
+          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div
               className="absolute inset-0 opacity-35"
               style={{
@@ -52,7 +50,7 @@ export function ChaptersSection() {
             </h3>
           </article>
 
-          <article className="relative flex h-[340px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div
               className="absolute inset-x-0 bottom-[70px] top-0 bg-[#f3f2ef] px-6 py-7"
               style={{
@@ -94,7 +92,7 @@ export function ChaptersSection() {
             </h3>
           </article>
 
-          <article className="relative flex h-[340px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div className="landing-mesh-overlay pointer-events-none absolute inset-0" aria-hidden />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -125,7 +123,7 @@ export function ChaptersSection() {
             </h3>
           </article>
 
-          <article className="relative flex h-[340px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div
               className="absolute inset-0 opacity-35"
               style={{
@@ -167,7 +165,7 @@ export function ChaptersSection() {
             </h3>
           </article>
 
-          <article className="relative flex h-[340px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div className="absolute inset-x-0 bottom-[70px] top-0 bg-[#f3f2ef] px-6 py-5">
               <div className="mx-auto max-w-[210px] overflow-hidden rounded-[32px] border-[5px] border-stone-900 bg-stone-900 shadow-[8px_8px_0_rgba(0,0,0,0.1)]">
                 {/* Status bar */}
@@ -228,7 +226,7 @@ export function ChaptersSection() {
             </h3>
           </article>
 
-          <article className="relative flex h-[340px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div
               className="absolute inset-0 opacity-35"
               style={{

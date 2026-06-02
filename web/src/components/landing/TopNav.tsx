@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { LANDING_CONTAINER } from "@/components/landing/landing-layout";
 import { APP_BASE } from "@/lib/app-path";
 
 export function TopNav() {
   return (
     <header className="sticky top-0 z-50 border-b border-black/10 bg-[#f8f8f7]/90 backdrop-blur-xl">
-      <nav className="mx-auto flex h-[72px] max-w-[1120px] items-center justify-between px-5 sm:px-8">
+      <nav className={`${LANDING_CONTAINER} flex h-[72px] items-center justify-between px-5 sm:px-8`}>
         <Link href="/" className="font-landing-serif text-2xl font-semibold tracking-[-0.04em] text-[#282522]">
           Koraku
         </Link>
