@@ -21,6 +21,7 @@ import {
 import type { ComposerImage } from "@/components/Composer";
 import type { QueuedMessagePreview } from "@/components/MessageQueueBar";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
+import { safeError } from "@/lib/safe-log";
 
 export type ChatMessage =
   | {
@@ -89,7 +90,12 @@ async function fetchDetachedRunStatusJson(
 
 const EMPTY_THREAD_MESSAGES: ChatMessage[] = [];
 
-export type ChatSession = { id: string; title: string };
+export type ChatSession = {
+  id: string;
+  title: string;
+  channel?: string;
+  pinned?: boolean;
+};
 
 export type OutboundJob = {
   id: string;
@@ -546,8 +552,12 @@ export function useKorakuChat() {
         const tr = await fetch("/api/chat/threads", { credentials: "include" });
         if (cancelled) return;
         if (!tr.ok) {
+          safeError("[useKorakuChat] thread list failed", tr.status);
           const id = uid();
-          persistenceEnabledRef.current = false;
+          // Keep persistence on for signed-in users so messages still save if the list
+          // endpoint fails transiently (e.g. pending DB migration).
+          persistenceEnabledRef.current = true;
+          draftSessionIdsRef.current.add(id);
           setSessions([{ id, title: "New chat" }]);
           setActiveId(id);
           setMessagesBySession({ [id]: [] });
@@ -555,7 +565,14 @@ export function useKorakuChat() {
           setHydrated(true);
           return;
         }
-        const payload = (await tr.json()) as { threads?: { id: string; title: string }[] };
+        const payload = (await tr.json()) as {
+          threads?: {
+            id: string;
+            title: string;
+            channel?: string;
+            pinned?: boolean;
+          }[];
+        };
         let list = payload.threads ?? [];
         if (list.length === 0) {
           const id = uid();
@@ -570,7 +587,12 @@ export function useKorakuChat() {
         }
         if (cancelled) return;
         persistenceEnabledRef.current = true;
-        const sessList = list.map((t) => ({ id: t.id, title: t.title || "New chat" }));
+        const sessList = list.map((t) => ({
+          id: t.id,
+          title: t.title || "New chat",
+          channel: t.channel,
+          pinned: t.pinned,
+        }));
         const msgMap: Record<string, ChatMessage[]> = Object.fromEntries(
           sessList.map((s) => [s.id, [] as ChatMessage[]]),
         );
@@ -1391,7 +1413,9 @@ export function useKorakuChat() {
 
   const deleteSession = useCallback(
     async (id: string) => {
-      if (!sessionsRef.current.some((s) => s.id === id)) return;
+      const target = sessionsRef.current.find((s) => s.id === id);
+      if (!target) return;
+      if (target.channel === "imessage" || target.pinned) return;
 
       setDeletingSessionIds((prev) =>
         prev.includes(id) ? prev : [...prev, id],
@@ -1466,6 +1490,36 @@ export function useKorakuChat() {
     [markStreamEnd],
   );
 
+  const reloadSessions = useCallback(async () => {
+    if (!persistenceEnabledRef.current) return;
+    try {
+      const tr = await fetch("/api/chat/threads", { credentials: "include" });
+      if (!tr.ok) return;
+      const payload = (await tr.json()) as {
+        threads?: {
+          id: string;
+          title: string;
+          channel?: string;
+          pinned?: boolean;
+        }[];
+      };
+      const list = (payload.threads ?? []).map((t) => ({
+        id: t.id,
+        title: t.title || "New chat",
+        channel: t.channel,
+        pinned: t.pinned,
+      }));
+      if (list.length === 0) return;
+      setSessions(list);
+      for (const s of list) {
+        serverChatSessionRef.current[s.id] = s.id;
+      }
+      setServerChatSessionByUi(Object.fromEntries(list.map((s) => [s.id, s.id])));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const shell = useMemo(
     (): KorakuChatShellApi => ({
       hydrated,
@@ -1477,6 +1531,7 @@ export function useKorakuChat() {
       newChat,
       deleteSession,
       discardEmptyActiveSession,
+      reloadSessions,
     }),
     [
       hydrated,
@@ -1488,6 +1543,7 @@ export function useKorakuChat() {
       newChat,
       deleteSession,
       discardEmptyActiveSession,
+      reloadSessions,
     ],
   );
 
@@ -1532,6 +1588,7 @@ export type KorakuChatShellApi = {
   newChat: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   discardEmptyActiveSession: () => Promise<void>;
+  reloadSessions: () => Promise<void>;
 };
 
 export type KorakuChatThreadApi = {

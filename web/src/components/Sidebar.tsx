@@ -8,6 +8,7 @@ import {
   Loader2,
   PanelLeftClose,
   PanelLeft,
+  MessageCircle,
   Plug,
   Plus,
   Search,
@@ -28,6 +29,7 @@ const nav = [
   { label: "New chat", icon: Plus, accent: true },
   { href: `${APP_BASE}/memory`, label: "Memory", icon: Network },
   { href: `${APP_BASE}/connections`, label: "Connections", icon: Plug },
+  { href: `${APP_BASE}/external`, label: "External", icon: MessageCircle },
   { href: `${APP_BASE}/automations`, label: "Automations", icon: Wand2 },
   { href: `${APP_BASE}/personalization`, label: "Profile", icon: SlidersHorizontal },
 ];
@@ -212,6 +214,7 @@ export function Sidebar({
             ) : (
               visibleSessions.map((s) => {
                 const deleting = deletingSet.has(s.id);
+                const isImessage = s.channel === "imessage" || s.pinned;
                 return (
                   <div
                     key={s.id}
@@ -240,11 +243,17 @@ export function Sidebar({
                           className="h-3.5 w-3.5 shrink-0 animate-spin text-neutral-400"
                           aria-hidden
                         />
+                      ) : isImessage ? (
+                        <MessageCircle
+                          className="h-3.5 w-3.5 shrink-0 text-violet-500"
+                          aria-hidden
+                        />
                       ) : (
                         <span className="h-3.5 w-3.5 shrink-0" aria-hidden />
                       )}
                       <span className="min-w-0 flex-1 truncate">{s.title}</span>
                     </button>
+                    {!isImessage ? (
                     <button
                       type="button"
                       disabled={deleting}
@@ -273,6 +282,7 @@ export function Sidebar({
                         aria-hidden
                       />
                     </button>
+                    ) : null}
                   </div>
                 );
               })

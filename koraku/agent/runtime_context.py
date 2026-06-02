@@ -37,3 +37,4 @@ class AgentRunContext:
     workspace_root: str | None = None
     execution_target: ExecutionTarget = "cloud"
     extra_tools: tuple["Tool", ...] = field(default_factory=tuple)
+    system_appendix: str | None = None

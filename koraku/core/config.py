@@ -393,6 +393,28 @@ class Settings(BaseSettings):
             "blaxel_sandbox_cache_ttl_seconds",
         ),
     )
+    # SendBlue (iMessage / SMS channel)
+    sendblue_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("SENDBLUE_API_KEY", "sendblue_api_key"),
+    )
+    sendblue_api_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("SENDBLUE_API_SECRET", "sendblue_api_secret"),
+    )
+    sendblue_from_number: str = Field(
+        default="",
+        validation_alias=AliasChoices("SENDBLUE_FROM_NUMBER", "sendblue_from_number"),
+    )
+    sendblue_webhook_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("SENDBLUE_WEBHOOK_SECRET", "sendblue_webhook_secret"),
+    )
+    sendblue_api_base: str = Field(
+        default="https://api.sendblue.co/api",
+        validation_alias=AliasChoices("SENDBLUE_API_BASE", "sendblue_api_base"),
+    )
+
     # Short conversational turns skip upfront sandbox provisioning (tools provision lazily).
     chat_defer_blaxel_provision: bool = Field(
         default=True,

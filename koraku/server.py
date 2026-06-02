@@ -17,6 +17,7 @@ from koraku.api.health_routes import router as health_router
 from koraku.api.memory_routes import router as memory_router
 from koraku.api.personalization_routes import router as personalization_router
 from koraku.api.workspace_routes import router as workspace_router
+from koraku.api.sendblue_routes import router as sendblue_router
 from koraku.automations import scheduler as automation_scheduler
 from koraku.integrations.supabase_tenant import supabase_tenant_configured
 from koraku.llm.catalog import any_llm_configured, default_model_for_provider
@@ -179,6 +180,7 @@ app.include_router(memory_router)
 app.include_router(composio_router)
 app.include_router(automations_router)
 app.include_router(workspace_router)
+app.include_router(sendblue_router)
 
 
 @app.get("/")

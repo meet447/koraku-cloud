@@ -3,6 +3,7 @@ import {
   invalidateUserThreadList,
   setCachedJson,
 } from "@/lib/koraku-redis";
+import { fetchChatThreadsForOrg } from "@/lib/chat-threads-query";
 import { safeError } from "@/lib/safe-log";
 import { resolveActiveOrgId } from "@/lib/tenant/server";
 import { requireSupabaseAuth } from "@/lib/supabase/server";
@@ -22,29 +23,24 @@ export async function GET() {
 
   const cacheKey = `threads:${orgId}:${userId}`;
   const cached = await getCachedJson<
-    { id: string; title: string; updatedAt: string | null }[]
+    {
+      id: string;
+      title: string;
+      updatedAt: string | null;
+      channel?: string;
+      pinned?: boolean;
+    }[]
   >(cacheKey);
   if (cached) {
     return Response.json({ threads: cached });
   }
 
-  const { data: rows, error } = await supabase
-    .from("chat_thread")
-    .select("id, title, updated_at")
-    .eq("org_id", orgId)
-    .order("updated_at", { ascending: false })
-    .limit(200);
+  const { threads, error } = await fetchChatThreadsForOrg(supabase, orgId);
 
   if (error) {
     safeError("[chat_thread GET]", error);
     return Response.json({ error: "Database error" }, { status: 500 });
   }
-
-  const threads = (rows ?? []).map((r) => ({
-    id: r.id,
-    title: r.title,
-    updatedAt: r.updated_at == null ? null : String(r.updated_at),
-  }));
   await setCachedJson(cacheKey, threads, 30);
   return Response.json({ threads });
 }

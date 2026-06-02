@@ -526,6 +526,11 @@ class Agent:
                 dispatch_appendix = dispatcher_system_appendix(turn_limits.task_class)
                 if dispatch_appendix:
                     system_prompt = f"{system_prompt.rstrip()}\n\n{dispatch_appendix.lstrip()}"
+                ctx_appendix = (
+                    (run_context.system_appendix or "").strip() if run_context else ""
+                )
+                if ctx_appendix:
+                    system_prompt = f"{system_prompt.rstrip()}\n\n{ctx_appendix}"
                 working_memory: list[dict[str, Any]] = []
                 async for ev in self._iterate_react_steps(
                     session=session,

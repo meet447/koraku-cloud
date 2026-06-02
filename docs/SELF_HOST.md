@@ -86,6 +86,10 @@ Set `KORAKU_BACKEND_URL=http://127.0.0.1:8000` in `web/.env.local` if needed.
 | `ALLOW_SERVER_EXECUTION_IN_CHAT` | `true` | Same host tools via `execution_target=server` (API alias) |
 | `BLAXEL_CLOUD_SANDBOX_ENABLED` | `false` | Set `true` + keys for **Cloud** sandboxes |
 
+## SendBlue / iMessage
+
+See **[SENDBLUE.md](SENDBLUE.md)** for credentials (`sendblue login`), Free Tier contact rules, Koraku External linking, and ngrok webhook setup.
+
 ## Troubleshooting
 
 | Symptom | Fix |
