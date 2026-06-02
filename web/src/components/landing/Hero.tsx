@@ -23,7 +23,7 @@ export function Hero() {
         </video>
 
         <div
-          className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-br from-amber-50/45 via-orange-50/20 to-landing-stone/55"
+          className="pointer-events-none absolute inset-0 z-[1] bg-landing-stone/45"
           aria-hidden
         />
 
@@ -36,9 +36,11 @@ export function Hero() {
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="mb-2 text-4xl font-normal leading-[1.05] tracking-tight text-landing-ink sm:text-5xl md:text-6xl lg:text-[80px]"
+              className="mb-3 text-4xl font-normal leading-[1.05] tracking-tight text-landing-ink sm:text-5xl md:text-6xl lg:text-[78px]"
             >
-              Fluid Memory Streams
+              One companion for your
+              <br />
+              memory, work, and apps
             </motion.h1>
             <motion.p
               initial={{ opacity: 0 }}
@@ -46,8 +48,9 @@ export function Hero() {
               transition={{ duration: 0.8, delay: 0.4 }}
               className="max-w-xl text-sm font-normal leading-relaxed text-landing-muted sm:text-base md:text-lg"
             >
-              Remember how you work, connect your apps, and turn everyday momentum into
-              memory, chat, and safe automations—instantly.
+              Koraku is a hosted AI companion that remembers how you work, organizes your
+              second brain, connects your favorite apps, and runs safe automations—on the
+              web or right from iMessage.
             </motion.p>
           </div>
 

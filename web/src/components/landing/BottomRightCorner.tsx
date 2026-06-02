@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, ChevronRight } from "lucide-react";
+import { ChevronRight, MessageCircle } from "lucide-react";
 import { motion } from "motion/react";
 
 export function BottomRightCorner() {
@@ -23,19 +23,17 @@ export function BottomRightCorner() {
         </svg>
       </div>
 
-      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-orange-200/60 bg-orange-50/80 md:h-14 md:w-14">
-        <ArrowUpRight className="h-5 w-5 text-orange-700 md:h-6 md:w-6" aria-hidden />
+      <div className="flex h-10 w-10 items-center justify-center rounded-full border border-orange-200 bg-landing-accentSoft md:h-14 md:w-14">
+        <MessageCircle className="h-5 w-5 text-landing-accent md:h-6 md:w-6" aria-hidden />
       </div>
 
       <div className="flex flex-col">
-        <span className="text-base font-normal text-landing-ink md:text-xl">Documentation</span>
+        <span className="text-base font-normal text-landing-ink md:text-xl">Works in iMessage</span>
         <Link
-          href="https://github.com/meet447/koraku-cloud#readme"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 text-orange-700 transition-colors hover:opacity-80"
+          href="/sign-up?next=/app/onboarding"
+          className="flex items-center gap-1 text-landing-accentText transition-colors hover:opacity-80"
         >
-          <span className="text-xs font-normal md:text-[15px]">Self-host guide</span>
+          <span className="text-xs font-normal md:text-[15px]">Text Koraku from your phone</span>
           <ChevronRight className="h-4 w-4" aria-hidden />
         </Link>
       </div>

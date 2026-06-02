@@ -2,17 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer utilities {
-  .landing-mesh-overlay {
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.8) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.8) 1px, transparent 1px);
-    background-size: 16px 16px;
-    -webkit-mask-image: radial-gradient(circle at center top, black 0%, transparent 80%);
-    mask-image: radial-gradient(circle at center top, black 0%, transparent 80%);
-  }
-}
-
 html {
   @apply min-h-full bg-white;
 }
@@ -24,6 +13,23 @@ body {
 
 body {
   @apply min-h-dvh bg-white antialiased;
+}
+
+@layer utilities {
+  .landing-pixel-headline {
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+    font-smooth: never;
+    text-rendering: geometricPrecision;
+    font-kerning: none;
+    paint-order: stroke fill;
+    -webkit-text-stroke: 0.45px currentColor;
+    text-shadow:
+      1px 0 0 currentColor,
+      0 1px 0 currentColor,
+      2px 2px 0 rgba(36, 33, 31, 0.12),
+      3px 3px 0 rgba(36, 33, 31, 0.06);
+  }
 }
 
 .koraku-md a {

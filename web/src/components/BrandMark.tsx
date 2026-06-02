@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import Image from "next/image";
 
-const BRAND_SRC = "/icon.png";
+const BRAND_SRC = "/koraku-logo.png";
 const NEW_CHAT_BRAND_SRC = "/butterfly-pixel.gif";
 
 export function BrandMark({

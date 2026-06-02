@@ -36,19 +36,19 @@ export function ModernHeroSection() {
           transition={{ duration: 0.7, ease: "easeOut" }}
           className="max-w-xl text-left"
         >
-          <h2 className="font-landing-display text-[42px] font-medium leading-[1.08] tracking-tight text-landing-navy md:text-[56px]">
-            Foundation of your
+          <h2 className="font-landing-display text-[42px] font-medium leading-[1.08] tracking-tight text-landing-ink md:text-[56px]">
+            Pick up right
             <br />
-            living memory
+            where you left off
           </h2>
-          <p className="mt-5 max-w-md text-sm leading-relaxed text-slate-500 md:text-[15px]">
-            Koraku remembers how you work, connects your apps, and turns everyday
-            conversations into durable memory, chat, and safe automations.
+          <p className="mt-5 max-w-md text-sm leading-relaxed text-landing-muted md:text-[15px]">
+            Chat with Koraku, hand off tasks, and let it keep your context, files, and
+            connected apps in sync—every session builds on the last.
           </p>
           <motion.div className="mt-8" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
             <Link
               href={APP_BASE}
-              className="inline-flex items-center rounded-full bg-landing-deep px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#0f1f3d]"
+              className="inline-flex items-center rounded-full bg-landing-ink px-7 py-3 text-sm font-semibold text-white transition-colors hover:bg-stone-800"
             >
               Open Koraku
             </Link>
@@ -61,31 +61,29 @@ export function ModernHeroSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.25, ease: "easeOut" }}
-          className="flex items-center rounded-full border border-slate-200/40 bg-white/90 px-1.5 py-1.5 shadow-landing-nav backdrop-blur-2xl"
+          className="flex items-center rounded-full border border-black/5 bg-white/90 px-1.5 py-1.5 shadow-landing-nav backdrop-blur-2xl"
           aria-label="Quick links"
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-100 bg-white text-sm text-landing-navy shadow-sm">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-orange-200 bg-landing-accentSoft text-sm text-landing-accent">
             ✦
           </div>
 
           <Link
-            href={`${APP_BASE}/memory`}
-            className="px-4 py-2 text-xs font-semibold text-slate-500 transition-colors hover:text-landing-navy"
+            href="#features"
+            className="px-4 py-2 text-xs font-semibold text-landing-soft transition-colors hover:text-landing-ink"
           >
-            Memory
+            Features
           </Link>
           <Link
-            href="https://github.com/meet447/koraku-cloud#readme"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-2 text-xs font-semibold text-slate-500 transition-colors hover:text-landing-navy"
+            href="/privacy"
+            className="px-4 py-2 text-xs font-semibold text-landing-soft transition-colors hover:text-landing-ink"
           >
-            Docs
+            Privacy
           </Link>
 
           <Link
             href="/sign-up?next=/app/onboarding"
-            className="ml-1 flex items-center gap-1 rounded-full border border-slate-200/60 bg-white px-5 py-2 text-xs font-semibold text-landing-navy shadow-sm transition-all hover:border-slate-300"
+            className="ml-1 flex items-center gap-1 rounded-full border border-black/5 bg-white px-5 py-2 text-xs font-semibold text-landing-ink shadow-sm transition-all hover:border-black/10"
           >
             Get started
             <ChevronRight className="h-3.5 w-3.5" aria-hidden />

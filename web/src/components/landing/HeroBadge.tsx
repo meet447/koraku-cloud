@@ -9,10 +9,12 @@ export function HeroBadge() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
-      className="mx-auto mb-3 flex w-fit items-center gap-2 rounded-full border border-orange-200/50 bg-white/65 px-4 py-2 backdrop-blur-md"
+      className="mx-auto mb-4 flex w-fit items-center gap-2 rounded-full border border-orange-200 bg-landing-accentSoft px-4 py-1.5"
     >
-      <Sparkles className="h-4 w-4 text-orange-700" aria-hidden />
-      <span className="text-[14px] font-normal text-orange-800">Public beta</span>
+      <Sparkles className="h-4 w-4 text-landing-accent" aria-hidden />
+      <span className="text-[13px] font-medium text-landing-accentText">
+        Your AI memory companion
+      </span>
     </motion.div>
   );
 }

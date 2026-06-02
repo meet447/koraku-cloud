@@ -20,7 +20,7 @@ function SocialIcon({
       aria-label={label}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex h-9 w-9 items-center justify-center rounded-[9px] bg-[#0e1014] text-white shadow-landing-social transition-all hover:-translate-y-0.5 hover:bg-black hover:shadow-landing-social-hover [&_svg]:h-[15px] [&_svg]:w-[15px] [&_svg]:fill-current"
+      className="flex h-9 w-9 items-center justify-center rounded-[9px] bg-landing-ink text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-black [&_svg]:h-[15px] [&_svg]:w-[15px] [&_svg]:fill-current"
     >
       {children}
     </a>
@@ -67,7 +67,7 @@ export function KorakuFooter() {
       </h2>
 
       <div className="mx-auto grid max-w-[1150px] grid-cols-1 items-stretch gap-4 min-[860px]:grid-cols-[350px_1fr]">
-        <div className="relative flex min-h-[340px] flex-col justify-between overflow-hidden rounded-[28px] bg-landing-blue p-8 shadow-landing-footer-left min-[860px]:min-h-[340px] min-[860px]:gap-0 max-[859px]:min-h-0 max-[859px]:gap-10">
+        <div className="relative flex min-h-[340px] flex-col justify-between overflow-hidden rounded-[28px] bg-landing-ink p-8 shadow-landing-card min-[860px]:min-h-[340px] min-[860px]:gap-0 max-[859px]:min-h-0 max-[859px]:gap-10">
           <video
             className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
             autoPlay
@@ -127,23 +127,23 @@ export function KorakuFooter() {
           </div>
         </div>
 
-        <div className="relative flex flex-col justify-between overflow-visible rounded-[28px] bg-landing-footer p-10 shadow-landing-footer-right max-[560px]:p-6">
+        <div className="relative flex flex-col justify-between overflow-visible rounded-[28px] bg-landing-shell p-10 shadow-landing-soft max-[560px]:p-6">
           <div
             className="absolute -top-9 right-10 z-10 flex flex-col items-start gap-1.5 max-[560px]:right-3 max-[560px]:-top-7"
             aria-hidden
           >
-            <div className="flex h-24 w-24 -rotate-[10deg] items-center justify-center rounded-[22px] bg-landing-lucky-cube shadow-landing-lucky-cube max-[560px]:h-[72px] max-[560px]:w-[72px]">
-              <span className="rotate-[10deg] text-[42px] font-bold leading-none tracking-tight text-white drop-shadow-[0_3px_6px_rgba(0,0,0,0.25)] max-[560px]:text-[32px]">
+            <div className="flex h-24 w-24 -rotate-[10deg] items-center justify-center rounded-[22px] bg-landing-accent shadow-[0_14px_28px_-8px_rgba(234,88,12,0.5)] max-[560px]:h-[72px] max-[560px]:w-[72px]">
+              <span className="rotate-[10deg] text-[42px] font-bold leading-none tracking-tight text-white max-[560px]:text-[32px]">
                 K
               </span>
             </div>
             <div className="-rotate-[4deg] mt-1 flex items-center gap-1.5">
-              <svg className="h-[22px] w-[22px] text-gray-400" viewBox="0 0 24 24">
+              <svg className="h-[22px] w-[22px] text-landing-soft" viewBox="0 0 24 24">
                 <path d="M3 20 C 6 14, 10 9, 18 5" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M18 5 L 12 5" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M18 5 L 18 11" stroke="currentColor" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span className="whitespace-nowrap font-landing-hand text-xl font-semibold text-gray-400">
+              <span className="whitespace-nowrap font-landing-hand text-xl font-semibold text-landing-soft">
                 Feeling lucky?
               </span>
             </div>
@@ -152,39 +152,39 @@ export function KorakuFooter() {
           <div className="pt-2">
             <div className="flex gap-[72px] max-[560px]:gap-10">
               <div>
-                <p className="mb-[18px] font-landing-hand text-2xl font-semibold italic text-gray-400">
-                  Navigation
+                <p className="mb-[18px] font-landing-hand text-2xl font-semibold italic text-landing-soft">
+                  Product
                 </p>
-                <Link href={APP_BASE} className="mb-3.5 block text-sm font-semibold text-gray-900 transition-colors hover:text-[#1f65d6]">
-                  How it works
+                <Link href="#features" className="mb-3.5 block text-sm font-semibold text-landing-ink transition-colors hover:text-landing-accentText">
+                  Features
                 </Link>
-                <Link href={`${APP_BASE}/memory`} className="mb-3.5 block text-sm font-semibold text-gray-900 transition-colors hover:text-[#1f65d6]">
+                <Link href={`${APP_BASE}/memory`} className="mb-3.5 block text-sm font-semibold text-landing-ink transition-colors hover:text-landing-accentText">
                   Memory
                 </Link>
-                <Link href={`${APP_BASE}/connections`} className="mb-3.5 block text-sm font-semibold text-gray-900 transition-colors hover:text-[#1f65d6]">
+                <Link href={`${APP_BASE}/connections`} className="mb-3.5 block text-sm font-semibold text-landing-ink transition-colors hover:text-landing-accentText">
                   Connections
                 </Link>
-                <Link href={`${APP_BASE}/automations`} className="mb-3.5 block text-sm font-semibold text-gray-900 transition-colors hover:text-[#1f65d6]">
+                <Link href={`${APP_BASE}/automations`} className="mb-3.5 block text-sm font-semibold text-landing-ink transition-colors hover:text-landing-accentText">
                   Automations
                 </Link>
-                <Link href={`${APP_BASE}/settings`} className="mb-3.5 block text-sm font-semibold text-gray-900 transition-colors hover:text-[#1f65d6]">
-                  Settings
+                <Link href={`${APP_BASE}/external`} className="mb-3.5 block text-sm font-semibold text-landing-ink transition-colors hover:text-landing-accentText">
+                  iMessage
                 </Link>
               </div>
               <div>
-                <p className="mb-[18px] font-landing-hand text-2xl font-semibold italic text-gray-400">
+                <p className="mb-[18px] font-landing-hand text-2xl font-semibold italic text-landing-soft">
                   Company
                 </p>
-                <Link href="https://github.com/meet447/koraku-cloud#readme" target="_blank" rel="noopener noreferrer" className="mb-3.5 block text-sm font-semibold text-gray-900 transition-colors hover:text-[#1f65d6]">
-                  Docs
+                <Link href="/sign-up?next=/app/onboarding" className="mb-3.5 block text-sm font-semibold text-landing-ink transition-colors hover:text-landing-accentText">
+                  Get started
                 </Link>
-                <Link href="/" className="mb-3.5 block text-sm font-semibold text-gray-900 transition-colors hover:text-[#1f65d6]">
-                  About
+                <Link href="/sign-in" className="mb-3.5 block text-sm font-semibold text-landing-ink transition-colors hover:text-landing-accentText">
+                  Sign in
                 </Link>
-                <Link href="/terms" className="mb-3.5 block text-sm font-semibold text-gray-900 transition-colors hover:text-[#1f65d6]">
-                  Terms and Condition
+                <Link href="/terms" className="mb-3.5 block text-sm font-semibold text-landing-ink transition-colors hover:text-landing-accentText">
+                  Terms of Service
                 </Link>
-                <Link href="/privacy" className="mb-3.5 block text-sm font-semibold text-gray-900 transition-colors hover:text-[#1f65d6]">
+                <Link href="/privacy" className="mb-3.5 block text-sm font-semibold text-landing-ink transition-colors hover:text-landing-accentText">
                   Privacy Policy
                 </Link>
               </div>
@@ -192,17 +192,17 @@ export function KorakuFooter() {
           </div>
 
           <div className="mt-12 flex items-end justify-between max-[560px]:mt-8 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-6">
-            <p className="text-[12.5px] font-medium text-gray-400">© 2025 Koraku. All rights reserved.</p>
+            <p className="text-[12.5px] font-medium text-landing-soft">© 2025 Koraku. All rights reserved.</p>
             <div className="flex flex-col gap-3.5">
-              <h4 className="text-[15px] font-normal leading-snug text-gray-500">
-                AI moves fast.
+              <h4 className="text-[15px] font-normal leading-snug text-landing-muted">
+                Ready when you are.
                 <br />
-                <strong className="mt-0 block text-[19px] font-bold text-gray-900">
-                  Stay ahead with Koraku.
+                <strong className="mt-0 block text-[19px] font-bold text-landing-ink">
+                  Start with Koraku today.
                 </strong>
               </h4>
               <form
-                className="flex w-[310px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-[0_2px_10px_rgba(0,0,0,0.04)] max-[560px]:w-full"
+                className="flex w-[310px] rounded-xl border border-black/5 bg-white p-1.5 shadow-landing-soft max-[560px]:w-full"
                 onSubmit={(e) => e.preventDefault()}
               >
                 <input
@@ -210,11 +210,11 @@ export function KorakuFooter() {
                   name="email"
                   placeholder="Enter email address"
                   aria-label="Email address"
-                  className="min-w-0 flex-1 bg-transparent px-3.5 py-[11px] text-[13.5px] text-gray-900 outline-none placeholder:text-gray-400"
+                  className="min-w-0 flex-1 bg-transparent px-3.5 py-[11px] text-[13.5px] text-landing-ink outline-none placeholder:text-landing-soft"
                 />
                 <button
                   type="submit"
-                  className="rounded-lg bg-[#111214] px-[22px] py-[11px] text-[13.5px] font-semibold text-white shadow-landing-subscribe transition-all hover:-translate-y-px hover:bg-black hover:shadow-landing-subscribe-hover"
+                  className="rounded-lg bg-landing-accent px-[22px] py-[11px] text-[13.5px] font-semibold text-white shadow-sm transition-all hover:-translate-y-px hover:bg-landing-accentText"
                 >
                   Subscribe
                 </button>

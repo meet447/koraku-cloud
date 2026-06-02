@@ -1,136 +1,95 @@
-import { cn } from "@/lib/cn";
+import {
+  Brain,
+  FolderOpen,
+  MessageCircle,
+  Plug,
+  ShieldCheck,
+  Workflow,
+  type LucideIcon,
+} from "lucide-react";
 
-const NETWORK_IMG =
-  "https://pub-f170a2592d2c4a1485466404c36807be.r2.dev/viktor/network.svg";
-const FOLDER_IMG =
-  "https://pub-f170a2592d2c4a1485466404c36807be.r2.dev/viktor/library%20icon.svg";
+type Feature = {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+};
 
-function Highlight({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="bg-landing-highlight bg-clip-text font-semibold text-transparent">
-      {children}
-    </span>
-  );
-}
+const FEATURES: Feature[] = [
+  {
+    icon: Brain,
+    title: "Memory",
+    description:
+      "A living second brain that learns your preferences and recalls context from past conversations—automatically.",
+  },
+  {
+    icon: FolderOpen,
+    title: "Workspace",
+    description:
+      "A cloud workspace where Koraku drafts documents, organizes files, and keeps your work in one searchable place.",
+  },
+  {
+    icon: Plug,
+    title: "Connections",
+    description:
+      "Link Gmail, Slack, Notion, Drive and more so Koraku can read context and take action across your tools.",
+  },
+  {
+    icon: Workflow,
+    title: "Automations",
+    description:
+      "Turn recurring work into scheduled automations that run in the background and ask before high-impact actions.",
+  },
+  {
+    icon: MessageCircle,
+    title: "iMessage & SMS",
+    description:
+      "Text or send voice notes to Koraku from your phone. Linked threads sync straight to the web, like any chat.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Safe by design",
+    description:
+      "Koraku confirms before sending messages, sharing files, or anything high-impact. Your data stays in your account.",
+  },
+];
 
 export function CoreFeatures() {
   return (
     <section
-      className="bg-white px-5 py-12 font-landing-body text-landing-body md:px-6 md:py-16"
+      id="features"
+      className="scroll-mt-20 bg-white px-5 py-20 font-landing-sans md:px-6 md:py-28"
       aria-labelledby="core-features-title"
     >
-      <div className="mx-auto w-full max-w-[1100px] text-center">
-        <header>
-          <p className="mb-4 inline-block bg-landing-badge bg-clip-text text-xs font-semibold uppercase tracking-widest text-transparent">
-            Core Features
+      <div className="mx-auto w-full max-w-[1120px]">
+        <header className="mx-auto max-w-2xl text-center">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-landing-accentText">
+            Everything Koraku does
           </p>
           <h2
             id="core-features-title"
-            className="mb-3 text-[2.25rem] font-medium tracking-tight text-slate-900 sm:text-[2.75rem]"
+            className="text-[2.1rem] font-medium leading-tight tracking-tight text-landing-ink sm:text-[2.6rem]"
           >
-            Built for Memory &amp; Momentum
+            One place for memory, work, and momentum
           </h2>
-          <p className="mx-auto mb-[50px] max-w-lg text-lg leading-relaxed text-slate-500">
-            Everything you need to go
-            <br />
-            from chat to lasting memory
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-landing-muted md:text-lg">
+            A hosted AI companion that ties your context, apps, and routines together—so
+            you can pick up exactly where you left off.
           </p>
         </header>
 
-        <div className="grid grid-cols-1 gap-6 min-[600px]:grid-cols-2 min-[900px]:grid-cols-3">
-          <article
-            className={cn(
-              "relative flex h-[340px] flex-col justify-end overflow-hidden rounded-[20px] bg-landing-card text-left shadow-landing-card",
-              "bg-landing-card-1",
-            )}
-          >
-            <div className="absolute left-6 right-6 top-[30px] z-[2] rounded-xl bg-white p-4 text-left text-[0.8rem] leading-relaxed text-slate-600 shadow-[0_8px_20px_rgba(0,0,0,0.04)]">
-              A companion that learns <Highlight>how you like to work</Highlight>, remembers{" "}
-              <Highlight>context from past chats</Highlight>, and{" "}
-              <Highlight>suggests helpful next steps</Highlight> without overwriting your voice
-            </div>
-            <div className="absolute left-10 top-[180px] z-[2] flex items-center gap-1.5 rounded-full border border-black bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-800 shadow-[0_4px_15px_rgba(0,0,0,0.08)]">
-              <span className="text-base text-violet-500" aria-hidden>
-                ✦
-              </span>
-              Add more context
-            </div>
-            <svg
-              className="absolute left-[110px] top-[205px] z-10 h-6 w-6 drop-shadow-[0_4px_6px_rgba(0,0,0,0.2)]"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="#0f172a"
-              stroke="#ffffff"
-              strokeWidth="1"
-              aria-hidden
+        <div className="mt-14 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map(({ icon: Icon, title, description }) => (
+            <article
+              key={title}
+              className="flex flex-col rounded-2xl border border-black/[0.06] bg-landing-shell p-7 transition-shadow hover:shadow-landing-soft"
             >
-              <path d="M4 2L20 11L11 13L9 22L4 2Z" />
-            </svg>
-            <h3 className="relative z-[2] p-6 text-[1.05rem] font-semibold text-slate-800">
-              Smart Memory Suggestions
-            </h3>
-          </article>
-
-          <article
-            className={cn(
-              "relative flex h-[340px] flex-col justify-end overflow-hidden rounded-[20px] text-left shadow-landing-card",
-              "bg-landing-card-2",
-            )}
-          >
-            <div className="absolute inset-x-0 bottom-[70px] top-0 flex items-center justify-center px-6">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={NETWORK_IMG}
-                alt=""
-                width={280}
-                height={180}
-                className="mt-5 h-[180px] w-full object-contain"
-              />
-            </div>
-            <h3 className="relative z-[2] p-6 text-[1.05rem] font-semibold text-slate-800">
-              Connected Apps
-            </h3>
-          </article>
-
-          <article
-            className={cn(
-              "relative flex h-[340px] flex-col justify-end overflow-hidden rounded-[20px] text-left shadow-landing-card",
-              "bg-landing-card-3",
-            )}
-          >
-            <div
-              className="landing-mesh-overlay pointer-events-none absolute inset-0"
-              aria-hidden
-            />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={FOLDER_IMG}
-              alt=""
-              width={170}
-              height={140}
-              className="absolute left-1/2 top-[50px] w-[170px] -translate-x-1/2 drop-shadow-[0_15px_25px_rgba(0,0,0,0.08)]"
-            />
-            <div className="absolute left-1/2 top-[220px] z-[2] flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-black bg-white px-[18px] py-1.5 text-xs font-medium text-slate-800 shadow-[0_8px_20px_rgba(0,0,0,0.06)]">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <circle cx="11" cy="11" r="8" stroke="#64748b" strokeWidth="2" />
-                <line
-                  x1="21"
-                  y1="21"
-                  x2="16.65"
-                  y2="16.65"
-                  stroke="#64748b"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Search in workspace
-            </div>
-            <h3 className="relative z-[2] p-6 text-[1.05rem] font-semibold text-slate-800">
-              Workspace Library
-            </h3>
-          </article>
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-orange-200 bg-landing-accentSoft text-landing-accent">
+                <Icon className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+              </span>
+              <h3 className="mt-5 text-lg font-semibold text-landing-ink">{title}</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-landing-muted">{description}</p>
+            </article>
+          ))}
         </div>
       </div>
     </section>

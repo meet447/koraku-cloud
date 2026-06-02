@@ -1,23 +1,27 @@
-import { CoreFeatures } from "@/components/landing/CoreFeatures";
-import { Hero } from "@/components/landing/Hero";
-import { KorakuFooter } from "@/components/landing/KorakuFooter";
+import { ChaptersSection } from "@/components/landing/ChaptersSection";
+import { HeroSection } from "@/components/landing/HeroSection";
 import { landingFontClassName } from "@/components/landing/LandingShell";
-import { LogoMarquee } from "@/components/landing/LogoMarquee";
-import { ModernHeroSection } from "@/components/landing/ModernHeroSection";
+import { LeftRail } from "@/components/landing/LeftRail";
+import { ModelsSection } from "@/components/landing/ModelsSection";
+import { PixelFooter } from "@/components/landing/PixelFooter";
+import { ToolsGrid } from "@/components/landing/ToolsGrid";
+import { TopNav } from "@/components/landing/TopNav";
+import { TrustStrip } from "@/components/landing/TrustStrip";
 import { cn } from "@/lib/cn";
 
 export function LandingPage() {
   return (
-    <main className={cn(landingFontClassName(), "min-h-screen overflow-x-hidden bg-landing-stone")}>
-      <Hero />
-      <CoreFeatures />
-      <section className="bg-landing-shell px-5 py-16 md:px-8 md:py-20">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <ModernHeroSection />
-          <LogoMarquee />
-        </div>
-      </section>
-      <KorakuFooter />
-    </main>
+    <div className={cn(landingFontClassName(), "h-screen overflow-hidden bg-[#f8f8f7] text-[#282522] lg:grid lg:grid-cols-[210px_1fr]")}>
+      <LeftRail />
+      <main className="h-screen min-w-0 overflow-y-auto overflow-x-hidden">
+        <TopNav />
+        <HeroSection />
+        <ChaptersSection />
+        <ModelsSection />
+        <ToolsGrid />
+        <TrustStrip />
+        <PixelFooter />
+      </main>
+    </div>
   );
 }

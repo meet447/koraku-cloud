@@ -1,16 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, ChevronRight } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { motion } from "motion/react";
 import { BrandMark } from "@/components/BrandMark";
 import { APP_BASE } from "@/lib/app-path";
 
 const NAV_ITEMS = [
-  { label: "Memory", href: `${APP_BASE}/memory` },
-  { label: "Connections", href: `${APP_BASE}/connections` },
-  { label: "Automations", href: `${APP_BASE}/automations`, hasDropdown: true },
-  { label: "Trust", href: "/privacy", hasDropdown: true },
+  { label: "Features", href: "#features" },
+  { label: "Memory", href: "#features" },
+  { label: "Automations", href: "#features" },
+  { label: "iMessage", href: "#features" },
 ] as const;
 
 export function Navbar() {
@@ -23,15 +23,9 @@ export function Navbar() {
           <li key={item.label}>
             <Link
               href={item.href}
-              className="group flex cursor-pointer items-center gap-1 transition-opacity hover:opacity-70"
+              className="cursor-pointer transition-colors hover:text-landing-accentText"
             >
               {item.label}
-              {"hasDropdown" in item && item.hasDropdown ? (
-                <ChevronRight
-                  className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
-                  aria-hidden
-                />
-              ) : null}
             </Link>
           </li>
         ))}

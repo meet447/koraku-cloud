@@ -13,8 +13,8 @@ export const metadata: Metadata = {
   description:
     "Your companion for memory, connected apps, and safe automations. Remember how you work and turn momentum into action.",
   icons: {
-    icon: [{ url: "/icon.png", type: "image/png" }],
-    apple: [{ url: "/icon.png", type: "image/png" }],
+    icon: [{ url: "/koraku-logo.png", type: "image/png" }],
+    apple: [{ url: "/koraku-logo.png", type: "image/png" }],
   },
 };
 
