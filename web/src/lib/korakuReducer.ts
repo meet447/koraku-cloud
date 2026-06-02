@@ -179,6 +179,54 @@ function _appendTimelineRow(
   return { ...s, timeline: [...s.timeline, row] };
 }
 
+/** Stream Composio worker prose into the timeline (never the main answer bubble). */
+function _appendSubagentProseChunk(
+  s: RunState,
+  chunk: string,
+  meta: ComposioSubagentMeta,
+): RunState {
+  const base = s.streamSubagentMeta?.composio
+    ? s
+    : { ...s, streamSubagentMeta: meta };
+  const next = finalizeThought(base);
+  if (!next.activeThought) {
+    return {
+      ...next,
+      streamSubagentMeta: meta,
+      activeThought: { started: Date.now(), text: chunk },
+    };
+  }
+  return {
+    ...next,
+    streamSubagentMeta: meta,
+    activeThought: {
+      ...next.activeThought,
+      text: next.activeThought.text + chunk,
+    },
+  };
+}
+
+function _appendSubagentThoughtRow(
+  s: RunState,
+  rawBody: string,
+  meta: ComposioSubagentMeta,
+): RunState {
+  const raw = rawBody.trim();
+  if (!raw) return s;
+  const body = raw.length > 14_000 ? `${raw.slice(0, 14_000)}…` : raw;
+  const row: TimelineRow = {
+    id: rid(),
+    kind: "thought",
+    seconds: 0,
+    body,
+  };
+  return _appendTimelineRow(
+    { ...s, activeThought: null, streamSubagentMeta: meta },
+    row,
+    meta,
+  );
+}
+
 function _mapTimelineForToolRow(
   timeline: TimelineRow[],
   rowId: string,
@@ -564,6 +612,15 @@ function handleStreamEvent(s: RunState, ev: Record<string, unknown>): RunState {
   if (t === "message_start") {
     const stepMeta = _metaFromSubagentPayload(ev.subagent);
     let next = finalizeThought(s);
+    if (stepMeta) {
+      return {
+        ...next,
+        streamSubagentMeta: stepMeta,
+        blockKindByIndex: {},
+        blockNameByIndex: {},
+        partialJsonByIndex: {},
+      };
+    }
     const md = next.assistantMarkdown.trim();
     // Always clear the bubble for this new provider message so interim status lines replace each
     // other instead of stacking (previously we only cleared when ``sawToolUseThisTurn`` was true).
@@ -629,14 +686,14 @@ function handleStreamEvent(s: RunState, ev: Record<string, unknown>): RunState {
     }
     if (dt === "text_delta" && typeof delta.text === "string") {
       const sm = _metaFromSubagentPayload(ev.subagent);
-      const next = finalizeThought(
-        sm ? { ...s, streamSubagentMeta: sm } : s,
-      );
+      if (sm) {
+        return _appendSubagentProseChunk(s, delta.text, sm);
+      }
+      const next = finalizeThought(s);
       const merged = next.assistantMarkdown + delta.text;
       const tb = _lastThoughtBodyFromTimeline(next.timeline);
       let out: RunState = {
         ...next,
-        streamSubagentMeta: sm ?? next.streamSubagentMeta,
         assistantMarkdown: _stripThoughtEchoPrefix(merged, tb),
       };
       if (out.assistantBubbleMode === "step") {
@@ -669,6 +726,7 @@ function handleStreamEvent(s: RunState, ev: Record<string, unknown>): RunState {
   }
 
   if (t === "assistant_message") {
+    const sm = _metaFromSubagentPayload(ev.subagent);
     const message = ev.message as Record<string, unknown> | undefined;
     if (!message) return s;
     const content = message.content;
@@ -689,6 +747,21 @@ function handleStreamEvent(s: RunState, ev: Record<string, unknown>): RunState {
     }
     const next = finalizeThought(s);
     const prev = next.assistantMarkdown;
+
+    if (sm) {
+      if (!text && !hasToolUse) {
+        return { ...next, streamSubagentMeta: sm };
+      }
+      let out = next;
+      if (text.trim()) {
+        const lastBody = _lastThoughtBodyFromTimeline(out.timeline);
+        const remainder = _stripThoughtEchoPrefix(text, lastBody);
+        if (remainder.trim()) {
+          out = _appendSubagentThoughtRow(out, remainder, sm);
+        }
+      }
+      return { ...out, streamSubagentMeta: sm };
+    }
 
     if (!text && !hasToolUse) {
       return s;
@@ -835,9 +908,10 @@ export function applyKorakuSseEvent(
       return { ...next, timeline: [...tl, group] };
     }
     if (phase === "composio_end") {
+      const flushed = finalizeThought(next);
       return {
-        ...next,
-        timeline: _closeInnermostComposioNest(next.timeline),
+        ...flushed,
+        timeline: _closeInnermostComposioNest(flushed.timeline),
         streamSubagentMeta: null,
       };
     }
