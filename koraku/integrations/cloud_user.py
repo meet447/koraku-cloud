@@ -39,3 +39,20 @@ def effective_cloud_user_id() -> str:
     if org:
         return TenantContext(org_id=org, user_id=uid).storage_scope_id()
     return uid
+
+
+def auth_user_id_from_storage_scope(scope: str) -> str:
+    """Supabase ``user_id`` / iMessage Blaxel paths use the auth sub, not ``org/sub``."""
+    s = (scope or "").strip()
+    if "/" in s:
+        tail = s.split("/", 1)[1].strip()
+        return tail or s
+    return s
+
+
+def workspace_path_user_id(storage_scope: str, channel: str) -> str:
+    """Folder segment for a thread: org-scoped web chats, auth-only for iMessage (agent parity)."""
+    scope = (storage_scope or "").strip()
+    if (channel or "").strip().lower() == "imessage":
+        return auth_user_id_from_storage_scope(scope)
+    return scope

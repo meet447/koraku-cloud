@@ -9,7 +9,11 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from koraku.core.config import Settings, settings
-from koraku.integrations.cloud_user import effective_cloud_user_id
+from koraku.integrations.cloud_user import (
+    auth_user_id_from_storage_scope,
+    effective_cloud_user_id,
+    workspace_path_user_id,
+)
 
 if TYPE_CHECKING:
     pass
@@ -287,15 +291,17 @@ async def ensure_session_workspace(
     """Attach VM + mkdir for the correct per-thread folder (web or iMessage)."""
     from koraku.integrations.supabase_external import resolve_thread_channel_sync
 
-    uid = (user_id or effective_cloud_user_id()).strip() or effective_cloud_user_id()
+    scope_uid = (user_id or effective_cloud_user_id()).strip() or effective_cloud_user_id()
     sid = (session_id or "").strip()
     if not sid:
         raise ValueError("session_id required")
-    ch = (channel or "").strip().lower() or resolve_thread_channel_sync(sid, uid)
+    auth_uid = auth_user_id_from_storage_scope(scope_uid)
+    ch = (channel or "").strip().lower() or resolve_thread_channel_sync(sid, auth_uid)
+    path_uid = workspace_path_user_id(scope_uid, ch)
     if ch == "imessage":
-        return await ensure_imessage_sandbox(sid, settings, user_id=uid)
-    sb = await ensure_chat_sandbox(sid, settings, user_id=uid)
-    root = session_workspace_root_posix(uid, sid, settings)
+        return await ensure_imessage_sandbox(sid, settings, user_id=path_uid)
+    sb = await ensure_chat_sandbox(sid, settings, user_id=path_uid)
+    root = session_workspace_root_posix(path_uid, sid, settings)
     return sb, root
 
 

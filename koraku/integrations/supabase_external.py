@@ -59,9 +59,14 @@ def get_phone_link_for_user_sync(user_id: str) -> dict[str, Any] | None:
 
 
 def resolve_thread_channel_sync(thread_id: str, user_id: str) -> str:
-    """Return ``web`` or ``imessage`` for workspace routing (defaults to ``web``)."""
+    """Return ``web`` or ``imessage`` for workspace routing (defaults to ``web``).
+
+    ``user_id`` must be the Supabase auth sub (not ``org_id/user_id`` storage scope).
+    """
+    from koraku.integrations.cloud_user import auth_user_id_from_storage_scope
+
     tid = (thread_id or "").strip()
-    uid = (user_id or "").strip()
+    uid = auth_user_id_from_storage_scope((user_id or "").strip())
     if not tid or not uid:
         return "web"
     if not supabase_chat_history_configured():

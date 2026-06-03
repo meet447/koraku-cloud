@@ -21,9 +21,11 @@ from koraku.integrations.blaxel_runtime import (
 )
 from koraku.integrations.supabase_external import resolve_thread_channel_sync
 from koraku.integrations.cloud_user import (
+    effective_auth_user_sub,
     effective_cloud_user_id,
     reset_cloud_user_id,
     set_cloud_user_id,
+    workspace_path_user_id,
 )
 
 router = APIRouter(prefix="/api/workspace", tags=["workspace"])
@@ -65,11 +67,14 @@ def _parse_session_id(raw: str) -> str:
     return s
 
 
-async def _workspace_context(session_id: str, user_id: str) -> tuple[str, str]:
-    """Resolve Blaxel root path and channel for a chat thread id."""
-    channel = await asyncio.to_thread(resolve_thread_channel_sync, session_id, user_id)
-    root = workspace_root_posix_for_channel(user_id, session_id, channel, settings)
-    return root, channel
+async def _workspace_context(session_id: str) -> tuple[str, str, str]:
+    """Resolve Blaxel root path, channel, and path user id for a chat thread."""
+    storage_uid = effective_cloud_user_id()
+    auth_uid = effective_auth_user_sub()
+    channel = await asyncio.to_thread(resolve_thread_channel_sync, session_id, auth_uid)
+    path_uid = workspace_path_user_id(storage_uid, channel)
+    root = workspace_root_posix_for_channel(path_uid, session_id, channel, settings)
+    return root, channel, path_uid
 
 
 async def _ensure_workspace_sandbox(session_id: str, user_id: str, channel: str) -> Any:
@@ -138,11 +143,10 @@ async def workspace_tree(
 ) -> dict[str, Any]:
     """List files and subdirectories under the chat session folder (or a subpath)."""
     sid = _parse_session_id(session_id)
-    uid = effective_cloud_user_id()
-    root, channel = await _workspace_context(sid, uid)
+    root, channel, path_uid = await _workspace_context(sid)
     target = safe_join_under_session_root(root, path)
     try:
-        sb = await _ensure_workspace_sandbox(sid, uid, channel)
+        sb = await _ensure_workspace_sandbox(sid, path_uid, channel)
         directory = await sb.fs.ls(target)
     except HTTPException:
         raise
@@ -164,11 +168,10 @@ async def workspace_read_file(
 ) -> dict[str, Any]:
     """Read a text file under the session workspace (size-capped)."""
     sid = _parse_session_id(session_id)
-    uid = effective_cloud_user_id()
-    root, channel = await _workspace_context(sid, uid)
+    root, channel, path_uid = await _workspace_context(sid)
     target = safe_join_under_session_root(root, path)
     try:
-        sb = await _ensure_workspace_sandbox(sid, uid, channel)
+        sb = await _ensure_workspace_sandbox(sid, path_uid, channel)
         text = await sb.fs.read(target)
     except HTTPException:
         raise
@@ -189,13 +192,12 @@ async def workspace_read_blob(
 ) -> Response:
     """Return raw bytes (PDF/DOCX with known media types; other files as octet-stream for download)."""
     sid = _parse_session_id(session_id)
-    uid = effective_cloud_user_id()
-    root, channel = await _workspace_context(sid, uid)
+    root, channel, path_uid = await _workspace_context(sid)
     target = safe_join_under_session_root(root, path)
     ext = posixpath.splitext(target)[1].lower()
     media_type = _BLOB_MEDIA.get(ext, "application/octet-stream")
     try:
-        sb = await _ensure_workspace_sandbox(sid, uid, channel)
+        sb = await _ensure_workspace_sandbox(sid, path_uid, channel)
         data = await sb.fs.read_binary(target)
     except HTTPException:
         raise
