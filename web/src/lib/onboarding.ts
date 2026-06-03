@@ -1,4 +1,5 @@
 import type { PersonalizationPayload } from "@/lib/koraku-personalization";
+import { buildMemoryFromSections } from "@/lib/personalization-memory";
 
 export const ONBOARDING_DONE_KEY = "koraku_onboarding_done";
 export const ONBOARDING_DRAFT_KEY = "koraku_onboarding_draft";
@@ -164,23 +165,16 @@ export function saveOnboardingDraft(data: OnboardingFormData, stepIndex: number)
 export function buildPersonalizationFromOnboarding(
   data: OnboardingFormData,
 ): PersonalizationPayload {
-  const profileLines = [
-    "## Onboarding profile",
-    data.userName.trim() ? `- User name: ${data.userName.trim()}` : "",
-    data.about.trim() ? `- About: ${data.about.trim()}` : "",
-    data.helpWith.length ? `- Koraku should help with: ${data.helpWith.join(", ")}` : "",
-    "- When suggesting external actions, verify the target app/account and ask for confirmation before sending or changing data.",
-  ].filter(Boolean);
-
-  const preferenceBody =
-    data.preferences.trim() ||
-    "Prefer concise answers with clear next steps. Ask before high-impact external actions.";
-
-  const memory = [...profileLines, "", "## Preferences", preferenceBody].join("\n");
-
   return {
     agent_name: data.agentName.trim() || "Koraku",
-    memory,
+    memory: buildMemoryFromSections(
+      {
+        userName: data.userName,
+        about: data.about,
+        helpWith: data.helpWith,
+      },
+      data.preferences,
+    ),
     soul: data.persona.trim(),
   };
 }

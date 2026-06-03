@@ -23,6 +23,7 @@ import {
   type OnboardingFormData,
   type OnboardingStepId,
 } from "@/lib/onboarding";
+import { parseMemorySections } from "@/lib/personalization-memory";
 import { korakuUi } from "@/lib/koraku-ui";
 import { KorakuAppPage } from "@/components/KorakuAppPage";
 import { KorakuAlert } from "@/components/KorakuAlert";
@@ -67,12 +68,14 @@ export function OnboardingWizard() {
       void loadPersonalization()
         .then((data) => {
           if (!data.agent_name && !data.memory && !data.soul) return;
+          const { profile, preferences } = parseMemorySections(data.memory);
           setForm((prev) => ({
             ...prev,
+            userName: profile.userName || prev.userName,
+            about: profile.about || prev.about,
+            helpWith: profile.helpWith.length ? profile.helpWith : prev.helpWith,
             agentName: data.agent_name || prev.agentName,
-            preferences: data.memory.includes("## Preferences")
-              ? data.memory.split("## Preferences")[1]?.trim().slice(0, 4000) || prev.preferences
-              : data.memory.trim() || prev.preferences,
+            preferences: preferences || prev.preferences,
             persona: data.soul || prev.persona,
           }));
         })

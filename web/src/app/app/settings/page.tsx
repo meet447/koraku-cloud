@@ -8,6 +8,7 @@ import { KorakuPageHeader } from "@/components/KorakuPageHeader";
 import { KorakuAlert } from "@/components/KorakuAlert";
 import { KorakuButton } from "@/components/KorakuButton";
 import { PersonalizationSection } from "@/components/PersonalizationSection";
+import { UserProfileSection } from "@/components/UserProfileSection";
 import { errorMessage } from "@/lib/error-message";
 import { korakuUi } from "@/lib/koraku-ui";
 import { KORAKU_COPY } from "@/lib/korakuBrand";
@@ -80,6 +81,7 @@ export default function SettingsPage() {
         ) : null}
 
         <div className="mt-8 space-y-4">
+          <UserProfileSection />
           <PersonalizationSection />
 
           <section className={korakuUi.card}>

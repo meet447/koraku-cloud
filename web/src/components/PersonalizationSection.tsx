@@ -10,6 +10,10 @@ import {
   savePersonalization,
   type PersonalizationPayload,
 } from "@/lib/koraku-personalization";
+import {
+  buildMemoryFromSections,
+  parseMemorySections,
+} from "@/lib/personalization-memory";
 import { korakuUi } from "@/lib/koraku-ui";
 import { KorakuAlert } from "@/components/KorakuAlert";
 import { KorakuButton } from "@/components/KorakuButton";
@@ -25,7 +29,7 @@ export function PersonalizationSection() {
 
   const applyPayload = useCallback((data: PersonalizationPayload) => {
     setAgentName(data.agent_name);
-    setMemory(data.memory);
+    setMemory(parseMemorySections(data.memory).preferences);
     setSoul(data.soul);
   }, []);
 
@@ -50,7 +54,13 @@ export function PersonalizationSection() {
     setSaving(true);
     setSavedAt(null);
     try {
-      await savePersonalization({ agent_name: agentName, memory, soul });
+      const current = await loadPersonalization();
+      const { profile } = parseMemorySections(current.memory);
+      await savePersonalization({
+        agent_name: agentName,
+        soul,
+        memory: buildMemoryFromSections(profile, memory),
+      });
       setSavedAt(Date.now());
     } catch (e) {
       setError(errorMessage(e, "Save failed"));
@@ -61,10 +71,10 @@ export function PersonalizationSection() {
 
   return (
     <section id="personalization" className={clsx(korakuUi.card, "scroll-mt-6")}>
-      <h2 className="text-lg font-bold text-koraku-ink">Personalization</h2>
+      <h2 className="text-lg font-bold text-koraku-ink">Agent personalization</h2>
       <p className="mt-2 text-sm font-medium leading-relaxed text-koraku-muted">
-        Profile text injected into every chat: what to call the agent, standing preferences, and
-        persona. Facts learned automatically across chats live under{" "}
+        How your agent shows up in chat: display name, standing preferences, and persona. Facts
+        learned automatically across chats live under{" "}
         <Link href={`${APP_BASE}/memory`} className="font-semibold text-koraku-ink underline">
           Memory
         </Link>
@@ -130,7 +140,7 @@ export function PersonalizationSection() {
           <span className="text-xs font-medium text-koraku-muted">Saved</span>
         ) : null}
         <KorakuButton onClick={() => void onSave()} disabled={loading || saving} className="px-8">
-          {saving ? "Saving…" : "Save personalization"}
+          {saving ? "Saving…" : "Save agent settings"}
         </KorakuButton>
       </div>
     </section>
