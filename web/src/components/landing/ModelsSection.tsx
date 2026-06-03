@@ -51,7 +51,7 @@ export function ModelsSection() {
   }, []);
 
   return (
-    <section id="models" className={`${LANDING_PAGE_BG} ${LANDING_SECTION}`}>
+    <section id="models" className={`scroll-mt-24 ${LANDING_PAGE_BG} ${LANDING_SECTION}`}>
       <div className={LANDING_CONTAINER}>
         <h2 className="landing-pixel-headline max-w-3xl text-[3.2rem] font-semibold leading-[0.95] tracking-[-0.06em] text-[#282522] sm:text-[4.8rem]">
           Multiple LLMs, one composer

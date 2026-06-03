@@ -13,7 +13,10 @@ export function LandingPage() {
   return (
     <div className={cn(landingFontClassName(), LANDING_PAGE_BG, "h-screen overflow-hidden text-[#282522] lg:grid lg:grid-cols-[240px_1fr]")}>
       <LeftRail />
-      <main className="h-screen min-w-0 overflow-y-auto overflow-x-hidden">
+      <main
+        data-landing-scroll
+        className="h-screen min-w-0 overflow-y-auto overflow-x-hidden"
+      >
         <TopNav />
         <HeroSection />
         <ChaptersSection />

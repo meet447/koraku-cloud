@@ -8,7 +8,7 @@ function integrationIcon(iconSlug: string, hex?: string) {
 
 export function ToolsGrid() {
   return (
-    <section id="integrations" className={`${LANDING_PAGE_BG} ${LANDING_SECTION}`}>
+    <section id="integrations" className={`scroll-mt-24 ${LANDING_PAGE_BG} ${LANDING_SECTION}`}>
       <div className={LANDING_CONTAINER}>
         <h2 className="landing-pixel-headline max-w-3xl text-[3.2rem] font-semibold leading-[0.95] tracking-[-0.06em] text-[#282522] sm:text-[4.8rem]">
           Connect the tools agents need

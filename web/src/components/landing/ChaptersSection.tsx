@@ -2,7 +2,7 @@ import { LANDING_CONTAINER, LANDING_PAGE_BG, LANDING_SECTION, LANDING_SURFACE } 
 
 export function ChaptersSection() {
   return (
-    <section id="how-to" className={`border-y border-black/10 ${LANDING_PAGE_BG} px-5 py-16 font-landing-sans sm:px-8 lg:py-20`}>
+    <section id="how-to" className={`scroll-mt-24 border-y border-black/10 ${LANDING_PAGE_BG} px-5 py-16 font-landing-sans sm:px-8 lg:py-20`}>
       <div className="mx-auto w-full max-w-[1120px]">
         <p className="mb-4 inline-block rounded bg-white px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 shadow-sm">
           Core Features
