@@ -23,6 +23,7 @@ import type { QueuedMessagePreview } from "@/components/MessageQueueBar";
 import { safeError } from "@/lib/safe-log";
 import { isDetachedRunsRedisCapable } from "@/lib/koraku-health";
 import { supabaseAuthHeaders } from "@/lib/supabase/fetch-auth";
+import { sortChatSessions } from "@/lib/chat-sessions";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 export type ChatMessage =
@@ -649,7 +650,7 @@ export function useKorakuChat() {
           }
         }
         messagesLoadedForThreadRef.current = new Set([focusId]);
-        setSessions(sessList);
+        setSessions(sortChatSessions(sessList));
         setActiveId(focusId);
         setMessagesBySession(msgMap);
         setHydrated(true);
@@ -777,7 +778,7 @@ export function useKorakuChat() {
     messagesLoadedForThreadRef.current.delete(sid);
     delete queuesRef.current[sid];
     setSessions((s) => {
-      const next = s.filter((x) => x.id !== sid);
+      const next = sortChatSessions(s.filter((x) => x.id !== sid));
       if (activeIdRef.current === sid && next.length > 0) {
         const fallbackId = next[0]!.id;
         setActiveId(fallbackId);
@@ -1359,7 +1360,7 @@ export function useKorakuChat() {
       if (persistenceEnabledRef.current) {
         draftSessionIdsRef.current.add(id);
       }
-      setSessions((s) => [{ id, title: "New chat" }, ...s]);
+      setSessions((s) => sortChatSessions([{ id, title: "New chat" }, ...s]));
       setMessagesBySession((m) => ({ ...m, [id]: [] }));
       setActiveId(id);
       setQueuedMessages([]);
@@ -1483,7 +1484,7 @@ export function useKorakuChat() {
           return;
         }
 
-        setSessions(nextSessions);
+        setSessions(sortChatSessions(nextSessions));
         setMessagesBySession((m) => {
           const n = { ...m };
           delete n[id];
@@ -1530,7 +1531,7 @@ export function useKorakuChat() {
         pinned: t.pinned,
       }));
       if (list.length === 0) return;
-      setSessions(list);
+      setSessions(sortChatSessions(list));
       for (const s of list) {
         serverChatSessionRef.current[s.id] = s.id;
       }

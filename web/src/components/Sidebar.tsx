@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import type { ChatSession } from "@/hooks/useKorakuChat";
+import { sortChatSessions } from "@/lib/chat-sessions";
 import { BrandMark } from "@/components/BrandMark";
 import { AccountMenu } from "@/components/AccountMenu";
 import { APP_BASE } from "@/lib/app-path";
@@ -71,8 +72,10 @@ export function Sidebar({
   const refreshingSet = new Set(refreshingSessionIds);
   const visibleSessions = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return sessions;
-    return sessions.filter((s) => s.title.toLowerCase().includes(q));
+    const list = q
+      ? sessions.filter((s) => s.title.toLowerCase().includes(q))
+      : sessions;
+    return sortChatSessions(list);
   }, [query, sessions]);
 
   return (

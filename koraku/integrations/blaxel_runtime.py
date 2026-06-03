@@ -265,6 +265,40 @@ async def ensure_imessage_sandbox(
     return sb, root
 
 
+def workspace_root_posix_for_channel(
+    user_id: str,
+    session_id: str,
+    channel: str,
+    settings: Settings,
+) -> str:
+    """Blaxel path for a thread — web chats use ``sessions/``, iMessage uses ``imessage/``."""
+    if (channel or "").strip().lower() == "imessage":
+        return imessage_workspace_root_posix(user_id, session_id, settings)
+    return session_workspace_root_posix(user_id, session_id, settings)
+
+
+async def ensure_session_workspace(
+    session_id: str,
+    settings: Settings,
+    *,
+    user_id: str | None = None,
+    channel: str | None = None,
+) -> tuple[Any, str]:
+    """Attach VM + mkdir for the correct per-thread folder (web or iMessage)."""
+    from koraku.integrations.supabase_external import resolve_thread_channel_sync
+
+    uid = (user_id or effective_cloud_user_id()).strip() or effective_cloud_user_id()
+    sid = (session_id or "").strip()
+    if not sid:
+        raise ValueError("session_id required")
+    ch = (channel or "").strip().lower() or resolve_thread_channel_sync(sid, uid)
+    if ch == "imessage":
+        return await ensure_imessage_sandbox(sid, settings, user_id=uid)
+    sb = await ensure_chat_sandbox(sid, settings, user_id=uid)
+    root = session_workspace_root_posix(uid, sid, settings)
+    return sb, root
+
+
 def get_cached_user_sandbox(user_id: str | None = None) -> Any | None:
     """Return a warm Blaxel VM handle for this user, if still within the cache TTL."""
     uid = (user_id or effective_cloud_user_id()).strip() or effective_cloud_user_id()

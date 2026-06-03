@@ -58,6 +58,40 @@ def get_phone_link_for_user_sync(user_id: str) -> dict[str, Any] | None:
     return rows[0] if isinstance(rows[0], dict) else None
 
 
+def resolve_thread_channel_sync(thread_id: str, user_id: str) -> str:
+    """Return ``web`` or ``imessage`` for workspace routing (defaults to ``web``)."""
+    tid = (thread_id or "").strip()
+    uid = (user_id or "").strip()
+    if not tid or not uid:
+        return "web"
+    if not supabase_chat_history_configured():
+        return "web"
+
+    link = get_phone_link_for_user_sync(uid)
+    if link and str(link.get("imessage_thread_id") or "").strip() == tid:
+        return "imessage"
+
+    try:
+        url = rest_url("/chat_thread")
+        params = {
+            "id": f"eq.{tid}",
+            "user_id": f"eq.{uid}",
+            "select": "channel",
+            "limit": "1",
+        }
+        r = get_http_client().get(url, headers=rest_headers(), params=params)
+        if r.status_code == 200:
+            rows = r.json()
+            if isinstance(rows, list) and rows:
+                ch = str((rows[0] or {}).get("channel") or "").strip().lower()
+                if ch == "imessage":
+                    return "imessage"
+    except Exception as e:
+        log.debug("resolve_thread_channel_sync failed thread=%s: %s", tid[:12], e)
+
+    return "web"
+
+
 def _upsert_thread_sync(*, thread_id: str, user_id: str, org_id: str) -> None:
     url = rest_url("/chat_thread")
     payload = {
