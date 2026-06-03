@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
-import { APP_BASE } from "@/lib/app-path";
 import { LANDING_CONTAINER, LANDING_PAGE_BG, LANDING_SECTION } from "@/components/landing/landing-layout";
 
 export function HeroSection() {
@@ -20,23 +19,41 @@ export function HeroSection() {
             Automate your work with natural language
           </h1>
           <p className="mt-6 max-w-[620px] text-base font-medium leading-7 text-[#252525] sm:text-[17px]">
-            Koraku plugs into your existing tools, gives agents their own desktop,
-            routes tasks across models, and organizes workflows you already understand.
+            Koraku is your AI workspace in the cloud — connect Gmail, Notion, Linear, and more, run
+            agents with approval gates, and pick up on web or iMessage.
           </p>
+          <ul className="mt-5 max-w-[620px] space-y-2 text-sm font-medium text-stone-600">
+            <li className="flex gap-2">
+              <span className="text-orange-600" aria-hidden>
+                ✦
+              </span>
+              Hosted workspace and chat history in your account
+            </li>
+            <li className="flex gap-2">
+              <span className="text-orange-600" aria-hidden>
+                ✦
+              </span>
+              35+ app connections with ask-before-send on sensitive actions
+            </li>
+            <li className="flex gap-2">
+              <span className="text-orange-600" aria-hidden>
+                ✦
+              </span>
+              Pick the right model per task in one composer
+            </li>
+          </ul>
           <div className="mt-8 flex flex-wrap items-center gap-5">
             <Link
-              href={APP_BASE}
+              href="/sign-in"
               className="inline-flex h-12 items-center justify-center rounded-md bg-[#171717] px-6 text-sm font-semibold text-white shadow-[0_8px_18px_rgba(0,0,0,0.2)] transition hover:-translate-y-0.5"
             >
-              Open app
+              Start free
             </Link>
             <Link
-              href="https://github.com/meet447/koraku-cloud#readme"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="#how-it-works"
               className="inline-flex h-12 items-center justify-center gap-2 text-sm font-semibold text-stone-700 transition hover:text-stone-950"
             >
-              Watch launch video
+              See how it works
               <span aria-hidden>›</span>
             </Link>
           </div>

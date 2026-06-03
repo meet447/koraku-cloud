@@ -1,8 +1,9 @@
+import { featureDescriptions } from "@/components/landing/landing-data";
 import { LANDING_CONTAINER, LANDING_PAGE_BG, LANDING_SECTION, LANDING_SURFACE } from "@/components/landing/landing-layout";
 
 export function ChaptersSection() {
   return (
-    <section id="how-to" className={`scroll-mt-24 border-y border-black/10 ${LANDING_PAGE_BG} px-5 py-16 font-landing-sans sm:px-8 lg:py-20`}>
+    <section id="features" className={`scroll-mt-24 border-y border-black/10 ${LANDING_PAGE_BG} px-5 py-16 font-landing-sans sm:px-8 lg:py-20`}>
       <div className="mx-auto w-full max-w-[1120px]">
         <p className="mb-4 inline-block rounded bg-white px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500 shadow-sm">
           Core Features
@@ -11,11 +12,12 @@ export function ChaptersSection() {
           Built for agent work that feels native
         </h2>
         <p className="mt-4 max-w-2xl text-base font-medium leading-7 text-stone-500 sm:text-[17px]">
-          Everything your agents need to go from personal context to finished workspace output.
+          Everything your agents need to go from personal context to finished workspace output — all
+          in your Koraku account, ready when you sign in.
         </p>
 
         <div className="mt-10 grid grid-cols-1 gap-5 min-[600px]:grid-cols-2 min-[900px]:grid-cols-3">
-          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex min-min-h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div
               className="absolute inset-0 opacity-35"
               style={{
@@ -47,12 +49,10 @@ export function ChaptersSection() {
             >
               <path d="M4 2L20 11L11 13L9 22L4 2Z" />
             </svg>
-            <h3 className="relative z-[2] border-t border-black/10 bg-white/60 p-6 text-[1.05rem] font-semibold text-slate-800 backdrop-blur-sm">
-              Smart Agent Instructions
-            </h3>
+            <FeatureFooter title="Smart Agent Instructions" />
           </article>
 
-          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div
               className="absolute inset-x-0 bottom-[70px] top-0 bg-[#f7f7f7] px-6 py-7"
               style={{
@@ -89,12 +89,10 @@ export function ChaptersSection() {
                 </span>
               </div>
             </div>
-            <h3 className="relative z-[2] border-t border-black/10 bg-white/60 p-6 text-[1.05rem] font-semibold text-slate-800 backdrop-blur-sm">
-              Connected Apps
-            </h3>
+            <FeatureFooter title="Connected Apps" />
           </article>
 
-          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div className="landing-mesh-overlay pointer-events-none absolute inset-0" aria-hidden />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -120,12 +118,10 @@ export function ChaptersSection() {
               </svg>
               Search workspace
             </div>
-            <h3 className="relative z-[2] border-t border-black/10 bg-white/60 p-6 text-[1.05rem] font-semibold text-slate-800 backdrop-blur-sm">
-              Agent Workspace Library
-            </h3>
+            <FeatureFooter title="Agent Workspace Library" />
           </article>
 
-          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div
               className="absolute inset-0 opacity-35"
               style={{
@@ -162,12 +158,10 @@ export function ChaptersSection() {
                 memory
               </span>
             </div>
-            <h3 className="relative z-[2] border-t border-black/10 bg-white/60 p-6 text-[1.05rem] font-semibold text-slate-800 backdrop-blur-sm">
-              Learned Memory
-            </h3>
+            <FeatureFooter title="Learned Memory" />
           </article>
 
-          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div className="absolute inset-x-0 bottom-[70px] top-0 bg-[#f7f7f7] px-6 py-5">
               <div className="mx-auto max-w-[210px] overflow-hidden rounded-[32px] border-[5px] border-stone-900 bg-stone-900 shadow-[8px_8px_0_rgba(0,0,0,0.1)]">
                 {/* Status bar */}
@@ -223,12 +217,10 @@ export function ChaptersSection() {
                 linked
               </span>
             </div>
-            <h3 className="relative z-[2] border-t border-black/10 bg-white/60 p-6 text-[1.05rem] font-semibold text-slate-800 backdrop-blur-sm">
-              iMessage and Voice Notes
-            </h3>
+            <FeatureFooter title="iMessage and Voice Notes" />
           </article>
 
-          <article className="relative flex h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
+          <article className="relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div
               className="absolute inset-0 opacity-35"
               style={{
@@ -259,13 +251,20 @@ export function ChaptersSection() {
                 Profile text is injected into every chat so agents keep your stable context.
               </p>
             </div>
-            <h3 className="relative z-[2] border-t border-black/10 bg-white/60 p-6 text-[1.05rem] font-semibold text-slate-800 backdrop-blur-sm">
-              Personalization Layer
-            </h3>
+            <FeatureFooter title="Personalization Layer" />
           </article>
         </div>
       </div>
     </section>
+  );
+}
+
+function FeatureFooter({ title }: { title: keyof typeof featureDescriptions }) {
+  return (
+    <div className="relative z-[2] border-t border-black/10 bg-white/60 p-6 backdrop-blur-sm">
+      <h3 className="text-[1.05rem] font-semibold text-slate-800">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-stone-500">{featureDescriptions[title]}</p>
+    </div>
   );
 }
 

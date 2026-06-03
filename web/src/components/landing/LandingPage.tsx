@@ -1,11 +1,16 @@
+import { AutomationsSection } from "@/components/landing/AutomationsSection";
 import { ChaptersSection } from "@/components/landing/ChaptersSection";
+import { FinalCtaSection } from "@/components/landing/FinalCtaSection";
 import { HeroSection } from "@/components/landing/HeroSection";
+import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 import { landingFontClassName } from "@/components/landing/LandingShell";
 import { LeftRail } from "@/components/landing/LeftRail";
 import { ModelsSection } from "@/components/landing/ModelsSection";
 import { PixelFooter } from "@/components/landing/PixelFooter";
 import { ToolsGrid } from "@/components/landing/ToolsGrid";
 import { TopNav } from "@/components/landing/TopNav";
+import { TrustSection } from "@/components/landing/TrustSection";
+import { UseCasesSection } from "@/components/landing/UseCasesSection";
 import { cn } from "@/lib/cn";
 import { LANDING_PAGE_BG } from "@/components/landing/landing-layout";
 
@@ -19,9 +24,14 @@ export function LandingPage() {
       >
         <TopNav />
         <HeroSection />
+        <HowItWorksSection />
+        <UseCasesSection />
         <ChaptersSection />
+        <AutomationsSection />
         <ModelsSection />
         <ToolsGrid />
+        <TrustSection />
+        <FinalCtaSection />
         <PixelFooter />
       </main>
     </div>

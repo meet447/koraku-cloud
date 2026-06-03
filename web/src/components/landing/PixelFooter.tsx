@@ -13,9 +13,9 @@ const footerColumns = [
     title: "Platform",
     links: [
       { label: "Open app", href: APP_BASE },
+      { label: "How it works", href: "#how-it-works" },
       { label: "Models", href: "#models" },
       { label: "Integrations", href: "#integrations" },
-      { label: "Documentation", href: "https://github.com/meet447/koraku-cloud#readme", external: true },
     ],
   },
   {

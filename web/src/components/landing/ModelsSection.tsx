@@ -3,6 +3,7 @@
 import { Cpu } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LANDING_CONTAINER, LANDING_FOOTER_BG, LANDING_PAGE_BG, LANDING_SECTION, LANDING_SURFACE } from "@/components/landing/landing-layout";
+import { modelUseCases } from "@/components/landing/landing-data";
 import {
   fetchLandingLlmModels,
   type LandingLlmModel,
@@ -57,8 +58,8 @@ export function ModelsSection() {
           Multiple LLMs, one composer
         </h2>
         <p className="mt-4 max-w-2xl text-base leading-7 text-stone-500 sm:text-[17px]">
-          Switch models per task without leaving chat — fast summaries, deep reasoning,
-          and hosted defaults ready out of the box.
+          Switch models per message in the composer — fast summaries, deep reasoning, and defaults
+          included with your Koraku plan.
         </p>
 
         <div className="mt-10 grid grid-cols-2 gap-4 rounded-xl border border-black/10 bg-white p-4 shadow-[10px_10px_0_rgba(0,0,0,0.04)] lg:grid-cols-4">
@@ -81,6 +82,18 @@ export function ModelsSection() {
                   <h3 className="mt-5 text-base font-semibold text-stone-900">{model.label}</h3>
                 </article>
               ))}
+        </div>
+
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
+          {modelUseCases.map((item) => (
+            <div
+              key={item.label}
+              className={`rounded-lg border border-black/10 ${LANDING_SURFACE} px-5 py-5 shadow-[6px_6px_0_rgba(0,0,0,0.03)]`}
+            >
+              <p className="text-sm font-semibold text-stone-900">{item.label}</p>
+              <p className="mt-2 text-sm leading-relaxed text-stone-500">{item.detail}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>

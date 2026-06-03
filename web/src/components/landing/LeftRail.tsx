@@ -73,7 +73,7 @@ export function LeftRail() {
                 href={item.href}
                 aria-current={isActive ? "location" : undefined}
                 className={cn(
-                  "rounded-md px-3 py-2 text-lg font-semibold tracking-[-0.02em] transition",
+                  "rounded-md px-3 py-2 text-[15px] font-semibold leading-snug tracking-[-0.02em] transition",
                   isActive
                     ? "bg-white text-stone-900 shadow-[4px_4px_0_rgba(0,0,0,0.04)] ring-1 ring-black/10"
                     : "text-stone-400 hover:text-stone-900",
