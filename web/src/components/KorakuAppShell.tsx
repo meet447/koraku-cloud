@@ -4,12 +4,65 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { KorakuChatProvider } from "@/context/KorakuChatContext";
 import { useKorakuChat } from "@/hooks/useKorakuChat";
-import { APP_BASE, isAppChatRoute } from "@/lib/app-path";
+import {
+  APP_BASE,
+  isAppChatRoute,
+  isAppRoute,
+  isOnboardingRoute,
+  ONBOARDING_PATH,
+} from "@/lib/app-path";
+import { isOnboardingComplete } from "@/lib/onboarding";
 import { AppChrome } from "@/components/AppChrome";
 import { ChatConversation } from "@/components/ChatApp";
 import { SetupStatusBanner } from "@/components/SetupStatusBanner";
 
-export function KorakuAppShell({ children }: { children: ReactNode }) {
+function OnboardingGate({ children }: { children: ReactNode }) {
+  const pathname = usePathname() || "";
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(true);
+  }, []);
+
+  const complete = isOnboardingComplete();
+  const onOnboarding = isOnboardingRoute(pathname);
+  const inApp = isAppRoute(pathname);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (onOnboarding && complete) {
+      router.replace(APP_BASE);
+      return;
+    }
+    if (inApp && !onOnboarding && !complete) {
+      router.replace(ONBOARDING_PATH);
+    }
+  }, [ready, onOnboarding, inApp, complete, router]);
+
+  if (!ready) {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
+        Loading…
+      </div>
+    );
+  }
+
+  if (onOnboarding) {
+    if (complete) {
+      return null;
+    }
+    return <div className="h-[100dvh] overflow-y-auto bg-white text-koraku-ink">{children}</div>;
+  }
+
+  if (inApp && !complete) {
+    return null;
+  }
+
+  return <>{children}</>;
+}
+
+function ProductShell({ children }: { children: ReactNode }) {
   const chat = useKorakuChat();
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname() || "";
@@ -79,5 +132,16 @@ export function KorakuAppShell({ children }: { children: ReactNode }) {
         {isAppChatRoute(pathname) ? <ChatConversation /> : children}
       </AppChrome>
     </KorakuChatProvider>
+  );
+}
+
+export function KorakuAppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname() || "";
+  const onOnboarding = isOnboardingRoute(pathname);
+
+  return (
+    <OnboardingGate>
+      {onOnboarding ? children : <ProductShell>{children}</ProductShell>}
+    </OnboardingGate>
   );
 }
