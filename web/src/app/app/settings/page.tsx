@@ -131,10 +131,19 @@ export default function SettingsPage() {
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link href="/privacy" className="text-sm font-bold text-orange-700 underline">
-                Privacy
+                Privacy Policy
               </Link>
               <Link href="/terms" className="text-sm font-bold text-orange-700 underline">
                 Terms
+              </Link>
+              <Link href="/security" className="text-sm font-bold text-orange-700 underline">
+                Security
+              </Link>
+              <Link href="/cookies" className="text-sm font-bold text-orange-700 underline">
+                Cookies
+              </Link>
+              <Link href="/contact" className="text-sm font-bold text-orange-700 underline">
+                Contact
               </Link>
             </div>
           </section>

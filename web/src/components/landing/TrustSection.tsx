@@ -27,9 +27,17 @@ export function TrustSection() {
               <p className="mt-2 text-[15px] leading-relaxed text-stone-500">
                 {point.title === "Clear policies" ? (
                   <>
-                    See how Koraku processes and stores data in our{" "}
+                    See our{" "}
                     <Link href="/privacy" className="font-semibold text-stone-700 underline-offset-2 hover:underline">
-                      privacy policy
+                      Privacy Policy
+                    </Link>
+                    ,{" "}
+                    <Link href="/security" className="font-semibold text-stone-700 underline-offset-2 hover:underline">
+                      Security
+                    </Link>
+                    , and{" "}
+                    <Link href="/terms" className="font-semibold text-stone-700 underline-offset-2 hover:underline">
+                      Terms
                     </Link>
                     .
                   </>

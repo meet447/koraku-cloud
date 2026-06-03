@@ -2,6 +2,7 @@ import Link from "next/link";
 import { navItems } from "@/components/landing/landing-data";
 import { LANDING_CONTAINER, LANDING_FOOTER_BG } from "@/components/landing/landing-layout";
 import { APP_BASE } from "@/lib/app-path";
+import { legalPages } from "@/lib/legal-pages";
 import { cn } from "@/lib/cn";
 
 const footerColumns = [
@@ -20,14 +21,14 @@ const footerColumns = [
   },
   {
     title: "Account",
-    links: [{ label: "Sign in", href: "/sign-in" }],
+    links: [
+      { label: "Sign in", href: "/sign-in" },
+      { label: "Contact", href: "/contact" },
+    ],
   },
   {
     title: "Legal",
-    links: [
-      { label: "Privacy", href: "/privacy" },
-      { label: "Terms", href: "/terms" },
-    ],
+    links: legalPages.map((page) => ({ label: page.label, href: page.href })),
   },
 ] as const;
 
@@ -76,21 +77,12 @@ export function PixelFooter() {
 
         <div className="mt-6 flex flex-col gap-3 border-t border-black/10 pt-6 text-xs text-stone-400 sm:flex-row sm:items-center sm:justify-between">
           <p>Koraku © 2026</p>
-          <div className="flex gap-5">
-            <Link href="/privacy" className="transition hover:text-stone-600">
-              Privacy
-            </Link>
-            <Link href="/terms" className="transition hover:text-stone-600">
-              Terms
-            </Link>
-            <Link
-              href="https://github.com/meet447/koraku-cloud"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="transition hover:text-stone-600"
-            >
-              GitHub
-            </Link>
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {legalPages.map((page) => (
+              <Link key={page.slug} href={page.href} className="transition hover:text-stone-600">
+                {page.label}
+              </Link>
+            ))}
           </div>
         </div>
       </div>

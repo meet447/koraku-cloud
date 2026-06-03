@@ -24,7 +24,18 @@ export function KorakuAuthShell({
         {children}
       </div>
 
-      <p className="mt-6 text-center text-sm text-stone-400 lg:hidden">
+      <p className="mt-6 text-center text-xs leading-relaxed text-stone-400">
+        By continuing, you agree to our{" "}
+        <Link href="/terms" className="font-medium text-stone-600 underline-offset-2 hover:underline">
+          Terms of Service
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="font-medium text-stone-600 underline-offset-2 hover:underline">
+          Privacy Policy
+        </Link>
+        .
+      </p>
+      <p className="mt-3 text-center text-sm text-stone-400 lg:hidden">
         <Link href="/" className="font-medium text-stone-600 transition hover:text-stone-900">
           ← Back to home
         </Link>
