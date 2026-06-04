@@ -7,11 +7,11 @@ import { applyTenantHeadersFromCookies } from "@/lib/tenant/server";
  * Use in Route Handlers that proxy to the Python API so the backend can verify the user
  * even when the browser request omits ``Authorization``.
  */
-export async function applySupabaseBearerFromCookies(headers: Headers): Promise<void> {
+export async function applySupabaseBearerFromCookies(headers: Headers): Promise<boolean> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) {
-    return;
+    return false;
   }
 
   const cookieStore = await cookies();
@@ -33,10 +33,23 @@ export async function applySupabaseBearerFromCookies(headers: Headers): Promise<
   });
 
   const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  if (error || !user) {
+    return false;
+  }
+  const {
     data: { session },
   } = await supabase.auth.getSession();
   if (session?.access_token) {
     headers.set("Authorization", `Bearer ${session.access_token}`);
   }
   await applyTenantHeadersFromCookies(headers);
+  return Boolean(session?.access_token);
+}
+
+/** JSON 401 when Supabase is configured but the caller has no valid session. */
+export function proxyUnauthorizedResponse(): Response {
+  return Response.json({ detail: "Sign in required." }, { status: 401 });
 }

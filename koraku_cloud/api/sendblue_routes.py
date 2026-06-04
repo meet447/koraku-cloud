@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from koraku.channels.imessage_runner import claim_message_handle, run_imessage_turn
 from koraku.channels.inbound_media import build_imessage_user_text
 from koraku.core.config import settings
+from koraku.core.product_hooks import product_hooks_active
 from koraku.core.request_auth import resolve_request_auth
 from koraku.integrations import sendblue_client
 from koraku_cloud.integrations.supabase_external import (
@@ -127,7 +128,10 @@ async def sendblue_webhook(request: Request) -> dict[str, Any]:
 
 
 @router.get("/status")
-async def sendblue_status() -> dict[str, Any]:
+async def sendblue_status(request: Request) -> dict[str, Any]:
+    resolved = resolve_request_auth(request)
+    if settings.require_auth_for_chat or product_hooks_active():
+        resolved.require_chat_access()
     return {
         "configured": sendblue_configured(),
         "from_number": (settings.sendblue_from_number or "").strip() or None,

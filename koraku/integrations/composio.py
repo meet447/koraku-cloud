@@ -120,14 +120,29 @@ def reset_composio_request_user(token: Token | None) -> None:
 
 
 def user_id() -> str:
-    """Composio entity id: per-request JWT user, else env ``COMPOSIO_USER_ID`` / settings fallback."""
+    """
+    Composio entity id: per-request JWT user (``set_composio_request_user``), else explicit
+    ``COMPOSIO_USER_ID`` / settings for single-tenant embeds.
+
+    When Composio is configured, does not fall back to a shared ``koraku-local`` id — callers
+    must bind the authenticated user or set ``COMPOSIO_USER_ID`` intentionally.
+    """
     ctx = _composio_request_user.get()
     if ctx and ctx.strip():
         return ctx.strip()
-    return (
-        (settings.composio_user_id or os.environ.get("COMPOSIO_USER_ID") or "koraku-local").strip()
-        or "koraku-local"
+    from_env = (os.environ.get("COMPOSIO_USER_ID") or "").strip()
+    from_settings = (settings.composio_user_id or "").strip()
+    explicit = from_env or (
+        from_settings if from_settings and from_settings != "koraku-local" else ""
     )
+    if is_configured():
+        if explicit:
+            return explicit
+        raise RuntimeError(
+            "Composio requires a per-request user id. "
+            "Use set_composio_request_user(auth_sub) or set COMPOSIO_USER_ID for single-tenant mode."
+        )
+    return explicit or "koraku-local"
 
 
 def list_connections_summary() -> list[dict[str, Any]]:

@@ -1,5 +1,8 @@
 import type { NextRequest } from "next/server";
-import { applySupabaseBearerFromCookies } from "@/lib/supabase/proxy-auth";
+import {
+  applySupabaseBearerFromCookies,
+  proxyUnauthorizedResponse,
+} from "@/lib/supabase/proxy-auth";
 import {
   KORAKU_SSE_RESPONSE_HEADERS,
   safeUpstreamFetch,
@@ -21,33 +24,44 @@ const HOP_BY_HOP = new Set([
   "content-length",
 ]);
 
+/** Never forward browser cookies to the Python API (session is Bearer-only). */
+const STRIP_INBOUND = new Set(["cookie", "authorization"]);
+
 type UpstreamKind = "json" | "sse" | "body";
 
 /** Copy safe inbound headers from the browser request (hop-by-hop headers omitted). */
 export function copyInboundHeaders(req: NextRequest, target: Headers): void {
   req.headers.forEach((value, key) => {
-    if (!HOP_BY_HOP.has(key.toLowerCase())) {
-      target.set(key, value);
+    const lower = key.toLowerCase();
+    if (HOP_BY_HOP.has(lower) || STRIP_INBOUND.has(lower)) {
+      return;
     }
+    target.set(key, value);
   });
 }
 
-/** Auth + org (cookies) + optional client Authorization / X-Request-ID. */
+export type KorakuProxyAuthMode = "required" | "optional";
+
+/** Auth + org (cookies) + optional client X-Request-ID (Bearer from session only). */
 export async function buildKorakuProxyHeaders(
   req: NextRequest,
   extra?: HeadersInit,
-): Promise<Headers> {
+  authMode: KorakuProxyAuthMode = "required",
+): Promise<Headers | Response> {
   const headers = new Headers();
   copyInboundHeaders(req, headers);
-  const auth = req.headers.get("authorization");
-  if (auth) {
-    headers.set("Authorization", auth);
-  }
   const rid = req.headers.get("x-request-id");
   if (rid) {
     headers.set("X-Request-ID", rid);
   }
-  await applySupabaseBearerFromCookies(headers);
+  const hasSession = await applySupabaseBearerFromCookies(headers);
+  const supabaseConfigured = Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim(),
+  );
+  if (authMode === "required" && supabaseConfigured && !hasSession) {
+    return proxyUnauthorizedResponse();
+  }
   if (extra) {
     new Headers(extra).forEach((value, key) => headers.set(key, value));
   }
@@ -105,8 +119,12 @@ export function passthroughUpstreamResponse(upstream: Response, kind: UpstreamKi
 export async function proxyKorakuBackend(
   req: NextRequest,
   upstreamUrl: string,
+  authMode: KorakuProxyAuthMode = "required",
 ): Promise<Response> {
-  const headers = await buildKorakuProxyHeaders(req);
+  const headers = await buildKorakuProxyHeaders(req, undefined, authMode);
+  if (headers instanceof Response) {
+    return headers;
+  }
 
   const init: RequestInit = {
     method: req.method,
@@ -138,8 +156,12 @@ export async function proxyKorakuSse(
     extraHeaders?: HeadersInit;
     mutateHeaders?: (headers: Headers) => void;
   },
+  authMode: KorakuProxyAuthMode = "required",
 ): Promise<Response> {
-  const headers = await buildKorakuProxyHeaders(req, { Accept: "text/event-stream" });
+  const headers = await buildKorakuProxyHeaders(req, { Accept: "text/event-stream" }, authMode);
+  if (headers instanceof Response) {
+    return headers;
+  }
   if (init.extraHeaders) {
     new Headers(init.extraHeaders).forEach((value, key) => headers.set(key, value));
   }
@@ -163,13 +185,21 @@ export async function proxyKorakuJson(
   req: NextRequest,
   upstreamUrl: string,
   init: { method: "GET" | "POST"; body?: string },
+  authMode: KorakuProxyAuthMode = "required",
 ): Promise<Response> {
-  const headers = await buildKorakuProxyHeaders(req, {
-    Accept: "application/json",
-    ...(init.body
-      ? { "Content-Type": req.headers.get("content-type") || "application/json" }
-      : {}),
-  });
+  const headers = await buildKorakuProxyHeaders(
+    req,
+    {
+      Accept: "application/json",
+      ...(init.body
+        ? { "Content-Type": req.headers.get("content-type") || "application/json" }
+        : {}),
+    },
+    authMode,
+  );
+  if (headers instanceof Response) {
+    return headers;
+  }
   const upstream = await safeUpstreamFetch(
     upstreamUrl,
     {

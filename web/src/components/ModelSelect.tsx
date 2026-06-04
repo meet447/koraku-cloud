@@ -139,7 +139,8 @@ export function ModelSelect({
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch("/koraku-api/api/chat-models");
+        const { korakuFetch } = await import("@/lib/koraku-fetch");
+        const r = await korakuFetch("/koraku-api/api/chat-models", { method: "GET" });
         const d = (await r.json()) as ChatModelsResponse;
         const next: ModelOption[] = [];
         const blocks = d.providers || [];

@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from koraku.core.product_hooks import health_detail_extras, product_hooks_active, runtime_mode_label
+from koraku.core.secret_compare import secrets_equal
 from koraku.integrations import composio as composio_runtime
 from koraku.integrations.blaxel_runtime import cloud_blaxel_block_reason
 from koraku.core import redis_client
@@ -25,7 +26,7 @@ def _health_detail_authorized(authorization: str | None, x_health_token: str | N
         token = raw.strip()
         if token.lower().startswith("bearer "):
             token = token[7:].strip()
-        if token == expected:
+        if secrets_equal(expected, token):
             return True
     return False
 

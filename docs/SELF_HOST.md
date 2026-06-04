@@ -76,7 +76,7 @@ npm run dev             # :3000
 
 Set `KORAKU_BACKEND_URL=http://127.0.0.1:8000` in `web/.env.local` if needed.
 
-The Next.js app proxies authenticated API traffic through **`/koraku-api/*` route handlers** (SSE and JSON). A few paths still rewrite directly (`/koraku-api/health`, `/koraku-api/api/chat-models`). See `web/src/lib/koraku-backend-proxy.ts` and `web/src/lib/koraku-api-routes.ts`.
+The Next.js app proxies authenticated API traffic through **`/koraku-api/*` route handlers** (SSE and JSON). Only **`/koraku-api/health`** rewrites directly (public liveness). All other backend calls go through handlers that attach Supabase Bearer from cookies and return **401** when there is no session. See `web/src/lib/koraku-backend-proxy.ts` and `web/src/lib/koraku-api-routes.ts`.
 
 ## Environment highlights
 
@@ -98,9 +98,35 @@ Before inviting real users:
 
 ### Deployment shape
 
+- **Cloud product:** start with `koraku_cloud.app:app` and `bootstrap_cloud()` (not `KORAKU_SERVER_APP=sdk`). SDK-only mode is for local embed/demo; it disables Supabase product hooks and opens chat when `REQUIRE_AUTH_FOR_CHAT=false`.
 - Run the Python API as a long-lived process (automations use an in-process scheduler; serverless-only API will not run cron jobs reliably).
 - Prefer keeping the API private behind the Next.js BFF. If the API is public, set `CORS_ALLOWED_ORIGINS` to your web origin only and keep `REQUIRE_AUTH_FOR_CHAT=true`.
 - **Single worker** on small VMs (~1 GB RAM). For multiple workers, set `REDIS_URL`, `SESSION_STORE_BACKEND=redis`, and use Redis detached runs (`DETACHED_RUN_STORE_BACKEND=auto`) or sticky routing for `/runs*`.
+
+### Auth and tenancy
+
+- `REQUIRE_AUTH_FOR_CHAT=true` and `AUTH_BACKEND=supabase` on any internet-facing API.
+- `SUPABASE_JWT_SECRET` (HS256) or JWKS for asymmetric project JWTs.
+- Org-scoped routes require a valid org membership (`X-Koraku-Org-Id` from the web cookie after sign-in).
+- `GET /api/chat-models` requires the same auth as chat when `REQUIRE_AUTH_FOR_CHAT=true` (demo mode with auth off is local-only).
+
+### Blaxel and file tools (Cloud)
+
+- For **Sandbox** / cloud execution: `BLAXEL_CLOUD_SANDBOX_ENABLED=true`, `BL_API_KEY`, `BL_WORKSPACE`, and `DEFAULT_EXECUTION_TARGET=cloud`.
+- Without Blaxel, cloud runs must not use host `Read`/`Write`/`Bash` on the API machine — file tools are blocked when Blaxel is required but unavailable.
+
+### Composio
+
+- Set `COMPOSIO_API_KEY` only when using Connections / automations with Composio triggers.
+- Per-user Composio identity comes from the signed-in JWT (`sub`). For single-tenant embeds, set explicit `COMPOSIO_USER_ID` — do not rely on the shared `koraku-local` fallback when Composio is configured.
+- `/api/composio/*` requires a session when `REQUIRE_AUTH_FOR_CHAT=true` or Cloud product hooks are active (static catalog browse without auth is local demo only).
+
+### Webhooks and secrets
+
+- Automation event webhooks: use `X-Koraku-Webhook-Token` or `?token=`; rotate on leak.
+- `SENDBLUE_WEBHOOK_SECRET` when SendBlue is enabled (fail-closed if missing).
+- `HEALTH_DETAIL_TOKEN` for `GET /health/detail` (never expose in the browser).
+- Service role key (`SUPABASE_SERVICE_ROLE_KEY`) is tier-0 — API host compromise equals database access.
 
 ### Required production env
 
@@ -111,9 +137,9 @@ Before inviting real users:
 ### Release verification
 
 - Run `cd web && npm run db:migrate`.
-- Check `GET /health` (UI) and `GET /health/detail` with your token (ops).
+- Check `GET /health` (UI) and `GET /health/detail` with your token (ops); Cloud should show `runtime: cloud` in detail when product hooks are registered.
 - Exercise sign-up, chat, memory save, connections, automation create/run, data export, account deletion.
-- Confirm unauthenticated `POST /stream` and `POST /runs` return `401`.
+- Confirm unauthenticated `POST /stream`, `POST /runs`, and `GET /api/chat-models` return `401` (with auth required).
 - Confirm logs redact secrets (`koraku/core/redact.py`).
 
 ### Degraded modes

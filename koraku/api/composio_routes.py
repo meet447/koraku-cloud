@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from koraku.core.auth import auth_error_detail, verify_request_auth
+from koraku.core.config import settings
+from koraku.core.product_hooks import product_hooks_active
 from koraku.integrations import composio as composio_runtime
 from koraku.workspace.paths import workspace_dir
 
@@ -22,11 +24,16 @@ async def _composio_request_scope(
     authorization: str | None = Header(None),
 ) -> AsyncGenerator[None, None]:
     """
-    When Composio is configured, require a valid Supabase access token and scope all SDK calls
-    to that user's ``sub``. When Composio is off, skip auth so the UI can show browse-only state.
+    Require auth when Composio is on, Cloud product hooks are active, or chat auth is required.
+    Local SDK demo (auth off, no product hooks) may browse the static catalog without a session.
     """
     composio_runtime.configure_workspace_cache(workspace_dir())
-    if not composio_runtime.is_configured():
+    must_auth = (
+        composio_runtime.is_configured()
+        or product_hooks_active()
+        or settings.require_auth_for_chat
+    )
+    if not must_auth:
         yield
         return
     jwt_res = verify_request_auth(authorization)

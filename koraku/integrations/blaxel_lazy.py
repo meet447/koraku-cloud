@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import logging
+from collections import OrderedDict
 
 from koraku.agent.blaxel_scope import bind_blaxel_sandbox, get_active_blaxel_sandbox
 from koraku.core.config import settings
@@ -24,7 +25,8 @@ _lazy_session_root: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "koraku_lazy_blaxel_session_root",
     default=None,
 )
-_ensure_locks: dict[str, asyncio.Lock] = {}
+_ENSURE_LOCK_MAX = 512
+_ensure_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
 
 
 def set_lazy_blaxel_session(
@@ -84,9 +86,13 @@ async def cloud_file_tool_block_reason(*, try_ensure: bool = False) -> str | Non
 def _lock_for_user() -> asyncio.Lock:
     key = effective_cloud_user_id()
     lock = _ensure_locks.get(key)
-    if lock is None:
-        lock = asyncio.Lock()
-        _ensure_locks[key] = lock
+    if lock is not None:
+        _ensure_locks.move_to_end(key)
+        return lock
+    while len(_ensure_locks) >= _ENSURE_LOCK_MAX:
+        _ensure_locks.popitem(last=False)
+    lock = asyncio.Lock()
+    _ensure_locks[key] = lock
     return lock
 
 

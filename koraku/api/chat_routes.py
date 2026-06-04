@@ -401,8 +401,10 @@ async def _stream_agent_sse(
 
 
 @router.get("/api/chat-models")
-async def chat_models():
+async def chat_models(request: Request):
     """Model IDs for the chat UI dropdown (per provider + optional CHAT_MODEL_OPTIONS)."""
+    resolved = resolve_request_auth(request)
+    resolved.require_chat_access()
     return ui_chat_models()
 
 

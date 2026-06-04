@@ -6,6 +6,7 @@
  */
 import type { NextRequest } from "next/server";
 import {
+  type KorakuProxyAuthMode,
   korakuUpstreamUrl,
   proxyKorakuBackend,
   proxyKorakuJson,
@@ -24,11 +25,14 @@ type CatchAllProxyConfig<M extends HttpMethod = HttpMethod> = {
   upstreamPath: string;
   methods: readonly M[];
   maxDuration?: number;
+  /** ``optional`` for inbound webhooks; default ``required`` (401 without Supabase session). */
+  authMode?: KorakuProxyAuthMode;
 };
 
 type FixedProxyConfig<M extends HttpMethod = HttpMethod> = {
   upstreamPath: string;
   methods: readonly M[];
+  authMode?: KorakuProxyAuthMode;
 };
 
 type CatchAllProxyBundle<M extends HttpMethod> = {
@@ -42,18 +46,21 @@ type FixedProxyBundle<M extends HttpMethod> = {
   dynamic: typeof dynamic;
 } & Record<M, FixedHandler>;
 
-function createCatchAllHandler(upstreamPath: string): CatchAllHandler {
+function createCatchAllHandler(
+  upstreamPath: string,
+  authMode: KorakuProxyAuthMode = "required",
+): CatchAllHandler {
   return async function handle(req: NextRequest, ctx: CatchAllCtx): Promise<Response> {
     const { path } = await ctx.params;
     const url = korakuUpstreamUrl(upstreamPath, path, req.nextUrl.search);
-    return proxyKorakuBackend(req, url);
+    return proxyKorakuBackend(req, url, authMode);
   };
 }
 
 export function createKorakuCatchAllProxy<M extends HttpMethod>(
   config: CatchAllProxyConfig<M>,
 ): CatchAllProxyBundle<M> {
-  const handle = createCatchAllHandler(config.upstreamPath);
+  const handle = createCatchAllHandler(config.upstreamPath, config.authMode ?? "required");
   const methodHandlers = Object.fromEntries(
     config.methods.map((method) => [method, handle]),
   ) as Pick<CatchAllProxyBundle<M>, M>;
@@ -65,17 +72,20 @@ export function createKorakuCatchAllProxy<M extends HttpMethod>(
   };
 }
 
-function createFixedHandler(upstreamPath: string): FixedHandler {
+function createFixedHandler(
+  upstreamPath: string,
+  authMode: KorakuProxyAuthMode = "required",
+): FixedHandler {
   return async function handle(req: NextRequest): Promise<Response> {
     const url = korakuUpstreamUrl(upstreamPath, undefined, req.nextUrl.search);
-    return proxyKorakuBackend(req, url);
+    return proxyKorakuBackend(req, url, authMode);
   };
 }
 
 export function createKorakuFixedProxy<M extends HttpMethod>(
   config: FixedProxyConfig<M>,
 ): FixedProxyBundle<M> {
-  const handle = createFixedHandler(config.upstreamPath);
+  const handle = createFixedHandler(config.upstreamPath, config.authMode ?? "required");
   const methodHandlers = Object.fromEntries(
     config.methods.map((method) => [method, handle]),
   ) as Pick<FixedProxyBundle<M>, M>;
@@ -94,11 +104,12 @@ export const automations = createKorakuCatchAllProxy({
   maxDuration: 300,
 });
 
-/** POST inbound webhooks for event-triggered automations (token query param, no session). */
+/** POST inbound webhooks for event-triggered automations (token header/query, no session). */
 export const automationEvents = createKorakuCatchAllProxy({
   upstreamPath: "/api/automation-events",
   methods: ["POST"] as const,
   maxDuration: 300,
+  authMode: "optional",
 });
 
 export const composio = createKorakuCatchAllProxy({
@@ -114,6 +125,7 @@ export const workspace = createKorakuCatchAllProxy({
 export const sendblue = createKorakuCatchAllProxy({
   upstreamPath: "/sendblue",
   methods: ["GET", "POST"] as const,
+  authMode: "optional",
 });
 
 // --- Fixed-path mounts ---
@@ -127,6 +139,11 @@ export const memoryGraph = createKorakuFixedProxy({
   upstreamPath: "/api/memory/graph",
   methods: ["GET"] as const,
 });
+
+/** GET ``/koraku-api/api/chat-models`` — provider/model catalog for chat UI. */
+export async function korakuChatModelsGet(req: NextRequest): Promise<Response> {
+  return proxyKorakuJson(req, korakuUpstreamUrl("/api/chat-models"), { method: "GET" });
+}
 
 // --- Streaming / detached runs ---
 

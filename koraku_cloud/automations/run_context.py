@@ -19,25 +19,31 @@ log = logging.getLogger(__name__)
 async def prepare_automation_agent_context(
     user_id: str,
     *,
+    org_id: str | None = None,
     spec_query: str | None = None,
 ) -> tuple[str | None, dict[str, str] | None, Any | None]:
     """
     Returns ``(org_id, account_personalization, tenant_token)``.
+
+    Uses the automation row's ``org_id`` when provided; otherwise falls back to the
+    user's personal org (legacy / non-automation callers).
 
     Blaxel and Supermemory are lazy (tools attach / search on demand).
 
     ``tenant_token`` must be reset via ``reset_tenant_org_id`` in a ``finally`` block.
     """
     _ = spec_query
-    org_id = await asyncio.to_thread(ensure_personal_org_sync, user_id)
-    tenant_token = set_tenant_org_id(org_id) if org_id else None
+    resolved_org = (org_id or "").strip()
+    if not resolved_org:
+        resolved_org = (await asyncio.to_thread(ensure_personal_org_sync, user_id) or "").strip() or None
+    tenant_token = set_tenant_org_id(resolved_org) if resolved_org else None
 
     account_p: dict[str, str] | None = None
     if supabase_personalization_configured():
-        fetched = await fetch_personalization_async(user_id, org_id=org_id)
+        fetched = await fetch_personalization_async(user_id, org_id=resolved_org)
         account_p = fetched if fetched is not None else empty_personalization()
 
-    return org_id, account_p, tenant_token
+    return resolved_org, account_p, tenant_token
 
 
 def reset_automation_tenant(tenant_token: Any | None) -> None:

@@ -41,7 +41,7 @@ Optional: Composio (`COMPOSIO_API_KEY`), web tools (`EXA_API_KEY`, `FIRECRAWL_AP
 
 | App module | Routes | Use |
 |------------|--------|-----|
-| `koraku.server_sdk` | `/health`, `/stream`, `/api/composio/*`, `/api/chat-models` | Embedders, self-host without Supabase |
+| `koraku.server_sdk` | `/health`, `/stream`, `/api/composio/*`, `/api/chat-models` (auth when `REQUIRE_AUTH_FOR_CHAT=true`) | Embedders, self-host without Supabase |
 | `koraku_cloud.app` | SDK routes + automations, personalization, workspace, SendBlue | Koraku Cloud only (not in PyPI wheel) |
 
 ## Session store and detached runs

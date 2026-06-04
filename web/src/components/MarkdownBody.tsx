@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { useDeferredValue, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { safeMarkdownHref } from "@/lib/safe-markdown-href";
 import { stripInlineToolJsonFromAnswer } from "@/lib/stripInlineToolJson";
 
 export function MarkdownBody({
@@ -51,12 +52,23 @@ export function MarkdownBody({
             <ol className="mb-3 list-decimal space-y-1 pl-5 text-neutral-800" {...p} />
           ),
           li: (p) => <li className="marker:text-neutral-400" {...p} />,
-          a: (p) => (
-            <a
-              className="font-medium text-koraku-accent underline decoration-koraku-accent/30 underline-offset-2 hover:decoration-koraku-accent"
-              {...p}
-            />
-          ),
+          a: ({ href, children, ...rest }) => {
+            const safe = safeMarkdownHref(href);
+            if (!safe) {
+              return <span className="text-koraku-accent">{children}</span>;
+            }
+            return (
+              <a
+                href={safe}
+                rel="noopener noreferrer"
+                target="_blank"
+                className="font-medium text-koraku-accent underline decoration-koraku-accent/30 underline-offset-2 hover:decoration-koraku-accent"
+                {...rest}
+              >
+                {children}
+              </a>
+            );
+          },
           code: ({ className, children, ...rest }) => {
             const block = /language-\w+/.test(String(className || ""));
             if (!block) {

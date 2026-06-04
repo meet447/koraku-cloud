@@ -397,17 +397,11 @@ async def execute_automation(
                 or None,
             )
 
-            run_org_id, account_p, tenant_tok = await prepare_automation_agent_context(
+            _, account_p, tenant_tok = await prepare_automation_agent_context(
                 user_id,
+                org_id=oid,
                 spec_query=auto.get("natural_language_spec"),
             )
-            if run_org_id and run_org_id != oid:
-                log.warning(
-                    "automation org mismatch automation=%s row_org=%s context_org=%s",
-                    automation_id,
-                    oid,
-                    run_org_id,
-                )
 
             lazy_tok, lazy_root_tok = set_lazy_blaxel_session(session.session_id)
 
