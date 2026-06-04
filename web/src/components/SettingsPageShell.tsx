@@ -7,6 +7,7 @@ import { korakuUi } from "@/lib/koraku-ui";
 type SettingsPageShellProps = {
   title: string;
   description: ReactNode;
+  eyebrow?: string;
   action?: ReactNode;
   children: ReactNode;
 };
@@ -15,13 +16,14 @@ type SettingsPageShellProps = {
 export function SettingsPageShell({
   title,
   description,
+  eyebrow = "Settings",
   action,
   children,
 }: SettingsPageShellProps) {
   return (
     <KorakuAppPage maxWidth="4xl" density="compact">
       <KorakuPageHeader
-        eyebrow="Settings"
+        eyebrow={eyebrow}
         title={title}
         description={description}
         action={action}
