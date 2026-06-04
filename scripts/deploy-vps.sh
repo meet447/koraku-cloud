@@ -71,17 +71,16 @@ if [[ -z "$VPS_HOST" ]]; then
 fi
 
 SSH=(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
-RSYNC_SSH=(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15)
+RSYNC_RSH="ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
 if [[ -n "$SSH_KEY" ]]; then
   if [[ ! -f "$SSH_KEY" ]]; then
     echo "SSH key not found: $SSH_KEY" >&2
     exit 1
   fi
   SSH+=(-i "$SSH_KEY")
-  RSYNC_SSH+=(-i "$SSH_KEY")
+  RSYNC_RSH="ssh -i $(printf '%q' "$SSH_KEY") -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
 fi
 SSH+=("${VPS_USER}@${VPS_HOST}")
-RSYNC_SSH+=("${VPS_USER}@${VPS_HOST}")
 
 REMOTE="${VPS_USER}@${VPS_HOST}:${VPS_DIR}/"
 
@@ -105,7 +104,7 @@ if [[ "$DEPLOY_ONLY" != true ]]; then
     --exclude .env \
     --exclude .env.local \
     --exclude deploy/vps/deploy.env \
-    -e "${RSYNC_SSH[*]}" \
+    -e "$RSYNC_RSH" \
     "$ROOT/" "$REMOTE"
 fi
 
