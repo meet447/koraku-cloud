@@ -12,6 +12,7 @@ import { ToolTimeline } from "./ToolTimeline";
 import { MarkdownBody } from "./MarkdownBody";
 import { AgentBusyRow } from "./AgentBusyRow";
 import { BrandMark } from "./BrandMark";
+import { NewChatLocalContext } from "./NewChatLocalContext";
 import { WorkspacePanel } from "./WorkspacePanel";
 import { RunWorkspaceAttachments } from "./RunWorkspaceAttachments";
 import { StreamingReplySkeleton } from "./StreamingReplySkeleton";
@@ -314,6 +315,7 @@ export function ChatConversation() {
                       <div className="mx-auto mb-5 flex justify-center">
                         <BrandMark size={88} priority variant="newChat" />
                       </div>
+                      <NewChatLocalContext />
                       <h1 className="text-2xl font-bold tracking-tight text-koraku-ink">
                         What should we move forward today?
                       </h1>
