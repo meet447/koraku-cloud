@@ -37,6 +37,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["@koraku/client"],
   output: "standalone",
   async headers() {
     return [

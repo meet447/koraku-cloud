@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "dev:turbo": "next dev --turbopack -p 3000",
+    "prebuild": "npm run build --prefix ../packages/koraku-client",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
