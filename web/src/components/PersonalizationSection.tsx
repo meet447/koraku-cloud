@@ -18,7 +18,13 @@ import { korakuUi } from "@/lib/koraku-ui";
 import { KorakuAlert } from "@/components/KorakuAlert";
 import { KorakuButton } from "@/components/KorakuButton";
 
-export function PersonalizationSection({ embedded = false }: { embedded?: boolean }) {
+export function PersonalizationSection({
+  embedded = false,
+  hideIntro = false,
+}: {
+  embedded?: boolean;
+  hideIntro?: boolean;
+}) {
   const [agentName, setAgentName] = useState("");
   const [memory, setMemory] = useState("");
   const [soul, setSoul] = useState("");
@@ -72,25 +78,31 @@ export function PersonalizationSection({ embedded = false }: { embedded?: boolea
   return (
     <section
       id="personalization"
-      className={clsx(embedded ? "scroll-mt-2" : [korakuUi.card, "scroll-mt-6"])}
+      className={clsx(
+        embedded ? "scroll-mt-2" : hideIntro ? korakuUi.card : [korakuUi.card, "scroll-mt-6"],
+      )}
     >
-      <h2 className="text-lg font-bold text-koraku-ink">Agent personalization</h2>
-      <p className="mt-2 text-sm font-medium leading-relaxed text-koraku-muted">
-        How your agent shows up in chat: display name, standing preferences, and persona. Facts
-        learned automatically across chats live under{" "}
-        <Link href={`${APP_BASE}/memory`} className="font-semibold text-koraku-ink underline">
-          Memory
-        </Link>
-        .
-      </p>
+      {hideIntro ? null : (
+        <>
+          <h2 className="text-base font-bold text-koraku-ink">Agent personalization</h2>
+          <p className="mt-1.5 text-sm font-medium leading-snug text-koraku-muted">
+            How your agent shows up in chat: display name, standing preferences, and persona. Facts
+            learned automatically across chats live under{" "}
+            <Link href={`${APP_BASE}/memory`} className="font-semibold text-koraku-ink underline">
+              Memory
+            </Link>
+            .
+          </p>
+        </>
+      )}
 
       {error ? (
-        <KorakuAlert variant="error" className="mt-4">
+        <KorakuAlert variant="error" className={hideIntro ? "mb-3" : "mt-4"}>
           {error}
         </KorakuAlert>
       ) : null}
 
-      <div className="mt-6 space-y-5">
+      <div className={clsx(hideIntro ? "space-y-3" : "mt-4 space-y-3")}>
         <div className={korakuUi.cardPanel}>
           <label className={korakuUi.fieldLabel}>Agent name</label>
           <input
@@ -99,7 +111,7 @@ export function PersonalizationSection({ embedded = false }: { embedded?: boolea
             onChange={(e) => setAgentName(e.target.value)}
             placeholder="Koraku"
             disabled={loading}
-            className={clsx(korakuUi.input, "mt-3")}
+            className={clsx(korakuUi.input, "mt-2")}
             maxLength={120}
             autoComplete="off"
           />
@@ -118,7 +130,7 @@ export function PersonalizationSection({ embedded = false }: { embedded?: boolea
             }
             disabled={loading}
             rows={8}
-            className={clsx(korakuUi.textarea, "mt-3")}
+            className={clsx(korakuUi.textarea, "mt-2")}
           />
         </div>
 
@@ -133,12 +145,12 @@ export function PersonalizationSection({ embedded = false }: { embedded?: boolea
             placeholder="e.g. warm mentor, direct and practical, no fluff"
             disabled={loading}
             rows={5}
-            className={clsx(korakuUi.textarea, "mt-3")}
+            className={clsx(korakuUi.textarea, "mt-2")}
           />
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
         {savedAt ? (
           <span className="text-xs font-medium text-koraku-muted">Saved</span>
         ) : null}

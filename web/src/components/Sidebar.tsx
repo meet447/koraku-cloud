@@ -177,7 +177,7 @@ export function Sidebar({
         })}
       </nav>
 
-      {!collapsed && (
+      {!collapsed && !settingsMenuOpen && (
         <div className="mt-4 flex min-h-0 flex-1 flex-col">
           <div className="mb-2 flex shrink-0 items-center justify-between px-1">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
@@ -342,37 +342,37 @@ export function Sidebar({
 
       <div
         className={clsx(
-          "mt-auto flex min-h-0 shrink-0 flex-col gap-2",
-          !collapsed && "border-t border-neutral-200/60 pt-2",
+          "flex flex-col gap-2",
+          !collapsed && settingsMenuOpen
+            ? "min-h-0 flex-1 border-t border-neutral-200/60 pt-2"
+            : "mt-auto shrink-0 border-t border-neutral-200/60 pt-2",
         )}
       >
         {!collapsed && settingsMenuOpen ? (
-          <div className="min-h-0 overflow-y-auto overscroll-y-contain">
-            <SidebarSettingsMenu onNavigate={() => setSettingsMenuOpen(false)} />
-          </div>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={() => {
-            if (collapsed) {
-              router.push(SETTINGS_PANEL_HREF.profile);
-              return;
-            }
-            setSettingsMenuOpen((open) => !open);
-          }}
-          aria-expanded={!collapsed && settingsMenuOpen}
-          className={clsx(
-            "flex w-full shrink-0 items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold transition",
-            !collapsed && (settingsMenuOpen || onSettingsRoute)
-              ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200/80"
-              : "text-neutral-600 hover:bg-white/80 hover:text-neutral-900",
-            collapsed && "justify-center px-0",
-          )}
-        >
-          <Settings2 className="h-4 w-4 shrink-0" strokeWidth={iconStroke} />
-          {!collapsed && "Settings"}
-        </button>
+          <SidebarSettingsMenu onClose={() => setSettingsMenuOpen(false)} />
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              if (collapsed) {
+                router.push(SETTINGS_PANEL_HREF.profile);
+                return;
+              }
+              setSettingsMenuOpen(true);
+            }}
+            aria-expanded={false}
+            className={clsx(
+              "flex w-full shrink-0 items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold transition",
+              !collapsed && onSettingsRoute
+                ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200/80"
+                : "text-neutral-600 hover:bg-white/80 hover:text-neutral-900",
+              collapsed && "justify-center px-0",
+            )}
+          >
+            <Settings2 className="h-4 w-4 shrink-0" strokeWidth={iconStroke} />
+            {!collapsed && "Settings"}
+          </button>
+        )}
         <div
           className={clsx(
             "min-w-0",

@@ -9,7 +9,13 @@ import { errorMessage } from "@/lib/error-message";
 import { korakuUi } from "@/lib/koraku-ui";
 import { KORAKU_COPY } from "@/lib/korakuBrand";
 
-export function SettingsAccountSection({ embedded = false }: { embedded?: boolean }) {
+export function SettingsAccountSection({
+  embedded = false,
+  hideIntro = false,
+}: {
+  embedded?: boolean;
+  hideIntro?: boolean;
+}) {
   const [busy, setBusy] = useState<"export" | "delete" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,11 +64,15 @@ export function SettingsAccountSection({ embedded = false }: { embedded?: boolea
   }
 
   return (
-    <div className={embedded ? "space-y-4" : "space-y-4"}>
-      <h2 className="text-lg font-bold text-koraku-ink">Account & data</h2>
-      <p className="text-sm font-medium leading-relaxed text-koraku-muted">
-        Export your Koraku data, delete app rows, and review privacy policies.
-      </p>
+    <div className="space-y-3">
+      {hideIntro ? null : (
+        <>
+          <h2 className="text-base font-bold text-koraku-ink">Account & data</h2>
+          <p className="text-sm font-medium leading-snug text-koraku-muted">
+            Export your Koraku data, delete app rows, and review privacy policies.
+          </p>
+        </>
+      )}
 
       {message ? (
         <KorakuAlert variant="success">{message}</KorakuAlert>
@@ -84,7 +94,7 @@ export function SettingsAccountSection({ embedded = false }: { embedded?: boolea
         </KorakuButton>
       </section>
 
-      <section className="rounded-2xl border border-red-200 bg-red-50 p-5">
+      <section className="rounded-xl border border-red-200 bg-red-50 p-4">
         <h3 className="text-base font-bold text-red-950">Delete Koraku app data</h3>
         <p className="mt-2 text-sm font-medium leading-relaxed text-red-800">
           This clears Koraku-owned rows for your account. Full auth account deletion
@@ -111,7 +121,7 @@ export function SettingsAccountSection({ embedded = false }: { embedded?: boolea
         onCancel={() => setConfirmDeleteOpen(false)}
       />
 
-      <section className={embedded ? korakuUi.cardPanel : "rounded-[28px] bg-koraku-panel p-6 ring-1 ring-neutral-200/80"}>
+      <section className={embedded ? korakuUi.cardPanel : korakuUi.card}>
         <h3 className="text-base font-bold text-koraku-ink">Privacy and retention</h3>
         <p className="mt-2 text-sm font-medium leading-relaxed text-koraku-muted">
           {KORAKU_COPY.privacyProcessing}

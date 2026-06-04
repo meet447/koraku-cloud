@@ -135,11 +135,11 @@ begin
       return;
   end;
 
-  update public.koraku_usage_period
-  set credits_used = credits_used + p_credits,
+  update public.koraku_usage_period up
+  set credits_used = up.credits_used + p_credits,
       updated_at = now()
-  where org_id = p_org_id and period_start = v_start
-  returning credits_used, credits_limit, period_end
+  where up.org_id = p_org_id and up.period_start = v_start
+  returning up.credits_used, up.credits_limit, up.period_end
   into credits_used, credits_limit, period_end;
 
   settled := true;

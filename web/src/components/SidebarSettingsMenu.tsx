@@ -8,33 +8,37 @@ import { SETTINGS_MENU_ITEMS } from "@/lib/settings-panel";
 
 const iconStroke = 1.5;
 
-export function SidebarSettingsMenu({ onNavigate }: { onNavigate?: () => void }) {
+export function SidebarSettingsMenu({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname() || "";
 
   return (
     <div
-      className="mb-2 flex flex-col gap-1.5"
+      className="flex min-h-0 flex-1 flex-col"
       role="region"
       aria-label="Settings menu"
     >
-      <div className="rounded-[18px] bg-white px-1.5 py-1.5 shadow-sm ring-1 ring-neutral-200/60">
-        <div className="flex items-center gap-2 px-1.5 py-1.5">
+      <div className="flex min-h-0 flex-1 flex-col rounded-[18px] bg-white px-1.5 py-1.5 shadow-sm ring-1 ring-neutral-200/60">
+        <button
+          type="button"
+          onClick={() => onClose?.()}
+          aria-expanded
+          className="flex w-full shrink-0 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition hover:bg-neutral-50"
+        >
           <SlidersHorizontal
             className="h-3.5 w-3.5 shrink-0 text-neutral-500"
             strokeWidth={iconStroke}
             aria-hidden
           />
           <span className="text-[13px] font-bold text-koraku-ink">Settings</span>
-        </div>
+        </button>
 
-        <ul className="space-y-0.5">
+        <ul className="mt-1 shrink-0 space-y-0.5">
           {SETTINGS_MENU_ITEMS.map(({ id, label, icon: Icon, href }) => {
             const active = pathname === href;
             return (
               <li key={id}>
                 <Link
                   href={href}
-                  onClick={() => onNavigate?.()}
                   aria-current={active ? "page" : undefined}
                   className={clsx(
                     "flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left text-[13px] font-semibold transition",

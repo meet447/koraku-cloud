@@ -5,6 +5,7 @@ type KorakuPageHeaderProps = {
   title: string;
   description: ReactNode;
   action?: ReactNode;
+  density?: "default" | "compact";
 };
 
 export function KorakuPageHeader({
@@ -12,17 +13,43 @@ export function KorakuPageHeader({
   title,
   description,
   action,
+  density = "default",
 }: KorakuPageHeaderProps) {
+  const compact = density === "compact";
   return (
-    <header className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+    <header
+      className={
+        compact
+          ? "flex flex-col justify-between gap-3 sm:flex-row sm:items-center"
+          : "flex flex-col justify-between gap-6 sm:flex-row sm:items-end"
+      }
+    >
       <div className="min-w-0">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-700">
+        <p
+          className={
+            compact
+              ? "text-[11px] font-bold uppercase tracking-[0.18em] text-orange-700"
+              : "text-xs font-bold uppercase tracking-[0.22em] text-orange-700"
+          }
+        >
           {eyebrow}
         </p>
-        <h1 className="mt-2 text-[2rem] font-bold leading-tight tracking-tight text-koraku-ink sm:text-4xl">
+        <h1
+          className={
+            compact
+              ? "mt-1 text-2xl font-bold leading-tight tracking-tight text-koraku-ink"
+              : "mt-2 text-[2rem] font-bold leading-tight tracking-tight text-koraku-ink sm:text-4xl"
+          }
+        >
           {title}
         </h1>
-        <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-koraku-muted">
+        <p
+          className={
+            compact
+              ? "mt-1 max-w-2xl text-sm font-medium leading-snug text-koraku-muted"
+              : "mt-3 max-w-2xl text-sm font-medium leading-relaxed text-koraku-muted"
+          }
+        >
           {description}
         </p>
       </div>

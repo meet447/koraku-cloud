@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import httpx
 
 from koraku.core.config import settings
 
@@ -162,12 +164,22 @@ def settle_sync(
             period["period_end"] = row.get("period_end", period.get("period_end"))
             return bool(row.get("settled")), _row_to_summary(period)
         return bool(row.get("settled")), None
+    except httpx.HTTPStatusError as exc:
+        body = (exc.response.text or "")[:500]
+        log.error(
+            "koraku_credit_settle failed org_id=%s key=%s status=%s body=%s",
+            oid,
+            key,
+            exc.response.status_code,
+            body,
+        )
+        return False, None
     except Exception:
         log.exception("koraku_credit_settle failed org_id=%s key=%s", oid, key)
         return False, None
 
 
-def fetch_activity_sync(org_id: str, *, days: int = 48) -> list[dict[str, Any]]:
+def fetch_activity_sync(org_id: str, *, days: int = 30) -> list[dict[str, Any]]:
     if not credits_configured():
         return []
     oid = (org_id or "").strip()
@@ -177,13 +189,18 @@ def fetch_activity_sync(org_id: str, *, days: int = 48) -> list[dict[str, Any]]:
     if not period:
         return []
     pstart = period.get("period_start")
+    window_days = max(1, min(int(days), 90))
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=window_days)
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         q = (
             f"/koraku_usage_ledger?org_id=eq.{oid}"
             f"&period_start=eq.{pstart}"
+            f"&created_at=gte.{cutoff}"
             "&select=credits,kind,created_at"
             "&order=created_at.desc"
-            f"&limit={max(1, min(days * 48, 500))}"
+            f"&limit={max(1, min(window_days * 48, 500))}"
         )
         get_http_client, rest_headers, rest_url, _ = _rest()
         r = get_http_client().get(rest_url(q), headers=rest_headers())
