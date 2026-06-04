@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Tests / tools
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Koraku runtime
+.koraku/
+.composio-cache/
+
+# Node (koraku-client)
+node_modules/
+packages/koraku-client/node_modules/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

@@ -28,14 +28,31 @@ from koraku.integrations.cloud_user import reset_cloud_user_id, set_cloud_user_i
 from koraku.integrations.blaxel_lazy import clear_lazy_blaxel_session, set_lazy_blaxel_session
 from koraku.integrations import sendblue_client
 from koraku.integrations.sendblue_client import send_message
-from koraku_cloud.integrations.supabase_chat_history import hydrate_session_messages_from_db
-from koraku_cloud.integrations.supabase_external import append_thread_message_sync
 from koraku.integrations.supermemory_client import extract_last_assistant_text
 from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
 from koraku.agent.runtime_context import AgentRunContext
 from koraku.tools.channel_send_tool import CHANNEL_SEND_TOOL
 
 log = logging.getLogger(__name__)
+
+
+async def _hydrate_session_messages_from_db(*args: Any, **kwargs: Any) -> None:
+    try:
+        from koraku_cloud.integrations.supabase_chat_history import (
+            hydrate_session_messages_from_db,
+        )
+    except ImportError:
+        return
+    await hydrate_session_messages_from_db(*args, **kwargs)
+
+
+def _append_thread_message_sync(*args: Any, **kwargs: Any) -> None:
+    try:
+        from koraku_cloud.integrations.supabase_external import append_thread_message_sync
+    except ImportError:
+        return
+    append_thread_message_sync(*args, **kwargs)
+
 
 _dedup_handles: dict[str, float] = {}
 _DEDUP_TTL_SEC = 3600.0
@@ -135,7 +152,7 @@ async def run_imessage_turn(
         await send_message(phone_e164, body)
         sent_parts.append(body)
         await asyncio.to_thread(
-            append_thread_message_sync,
+            _append_thread_message_sync,
             thread_id=thread_id,
             role="assistant",
             text=body,
@@ -185,7 +202,7 @@ async def run_imessage_turn(
                     thread_id[:12],
                     imessage_root,
                 )
-        await hydrate_session_messages_from_db(
+        await _hydrate_session_messages_from_db(
             session,
             incoming_user_text=text.strip(),
             auth_sub=user_id,
@@ -193,7 +210,7 @@ async def run_imessage_turn(
             client_history=[],
         )
         await asyncio.to_thread(
-            append_thread_message_sync,
+            _append_thread_message_sync,
             thread_id=thread_id,
             role="user",
             text=text.strip(),
@@ -231,7 +248,7 @@ async def run_imessage_turn(
                 await send_message(phone_e164, tail)
                 sent_parts.append(tail)
                 await asyncio.to_thread(
-                    append_thread_message_sync,
+                    _append_thread_message_sync,
                     thread_id=thread_id,
                     role="assistant",
                     text=tail,
