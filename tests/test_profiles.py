@@ -6,6 +6,7 @@ from koraku.plugins.memory import get_memory_backend, reset_memory_backend_cache
 from koraku.sdk import KorakuConfig
 from koraku_cloud.bootstrap import bootstrap_cloud
 
+
 def test_cloud_settings_defaults() -> None:
     reset_cloud_binding()
     bootstrap_cloud()

@@ -14,6 +14,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+def _strip_env_str(v: object, *, strip_quotes: bool = False) -> str:
+    if v is None:
+        return ""
+    s = str(v).strip()
+    if strip_quotes and len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
+        s = s[1:-1].strip()
+    return s
+
+
 class CloudSettings(BaseSettings):
     """Product-layer settings schema; defaults are SDK-safe when Cloud is not bound."""
 
@@ -230,19 +239,12 @@ class CloudSettings(BaseSettings):
     @field_validator("supabase_jwt_secret", mode="before")
     @classmethod
     def _strip_supabase_jwt_secret(cls, v: object) -> str:
-        if v is None:
-            return ""
-        s = str(v).strip()
-        if len(s) >= 2 and s[0] == s[-1] and s[0] in "\"'":
-            s = s[1:-1].strip()
-        return s
+        return _strip_env_str(v, strip_quotes=True)
 
     @field_validator("bl_workspace", "bl_api_key", mode="before")
     @classmethod
     def _strip_blaxel_credentials(cls, v: object) -> str:
-        if v is None:
-            return ""
-        return str(v).strip()
+        return _strip_env_str(v)
 
     def model_post_init(self, __context: Any) -> None:
         key = (self.bl_api_key or "").strip()
