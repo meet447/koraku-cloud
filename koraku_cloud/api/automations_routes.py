@@ -37,12 +37,9 @@ from koraku.integrations import composio as composio_runtime
 from dataclasses import dataclass
 from typing import Any
 
-from koraku.core.auth import auth_error_detail, verify_request_auth
 from koraku.core.config import settings as app_settings
 from koraku.core.rate_limit import RateLimit, enforce_rate_limit, rate_limit_key
-from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
-from koraku.integrations.cloud_user import reset_cloud_user_id, set_cloud_user_id
-from koraku_cloud.integrations.supabase_tenant import parse_org_header, resolve_org_id_sync
+from koraku_cloud.api.auth_scope import cloud_supabase_user_scope
 
 router = APIRouter(prefix="/api/automations", tags=["automations"])
 
@@ -74,11 +71,7 @@ class AutomationsAuth:
     org_id: str
 
 
-async def _automations_request_scope(
-    request: Request,
-    authorization: str | None = Header(None),
-) -> AsyncGenerator[AutomationsAuth, None]:
-    """Require Supabase JWT, org membership, and bind user/org context for row scope."""
+def _require_automations_supabase() -> None:
     if not supabase_automations_configured():
         raise HTTPException(
             status_code=503,
@@ -87,30 +80,19 @@ async def _automations_request_scope(
                 "SUPABASE_SERVICE_ROLE_KEY on the Koraku backend."
             ),
         )
-    jwt_res = verify_request_auth(authorization)
-    if not jwt_res.ok or not jwt_res.sub:
-        status = 503 if jwt_res.reason == "no_secret" else 401
-        detail = auth_error_detail(jwt_res.reason)
-        raise HTTPException(
-            status_code=status, detail=f"{detail} (code={jwt_res.reason})"
-        )
-    uid = jwt_res.sub
-    requested = parse_org_header(request.headers)
-    org_id, reason = resolve_org_id_sync(uid, requested)
-    if not org_id:
-        if reason == "org_forbidden":
-            raise HTTPException(status_code=403, detail="You do not have access to this organization.")
-        raise HTTPException(
-            status_code=503,
-            detail="Tenant service unavailable. Check Supabase configuration.",
-        )
-    cloud_tok = set_cloud_user_id(uid)
-    tenant_tok = set_tenant_org_id(org_id)
-    try:
-        yield AutomationsAuth(user_id=uid, org_id=org_id)
-    finally:
-        reset_tenant_org_id(tenant_tok)
-        reset_cloud_user_id(cloud_tok)
+
+
+async def _automations_request_scope(
+    request: Request,
+    authorization: str | None = Header(None),
+) -> AsyncGenerator[AutomationsAuth, None]:
+    """Require Supabase JWT, org membership, and bind user/org context for row scope."""
+    async for scope in cloud_supabase_user_scope(
+        request,
+        authorization,
+        pre_check=_require_automations_supabase,
+    ):
+        yield AutomationsAuth(user_id=scope.user_id, org_id=scope.org_id)
 
 
 class SchedulePresetBody(BaseModel):

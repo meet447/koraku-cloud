@@ -62,6 +62,11 @@ KORAKU_SERVER_APP=sdk ./scripts/run-api.sh   # SDK-only server
 | Cloud | `koraku_cloud.app:app` |
 | Either | `koraku.server:app` (uses `KORAKU_SERVER_APP`) |
 
+## SDK / Cloud boundary
+
+Product behavior is registered via `koraku.core.product_hooks` when `bootstrap_cloud()` runs.
+See [MIGRATION_SDK_CLOUD.md](./MIGRATION_SDK_CLOUD.md) for the phased split plan.
+
 ## Guards
 
 ```bash

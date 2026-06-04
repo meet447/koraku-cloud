@@ -92,6 +92,39 @@ def test_blaxel_auth_failure_detector_message() -> None:
     assert br._blaxel_error_looks_like_auth_failure(RuntimeError("Authorization failed"))
 
 
+@pytest.mark.asyncio
+async def test_cloud_file_tool_block_when_blaxel_required(monkeypatch: pytest.MonkeyPatch) -> None:
+    from koraku.agent.runtime_context import bind_execution_target, reset_execution_target
+    from koraku.integrations.blaxel_lazy import cloud_file_tool_block_reason
+
+    async def _no_ensure() -> bool:
+        return False
+
+    monkeypatch.setattr(
+        "koraku.integrations.blaxel_lazy.settings",
+        SimpleNamespace(blaxel_cloud_sandbox_enabled=True),
+    )
+    monkeypatch.setattr(
+        "koraku.integrations.blaxel_lazy.get_active_blaxel_sandbox",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        "koraku.integrations.blaxel_lazy.ensure_blaxel_for_file_tool",
+        _no_ensure,
+    )
+    monkeypatch.setattr(
+        "koraku.integrations.blaxel_lazy.cloud_file_tools_use_blaxel",
+        lambda: True,
+    )
+    tok = bind_execution_target("cloud")
+    try:
+        msg = await cloud_file_tool_block_reason(try_ensure=True)
+    finally:
+        reset_execution_target(tok)
+    assert msg is not None
+    assert "Blaxel sandbox" in msg
+
+
 def test_settings_post_init_exports_blaxel_to_os(monkeypatch: pytest.MonkeyPatch) -> None:
     """Blaxel SDK reads ``os.environ``; Koraku must mirror pydantic-loaded values there."""
     from koraku.core.config import Settings

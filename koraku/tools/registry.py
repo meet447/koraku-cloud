@@ -38,22 +38,11 @@ def _path_is_under(path: str, root: str) -> bool:
         return False
 
 
-def _cloud_file_tool_host_blocked() -> str | None:
-    """Cloud mode must not read/write the API host filesystem when Blaxel is not active."""
-    from koraku.agent.runtime_context import get_active_execution_target
+async def _host_file_tool_block() -> str | None:
+    """Block host filesystem tools when cloud mode requires an active Blaxel sandbox."""
+    from koraku.integrations.blaxel_lazy import cloud_file_tool_block_reason
 
-    if get_active_execution_target() != "cloud":
-        return None
-    if not settings.blaxel_cloud_sandbox_enabled:
-        return None
-    from koraku.agent.blaxel_scope import get_active_blaxel_sandbox
-
-    if get_active_blaxel_sandbox() is None:
-        return (
-            "Error: Cloud file tools require the Blaxel sandbox (still starting or unavailable). "
-            "Retry shortly."
-        )
-    return None
+    return await cloud_file_tool_block_reason(try_ensure=False)
 
 
 def _resolve_host_path(path: str, *, parent_for_new_file: bool = False) -> tuple[str | None, str | None]:
@@ -75,7 +64,7 @@ async def _read(file_path: str, offset: int = 1, limit: int = 100) -> str:
     bx = await blaxel_read_if_active(file_path, offset, limit)
     if bx is not None:
         return bx
-    host_block = _cloud_file_tool_host_blocked()
+    host_block = await _host_file_tool_block()
     if host_block:
         return host_block
 
@@ -133,7 +122,7 @@ async def _write(file_path: str, content: str) -> str:
     bx = await blaxel_write_if_active(file_path, content)
     if bx is not None:
         return bx
-    host_block = _cloud_file_tool_host_blocked()
+    host_block = await _host_file_tool_block()
     if host_block:
         return host_block
 
@@ -176,6 +165,9 @@ async def _edit(file_path: str, old_string: str, new_string: str) -> str:
     bx = await blaxel_edit_if_active(file_path, old_string, new_string)
     if bx is not None:
         return bx
+    host_block = await _host_file_tool_block()
+    if host_block:
+        return host_block
 
     fpath, path_error = _resolve_host_path(file_path)
     if path_error:
@@ -223,6 +215,9 @@ async def _bash(command: str, timeout: int = 30) -> str:
     bx = await blaxel_bash_if_active(command, timeout)
     if bx is not None:
         return bx
+    host_block = await _host_file_tool_block()
+    if host_block:
+        return host_block
 
     dangerous = ["rm -rf /", "> /dev/sda", "mkfs", "dd if=/dev/zero"]
     for d in dangerous:
@@ -268,6 +263,9 @@ async def _glob(pattern: str, path: str = ".") -> str:
     bx = await blaxel_glob_if_active(pattern, path)
     if bx is not None:
         return bx
+    host_block = await _host_file_tool_block()
+    if host_block:
+        return host_block
 
     search_dir, path_error = _resolve_host_path(path)
     if path_error:
@@ -303,6 +301,9 @@ async def _grep(pattern: str, path: str = ".", include: str = "*") -> str:
     bx = await blaxel_grep_if_active(pattern, path, include)
     if bx is not None:
         return bx
+    host_block = await _host_file_tool_block()
+    if host_block:
+        return host_block
 
     search_dir, path_error = _resolve_host_path(path)
     if path_error:
@@ -621,8 +622,8 @@ _BASE_TOOLS: list[Tool] = [
     web_search_tool, web_fetch_tool,
 ]
 
+from koraku.core.product_hooks import extra_agent_tools  # noqa: E402
 from koraku.plugins.memory import memory_agent_tools  # noqa: E402
-from koraku.profiles import is_cloud_profile  # noqa: E402
 
 _AVAILABLE_TOOLS_CACHE: list[Tool] | None = None
 
@@ -631,14 +632,7 @@ def _build_available_tools() -> list[Tool]:
     """Assemble tool list (lazy — avoids importing ``koraku_cloud`` during ``koraku`` init)."""
     tools: list[Tool] = list(_BASE_TOOLS)
     tools.extend(memory_agent_tools())
-    if is_cloud_profile():
-        from koraku_cloud.automations.agent_tools import build_automation_tools
-
-        tools.extend(build_automation_tools())
-        if settings.sendblue_api_key and settings.sendblue_api_secret and settings.sendblue_from_number:
-            from koraku_cloud.tools.imessage_send_tool import IMESSAGE_SEND_TOOL
-
-            tools.append(IMESSAGE_SEND_TOOL)
+    tools.extend(extra_agent_tools())
     out: list[Tool] = []
     for t in tools:
         if t.name == "WebSearch" and not settings.exa_api_key:

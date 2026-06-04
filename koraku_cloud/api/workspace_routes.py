@@ -10,10 +10,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response
 
-from koraku.core.auth import auth_error_detail, verify_request_auth
 from koraku.core.config import settings
-from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
-from koraku_cloud.integrations.supabase_tenant import parse_org_header, resolve_org_id_sync
+from koraku_cloud.api.auth_scope import cloud_supabase_user_scope
 from koraku.integrations.blaxel_runtime import (
     cloud_blaxel_block_reason,
     ensure_session_workspace,
@@ -23,8 +21,6 @@ from koraku_cloud.integrations.supabase_external import resolve_thread_channel_s
 from koraku.integrations.cloud_user import (
     effective_auth_user_sub,
     effective_cloud_user_id,
-    reset_cloud_user_id,
-    set_cloud_user_id,
     workspace_path_user_id,
 )
 
@@ -101,29 +97,12 @@ async def _workspace_user_scope(
     authorization: str | None = Header(None),
 ) -> AsyncGenerator[None, None]:
     """Require Blaxel + valid Supabase JWT; match chat sandbox path (org + user)."""
-    _require_cloud_workspace()
-    jwt_res = verify_request_auth(authorization)
-    if not jwt_res.ok or not jwt_res.sub:
-        status = 503 if jwt_res.reason == "no_secret" else 401
-        detail = auth_error_detail(jwt_res.reason)
-        raise HTTPException(status_code=status, detail=f"{detail} (code={jwt_res.reason})")
-    uid = jwt_res.sub
-    requested_org = parse_org_header(request.headers)
-    org_id, reason = resolve_org_id_sync(uid, requested_org)
-    if requested_org and reason == "org_forbidden":
-        raise HTTPException(status_code=403, detail="You do not have access to this organization.")
-    if not org_id:
-        raise HTTPException(
-            status_code=503,
-            detail="Tenant service unavailable. Check Supabase configuration.",
-        )
-    cloud_token = set_cloud_user_id(uid)
-    tenant_token = set_tenant_org_id(org_id)
-    try:
+    async for _scope in cloud_supabase_user_scope(
+        request,
+        authorization,
+        pre_check=_require_cloud_workspace,
+    ):
         yield
-    finally:
-        reset_tenant_org_id(tenant_token)
-        reset_cloud_user_id(cloud_token)
 
 
 @router.get("/tree", dependencies=[Depends(_workspace_user_scope)])
