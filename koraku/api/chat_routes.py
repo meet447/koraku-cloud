@@ -19,6 +19,11 @@ from koraku.agent import _step_budget, get_or_create_chat_session
 from koraku.agent.runtime_context import AgentRunContext, ExecutionTarget
 from koraku.agent.unconfigured import run_unconfigured
 from koraku.core.config import settings
+from koraku.credits.service import (
+    credits_summary_event,
+    pre_check_org,
+    settle_run,
+)
 from koraku.core.rate_limit import RateLimit, enforce_rate_limit, rate_limit_key
 from koraku.core.request_auth import resolve_request_auth
 from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
@@ -187,6 +192,8 @@ async def _stream_agent_sse(
     stream_state = KorakuStreamState()
     if stream_run_id and str(stream_run_id).strip():
         stream_state.run_id = str(stream_run_id).strip()
+    if images:
+        stream_state.usage.image_count = len(images)
     stream_state.resolved_model = resolved_model if server_mode == "live" else "koraku-unconfigured"
     stream_state.eff_provider = eff_provider if server_mode == "live" else "unconfigured"
 
@@ -397,6 +404,21 @@ async def _stream_agent_sse(
             await task
 
     await _stop_disconnect_watch()
+
+    if auth_org_id and server_mode == "live":
+        credits_payload = await settle_run(
+            auth_org_id,
+            run_id=stream_state.run_id,
+            usage=stream_state.usage,
+            kind="chat",
+            model=stream_state.resolved_model,
+            provider=stream_state.eff_provider,
+        )
+        credit_evt = credits_summary_event(credits_payload)
+        if credit_evt:
+            yield format_sse(credit_evt)
+            await asyncio.sleep(0)
+
     yield "event: done\n\n"
 
 
@@ -423,6 +445,7 @@ async def stream_endpoint_post(body: StreamChatBody, request: Request):
             limit=settings.chat_rate_limit_per_minute,
         )
     )
+    await pre_check_org(auth_org_id)
 
     agent = getattr(request.app.state, "koraku_agent", None)
     server_mode = getattr(request.app.state, "server_mode", "unconfigured")

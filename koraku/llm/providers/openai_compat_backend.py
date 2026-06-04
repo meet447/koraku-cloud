@@ -16,6 +16,7 @@ from koraku.llm.openai_delta import (
     openai_delta_content_to_str,
 )
 from koraku.llm.sanitize import VisibleToolJsonFilter
+from koraku.credits.token_estimator import normalize_provider_usage
 from koraku.llm.tool_call_parse import parse_tool_calls_from_text
 
 
@@ -38,6 +39,7 @@ class _OpenAIStreamHandler:
         self.thinking_started = False
         self.thinking_stopped = False
         self.text_stream_index: int | None = None
+        self.reported_usage: dict[str, int] | None = None
 
     def close_thinking_if_needed(self) -> Iterator[dict[str, Any]]:
         if self.thinking_started and not self.thinking_stopped:
@@ -127,6 +129,12 @@ class _OpenAIStreamHandler:
             parsed = json.loads(data)
         except json.JSONDecodeError:
             return
+        usage_raw = parsed.get("usage")
+        if isinstance(usage_raw, dict):
+            norm = normalize_provider_usage(usage_raw)
+            if norm["input_tokens"] or norm["output_tokens"]:
+                self.reported_usage = norm
+                yield {"type": "message_delta", "delta": {}, "usage": norm}
         choices = parsed.get("choices")
         if not isinstance(choices, list) or len(choices) == 0:
             return
@@ -212,12 +220,13 @@ class _OpenAIStreamHandler:
             }]
 
         stop_reason = "tool_use" if any(b.get("type") == "tool_use" for b in content_blocks) else "end_turn"
+        usage = normalize_provider_usage(self.reported_usage)
 
-        yield {"type": "message_delta", "delta": {"stop_reason": stop_reason}, "usage": {}}
+        yield {"type": "message_delta", "delta": {"stop_reason": stop_reason}, "usage": usage}
         yield {"type": "message_stop", "message": {}}
         yield {"type": "assistant_message", "message": {
             "id": self.message_id or "unknown", "model": self.model_id, "role": "assistant",
-            "content": content_blocks, "stop_reason": stop_reason, "usage": {},
+            "content": content_blocks, "stop_reason": stop_reason, "usage": usage,
         }}
 
 class OpenAICompatBackend:

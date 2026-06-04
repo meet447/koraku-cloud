@@ -140,6 +140,11 @@ export const memoryGraph = createKorakuFixedProxy({
   methods: ["GET"] as const,
 });
 
+export const usage = createKorakuFixedProxy({
+  upstreamPath: "/api/usage",
+  methods: ["GET"] as const,
+});
+
 /** GET ``/koraku-api/api/chat-models`` — provider/model catalog for chat UI. */
 export async function korakuChatModelsGet(req: NextRequest): Promise<Response> {
   return proxyKorakuJson(req, korakuUpstreamUrl("/api/chat-models"), { method: "GET" });

@@ -83,6 +83,17 @@ class CloudSettings(BaseSettings):
         default=12,
         validation_alias=AliasChoices("CHAT_RATE_LIMIT_PER_MINUTE", "chat_rate_limit_per_minute"),
     )
+    credits_free_monthly_limit: int = Field(
+        default=100_000,
+        validation_alias=AliasChoices(
+            "CREDITS_FREE_MONTHLY_LIMIT",
+            "credits_free_monthly_limit",
+        ),
+    )
+    credits_min_reserve: int = Field(
+        default=500,
+        validation_alias=AliasChoices("CREDITS_MIN_RESERVE", "credits_min_reserve"),
+    )
     automation_rate_limit_per_minute: int = Field(
         default=6,
         validation_alias=AliasChoices("AUTOMATION_RATE_LIMIT_PER_MINUTE", "automation_rate_limit_per_minute"),

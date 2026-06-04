@@ -8,6 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from koraku.credits.calculator import UsageAccumulator
 from koraku.tools.registry import available_tools
 
 
@@ -96,11 +97,14 @@ def _tool_started_events(
     tool_name = (tool_name or "tool").strip() or "tool"
     if not scoped_tool_use_id:
         return []
+    is_new = scoped_tool_use_id not in state.started_tool_use_ids
     state.tool_calls_by_id[scoped_tool_use_id] = {
         "tool": tool_name,
         "input": tool_input,
     }
     state.started_tool_use_ids.add(scoped_tool_use_id)
+    if is_new:
+        state.usage.record_tool(tool_name)
     t_args = _json_len(tool_input) > _TOOL_INPUT_TRUNC_BYTES
     return [
         _tool_event(
@@ -316,6 +320,7 @@ class KorakuStreamState:
     suppressed_tool_block_indexes: set[int] = field(default_factory=set)
     tool_calls_by_id: dict[str, dict[str, Any]] = field(default_factory=dict)
     started_tool_use_ids: set[str] = field(default_factory=set)
+    usage: UsageAccumulator = field(default_factory=UsageAccumulator)
 
     def started_payload(self, model: str, *, chat_session_id: str | None = None) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -395,6 +400,13 @@ def map_koraku_stream_events(event: dict[str, Any], state: KorakuStreamState) ->
         return [_koraku_trace("tools", event.get("data") or {}, state.inner_session_id, rid)]
     if et == "agent.context":
         return [_koraku_trace("context", event.get("data") or {}, state.inner_session_id, rid)]
+    if et == "agent.llm_usage_estimate":
+        data = event.get("data") if isinstance(event.get("data"), dict) else {}
+        est_in = int(data.get("input_tokens") or 0)
+        est_out = int(data.get("output_tokens") or 0)
+        if est_in > 0 or est_out > 0:
+            state.usage.add_estimated_round(input_tokens=est_in, output_tokens=est_out)
+        return []
     if et == "agent.history":
         return [_koraku_trace("history", event.get("data") or {}, state.inner_session_id, rid)]
     if et == "agent.trace":
@@ -444,17 +456,16 @@ def map_koraku_stream_events(event: dict[str, Any], state: KorakuStreamState) ->
             usage = raw.get("usage") if isinstance(raw.get("usage"), dict) else {}
             u = usage if isinstance(usage, dict) else {}
             if any((u.get(k) or 0) > 0 for k in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")):
-                out.append({
-                    "type": "koraku.turn_usage",
-                    "data": {
-                        "runId": rid,
-                        "innerSessionId": state.inner_session_id,
-                        "input_tokens": int(u.get("input_tokens") or 0),
-                        "output_tokens": int(u.get("output_tokens") or 0),
-                        "cache_creation_input_tokens": int(u.get("cache_creation_input_tokens") or 0),
-                        "cache_read_input_tokens": int(u.get("cache_read_input_tokens") or 0),
-                    },
-                })
+                usage_data = {
+                    "runId": rid,
+                    "innerSessionId": state.inner_session_id,
+                    "input_tokens": int(u.get("input_tokens") or 0),
+                    "output_tokens": int(u.get("output_tokens") or 0),
+                    "cache_creation_input_tokens": int(u.get("cache_creation_input_tokens") or 0),
+                    "cache_read_input_tokens": int(u.get("cache_read_input_tokens") or 0),
+                }
+                state.usage.add_turn_usage(usage_data)
+                out.append({"type": "koraku.turn_usage", "data": usage_data})
         if raw_type == "tool_use_pending":
             pending = raw if isinstance(raw, dict) else {}
             sub_payload = _composio_subagent_payload(event)

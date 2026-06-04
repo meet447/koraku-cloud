@@ -40,6 +40,10 @@ from koraku.integrations.cloud_user import effective_cloud_user_id
 from koraku.workspace.agent_workspace import agent_workspace_scope
 from koraku.agent.prompt_builder import build_tiered_system_prompt, prefetch_learned_memory_volatile
 from koraku.agent.prompt_sections import format_runtime_context_section
+from koraku.credits.token_estimator import (
+    estimate_llm_round,
+    native_tools_for_provider,
+)
 from koraku.agent.budget import (
     BUDGET_EXHAUSTED_USER,
     BUDGET_STEERING_USER,
@@ -59,6 +63,38 @@ from koraku.agent.budget import (
 
 
 log = logging.getLogger(__name__)
+
+
+def _emit_llm_usage_estimate(
+    emit: Callable[[dict[str, Any]], None],
+    *,
+    messages: list[AgentMessage],
+    system_prompt: str,
+    tool_schemas: list[Any],
+    assistant_content: list[dict[str, Any]] | str,
+    model: str,
+    provider: str,
+) -> dict[str, Any]:
+    est_in, est_out = estimate_llm_round(
+        messages=messages,
+        system_prompt=system_prompt,
+        tool_schemas=tool_schemas,
+        assistant_content=assistant_content,
+        model=model,
+        native_tools=native_tools_for_provider(provider, tool_schemas),
+    )
+    event = {
+        "type": "agent.llm_usage_estimate",
+        "data": {
+            "input_tokens": est_in,
+            "output_tokens": est_out,
+            "model": model,
+            "provider": provider,
+        },
+    }
+    emit(event)
+    return event
+
 
 _AGENT_RUN_SEMAPHORE = asyncio.Semaphore(max(1, int(settings.agent_concurrency_limit)))
 _TOOL_RUN_SEMAPHORE = asyncio.Semaphore(max(1, int(settings.tool_concurrency_limit)))
@@ -614,6 +650,15 @@ class Agent:
             yield wrapped
             if event.get("type") == "assistant_message":
                 assistant_content = event["message"]["content"]
+        yield _emit_llm_usage_estimate(
+            emit,
+            messages=context_messages,
+            system_prompt=system_prompt,
+            tool_schemas=[],
+            assistant_content=assistant_content,
+            model=effective_model,
+            provider=eff_provider,
+        )
         session.add_message("assistant", assistant_content, model=effective_model, stop_reason="end_turn")
         done = {
             "type": "agent.completed",
@@ -758,6 +803,16 @@ class Agent:
 
                 if event["type"] == "assistant_message":
                     assistant_content = event["message"]["content"]
+
+            yield _emit_llm_usage_estimate(
+                emit,
+                messages=context_messages,
+                system_prompt=system_prompt,
+                tool_schemas=active_tools,
+                assistant_content=assistant_content,
+                model=effective_model,
+                provider=eff_provider,
+            )
 
             if llm_timed_out:
                 err = {

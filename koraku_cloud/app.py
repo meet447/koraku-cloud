@@ -13,6 +13,7 @@ from koraku_cloud.api.memory_routes import router as memory_router
 from koraku_cloud.api.personalization_routes import router as personalization_router
 from koraku_cloud.api.sendblue_routes import router as sendblue_router
 from koraku_cloud.api.workspace_routes import router as workspace_router
+from koraku.api.usage_routes import router as usage_router
 from koraku.server_sdk import create_sdk_app
 
 # Re-export startup agent for tests.
@@ -34,6 +35,7 @@ def create_cloud_app():
     app.include_router(composio_trigger_events_router)
     app.include_router(workspace_router)
     app.include_router(sendblue_router)
+    app.include_router(usage_router)
     return app
 
 

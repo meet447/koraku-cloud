@@ -29,6 +29,8 @@ _CLOUD_OVERRIDE_FIELDS = frozenset(
         "koraku_api_key",
         "health_detail_token",
         "chat_rate_limit_per_minute",
+        "credits_free_monthly_limit",
+        "credits_min_reserve",
         "automation_rate_limit_per_minute",
         "automation_manual_run_concurrency_per_user",
         "supabase_jwt_secret",

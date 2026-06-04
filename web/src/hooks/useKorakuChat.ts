@@ -560,10 +560,23 @@ export function useKorakuChat() {
 
             if (!startRes.ok) {
               const errText = await startRes.text().catch(() => startRes.statusText);
+              let displayError = `HTTP ${startRes.status}: ${errText.slice(0, 400)}`;
+              if (startRes.status === 402) {
+                try {
+                  const body = JSON.parse(errText) as { detail?: { message?: string } };
+                  displayError =
+                    body.detail?.message ||
+                    "Monthly credit limit reached. Open Settings → Usage for details.";
+                } catch {
+                  displayError =
+                    "Monthly credit limit reached. Open Settings → Usage for details.";
+                }
+              }
               updateAssistantRun(sid, assistantMsgId, (r) => ({
                 ...r,
-                error: r.error || `HTTP ${startRes.status}: ${errText.slice(0, 400)}`,
-                statusText: "Request failed",
+                error: r.error || displayError,
+                statusText:
+                  startRes.status === 402 ? "Credits exhausted" : "Request failed",
               }));
               return;
             }
@@ -621,12 +634,24 @@ export function useKorakuChat() {
               }
             }
             const errText = await streamRes.text().catch(() => streamRes.statusText);
+            let displayError = `Stream HTTP ${streamRes.status}: ${errText.slice(0, 400)}${extra}`.trim();
+            if (streamRes.status === 402) {
+              try {
+                const body = JSON.parse(errText) as {
+                  detail?: { message?: string };
+                };
+                displayError =
+                  body.detail?.message ||
+                  "Monthly credit limit reached. Open Settings → Usage for details.";
+              } catch {
+                displayError =
+                  "Monthly credit limit reached. Open Settings → Usage for details.";
+              }
+            }
             updateAssistantRun(sid, assistantMsgId, (r) => ({
               ...r,
-              error:
-                r.error ||
-                `Stream HTTP ${streamRes.status}: ${errText.slice(0, 400)}${extra}`.trim(),
-              statusText: "Subscribe failed",
+              error: r.error || displayError,
+              statusText: streamRes.status === 402 ? "Credits exhausted" : "Subscribe failed",
             }));
             return;
           }
