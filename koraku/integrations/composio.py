@@ -27,6 +27,7 @@ _composio_tool_map: ContextVar[dict[str, Tool] | None] = ContextVar("koraku_comp
 # When set, Composio list/auth/execute use this Supabase ``sub`` instead of the global fallback.
 _composio_request_user: ContextVar[str | None] = ContextVar("koraku_composio_request_user", default=None)
 _connections_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+_prompt_section_cache: dict[str, tuple[float, str]] = {}
 _CACHE_TTL = 15.0
 _CONNECTIONS_CACHE_MAX_SIZE = 2000
 
@@ -175,7 +176,10 @@ def list_connections_summary() -> list[dict[str, Any]]:
 
     if len(_connections_cache) >= _CONNECTIONS_CACHE_MAX_SIZE:
         _connections_cache.clear()
+        _prompt_section_cache.clear()
     _connections_cache[uid] = (time.monotonic(), out)
+    for suffix in ("quick", "full", "flat"):
+        _prompt_section_cache.pop(f"{uid}:{suffix}", None)
     return [dict(r) for r in out]
 
 
@@ -535,6 +539,37 @@ def composio_dispatcher_prompt_section_quick() -> str:
             "- No integrations are **ACTIVE** yet. Suggest **Connections** in the app."
         )
     return "\n".join(lines) + "\n\n"
+
+
+def _cached_composio_prompt_section(cache_key: str, builder: Callable[[], str]) -> str:
+    """Per-user Composio prompt slice; TTL aligned with ``list_connections_summary`` cache."""
+    now = time.monotonic()
+    cached = _prompt_section_cache.get(cache_key)
+    if cached is not None:
+        cache_time, text = cached
+        if (now - cache_time) < _CACHE_TTL:
+            return text
+    text = builder()
+    _prompt_section_cache[cache_key] = (now, text)
+    return text
+
+
+def composio_prompt_section_for_turn(task_class: str) -> str:
+    """Composio system slice for a main-agent turn (cached; quick variant for non-research)."""
+    if not is_configured():
+        return ""
+    uid = user_id()
+    use_quick = (task_class or "").strip().lower() != "research"
+    if bool(settings.composio_subagent_mode):
+        variant = "quick" if use_quick else "full"
+        cache_key = f"{uid}:{variant}"
+        builder = (
+            composio_dispatcher_prompt_section_quick
+            if use_quick
+            else composio_dispatcher_prompt_section
+        )
+        return _cached_composio_prompt_section(cache_key, builder)
+    return _cached_composio_prompt_section(f"{uid}:flat", composio_system_prompt_section)
 
 
 def composio_dispatcher_prompt_section() -> str:

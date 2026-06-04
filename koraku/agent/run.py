@@ -368,6 +368,16 @@ class Agent:
                     seen.add(t.name)
         return active_tools
 
+    async def _composio_prompt_section_for_turn(self, task_class: str) -> str | None:
+        if not composio_runtime.is_configured():
+            return None
+        if bool(settings.composio_subagent_mode):
+            return await asyncio.to_thread(
+                composio_runtime.composio_prompt_section_for_turn,
+                task_class,
+            )
+        return await asyncio.to_thread(composio_runtime.composio_system_prompt_section)
+
     def _llm(self, provider_id: str) -> UnifiedLLMClient:
         pid = provider_id.strip().lower()
         if pid not in self._llm_by_provider:
@@ -524,13 +534,17 @@ class Agent:
                 emit(mode_event)
                 yield mode_event
 
-                active_tools = await self._setup_active_tools(
-                    composio_registry_token,
-                    emit,
-                    execution_target=execution_target,
-                    blaxel_sandbox_active=blaxel_active,
-                    run_context=run_context,
-                    task_class=turn_limits.task_class,
+                active_tools, composio_sec, learned_prefetch = await asyncio.gather(
+                    self._setup_active_tools(
+                        composio_registry_token,
+                        emit,
+                        execution_target=execution_target,
+                        blaxel_sandbox_active=blaxel_active,
+                        run_context=run_context,
+                        task_class=turn_limits.task_class,
+                    ),
+                    self._composio_prompt_section_for_turn(turn_limits.task_class),
+                    prefetch_learned_memory_volatile(user_input, workspace=ws),
                 )
                 tool_names = [t.name for t in active_tools]
                 tools_event = {"type": "agent.tools", "data": {"tools": tool_names, "count": len(tool_names)}}
@@ -562,18 +576,6 @@ class Agent:
                     user_turn = build_user_message_blocks(user_input, imgs)
                     session.add_message("user", user_turn)
                     session.step_count = 0
-                    if composio_runtime.is_configured():
-                        if bool(settings.composio_subagent_mode):
-                            composio_sec = await asyncio.to_thread(
-                                composio_runtime.composio_dispatcher_prompt_section
-                            )
-                        else:
-                            composio_sec = await asyncio.to_thread(
-                                composio_runtime.composio_system_prompt_section
-                            )
-                    else:
-                        composio_sec = None
-                    learned_prefetch = await prefetch_learned_memory_volatile(user_input, workspace=ws)
                     system_prompt = build_system_prompt(
                         ws,
                         client_timezone=client_timezone,

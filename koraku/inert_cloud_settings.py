@@ -83,6 +83,20 @@ class CloudSettings(BaseSettings):
         default=12,
         validation_alias=AliasChoices("CHAT_RATE_LIMIT_PER_MINUTE", "chat_rate_limit_per_minute"),
     )
+    chat_hydrate_prefer_client_history: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "CHAT_HYDRATE_PREFER_CLIENT_HISTORY",
+            "chat_hydrate_prefer_client_history",
+        ),
+    )
+    chat_history_supabase_limit: int = Field(
+        default=60,
+        validation_alias=AliasChoices(
+            "CHAT_HISTORY_SUPABASE_LIMIT",
+            "chat_history_supabase_limit",
+        ),
+    )
     credits_free_monthly_limit: int = Field(
         default=100_000,
         validation_alias=AliasChoices(
