@@ -1,9 +1,11 @@
+"use server";
+
 import { cookies } from "next/headers";
 import { ORG_ID_COOKIE } from "@/lib/tenant/constants";
 import { ensureDefaultOrgId } from "@/lib/tenant/server";
 import { requireSupabaseAuth } from "@/lib/supabase/server";
 
-/** Ensure org cookie exists for signed-in app sessions (server layout). */
+/** Ensure org cookie exists for signed-in app sessions (Server Action). */
 export async function bootstrapOrgCookie(): Promise<void> {
   const auth = await requireSupabaseAuth();
   if (!auth.ok) return;

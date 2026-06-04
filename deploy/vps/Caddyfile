@@ -1,0 +1,6 @@
+# Optional: use this file only if Caddy runs **inside Docker** (not the default on your OCI VM).
+# On 144.24.98.146, system Caddy already owns :80/:443 — use caddy-site.snippet instead.
+api.koraku.chipling.xyz {
+	encode gzip zstd
+	reverse_proxy api:8000
+}

@@ -1,7 +1,11 @@
 import { KorakuAppShell } from "@/components/KorakuAppShell";
-import { bootstrapOrgCookie } from "@/lib/tenant/bootstrap-org";
+import { OrgCookieBootstrap } from "@/components/OrgCookieBootstrap";
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  await bootstrapOrgCookie();
-  return <KorakuAppShell>{children}</KorakuAppShell>;
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      <OrgCookieBootstrap />
+      <KorakuAppShell>{children}</KorakuAppShell>
+    </>
+  );
 }
