@@ -81,6 +81,15 @@ def _cloud_field_names() -> frozenset[str]:
     return frozenset(_cloud_settings_module().CloudSettings.model_fields)
 
 
+def _partition_settings_kwargs(
+    kwargs: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    cloud_fields = _cloud_field_names()
+    sdk_kwargs = {k: v for k, v in kwargs.items() if k in _SDK_FIELD_NAMES}
+    cloud_kwargs = {k: v for k, v in kwargs.items() if k in cloud_fields}
+    return sdk_kwargs, cloud_kwargs
+
+
 def _get_cloud_layer() -> Any:
     global _inert_cloud
     if _cloud_bound and _cloud_settings is not None:
@@ -190,9 +199,7 @@ class _MergedSettings:
 
     @classmethod
     def model_construct(cls, **_kwargs: Any) -> _MergedSettings:
-        cloud_fields = _cloud_field_names()
-        sdk_kwargs = {k: v for k, v in _kwargs.items() if k in _SDK_FIELD_NAMES}
-        cloud_kwargs = {k: v for k, v in _kwargs.items() if k in cloud_fields}
+        sdk_kwargs, cloud_kwargs = _partition_settings_kwargs(_kwargs)
         sdk = SdkSettings.model_construct(**sdk_kwargs)
         if cloud_kwargs:
             CloudSettings = _cloud_settings_module().CloudSettings
@@ -210,9 +217,7 @@ class _SettingsMeta(type):
             return _MergedSettings(args[0])
         if not args and not kwargs:
             return _merged_default()
-        cloud_fields = _cloud_field_names()
-        sdk_kwargs = {k: v for k, v in kwargs.items() if k in _SDK_FIELD_NAMES}
-        cloud_kwargs = {k: v for k, v in kwargs.items() if k in cloud_fields}
+        sdk_kwargs, cloud_kwargs = _partition_settings_kwargs(kwargs)
         sdk = SdkSettings(**sdk_kwargs) if sdk_kwargs else SdkSettings()
         if cloud_kwargs:
             CloudSettings = _cloud_settings_module().CloudSettings

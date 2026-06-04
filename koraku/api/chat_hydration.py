@@ -4,36 +4,36 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from koraku.core.chat_history import ChatHistoryHydration, client_history_rows_to_agent_messages
 from koraku.core.models import AgentMessage, SessionState
 from koraku.profiles import is_cloud_profile
 
 
-def _sdk_hydration_report(
+def _sdk_hydration(
     session: SessionState,
     *,
     source: str,
     reason: str,
     messages_before: int,
     messages_loaded: int,
+    auth_sub: str | None = None,
     rows_fetched: int = 0,
-) -> dict[str, Any]:
-    return {
-        "session_id": session.session_id,
-        "source": source,
-        "reason": reason,
-        "auth_present": False,
-        "supabase_configured": False,
-        "rows_fetched": rows_fetched,
-        "messages_loaded": messages_loaded,
-        "messages_before": messages_before,
-    }
+) -> ChatHistoryHydration:
+    return ChatHistoryHydration(
+        session_id=session.session_id,
+        source=source,
+        reason=reason,
+        auth_present=bool(auth_sub),
+        supabase_configured=False,
+        rows_fetched=rows_fetched,
+        messages_loaded=messages_loaded,
+        messages_before=messages_before,
+    )
 
 
 def _client_history_to_messages(client_history: list[dict[str, Any]] | None) -> list[AgentMessage]:
     if not client_history:
         return []
-    from koraku.core.chat_history import client_history_rows_to_agent_messages
-
     return client_history_rows_to_agent_messages(list(client_history))
 
 
@@ -59,47 +59,35 @@ async def hydrate_session_for_turn(
 
     messages_before = len(session.messages)
     if messages_before > 0:
-        from koraku.core.chat_history import ChatHistoryHydration
-
-        return ChatHistoryHydration(
-            session_id=session.session_id,
+        return _sdk_hydration(
+            session,
             source="session",
             reason="warm",
-            auth_present=bool(auth_sub),
-            supabase_configured=False,
-            rows_fetched=0,
-            messages_loaded=messages_before,
             messages_before=messages_before,
+            messages_loaded=messages_before,
+            auth_sub=auth_sub,
         )
 
     fallback = _client_history_to_messages(client_history)
     if fallback:
         session.messages = fallback
         session.touch()
-        from koraku.core.chat_history import ChatHistoryHydration
-
-        return ChatHistoryHydration(
-            session_id=session.session_id,
+        return _sdk_hydration(
+            session,
             source="client",
             reason="sdk_client_history",
-            auth_present=bool(auth_sub),
-            supabase_configured=False,
-            rows_fetched=0,
-            messages_loaded=len(fallback),
             messages_before=messages_before,
+            messages_loaded=len(fallback),
+            auth_sub=auth_sub,
         )
 
-    from koraku.core.chat_history import ChatHistoryHydration
-
-    return ChatHistoryHydration(
-        session_id=session.session_id,
+    return _sdk_hydration(
+        session,
         source="memory",
         reason="sdk_empty",
-        auth_present=bool(auth_sub),
-        supabase_configured=False,
-        rows_fetched=0,
-        messages_loaded=messages_before,
         messages_before=messages_before,
+        messages_loaded=messages_before,
+        auth_sub=auth_sub,
     )
 
 
