@@ -177,7 +177,7 @@ export function Sidebar({
         })}
       </nav>
 
-      {!collapsed && !settingsMenuOpen && (
+      {!collapsed && (
         <div className="mt-4 flex min-h-0 flex-1 flex-col">
           <div className="mb-2 flex shrink-0 items-center justify-between px-1">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
@@ -340,14 +340,7 @@ export function Sidebar({
         </div>
       )}
 
-      <div
-        className={clsx(
-          "flex flex-col gap-2",
-          !collapsed && settingsMenuOpen
-            ? "min-h-0 flex-1 border-t border-neutral-200/60 pt-2"
-            : "mt-auto shrink-0 border-t border-neutral-200/60 pt-2",
-        )}
-      >
+      <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-neutral-200/60 pt-2">
         {!collapsed && settingsMenuOpen ? (
           <SidebarSettingsMenu onClose={() => setSettingsMenuOpen(false)} />
         ) : (
