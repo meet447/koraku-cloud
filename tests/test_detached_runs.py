@@ -43,6 +43,34 @@ def test_runs_post_requires_auth_by_default() -> None:
     assert resp.status_code == 401
 
 
+def test_detached_run_worker_forwards_client_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    async def _capture_stream(*_a: object, **kw: object):
+        captured.update(kw)
+        yield 'data: {"type": "koraku.started"}\n\n'
+        yield "event: done\n\n"
+
+    monkeypatch.setattr("koraku_cloud.api.detached_runs._stream_agent_sse", _capture_stream, raising=False)
+
+    client = TestClient(app)
+    history = [
+        {"role": "user", "text": "tell me fifa news"},
+        {"role": "assistant", "text": "Zee has World Cup rights."},
+    ]
+    resp = client.post(
+        "/runs",
+        json={
+            "msg": "yeah do that",
+            "turn_id": "00000000-0000-4000-8000-000000000099",
+            "client_history": history,
+        },
+    )
+    assert resp.status_code == 200
+    time.sleep(0.05)
+    assert captured.get("client_history") == history
+
+
 def test_runs_post_returns_run_id() -> None:
     client = TestClient(app)
     resp = client.post("/runs", json={"msg": "hello"})

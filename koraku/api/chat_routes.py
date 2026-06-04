@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from koraku.agent import _step_budget, get_or_create_chat_session
+from koraku.core.session_store import get_session_store
 from koraku.agent.runtime_context import AgentRunContext, ExecutionTarget
 from koraku.agent.unconfigured import run_unconfigured
 from koraku.core.config import settings
@@ -373,6 +374,8 @@ async def _stream_agent_sse(
                 session=session,
                 run_id=stream_state.run_id,
             )
+            session.touch()
+            get_session_store().save(session)
             clear_lazy_blaxel_session(lazy_tok, lazy_root_tok)
             try:
                 queue.put_nowait(None)

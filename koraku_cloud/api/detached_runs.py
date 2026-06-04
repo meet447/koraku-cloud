@@ -15,7 +15,12 @@ from typing import TYPE_CHECKING, Any, AsyncIterator, cast
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from koraku.api.chat_routes import StreamChatBody, _stream_agent_sse, format_sse
+from koraku.api.chat_routes import (
+    StreamChatBody,
+    _stream_agent_sse,
+    format_sse,
+    normalize_stream_execution_target,
+)
 from koraku.core.config import settings
 from koraku.credits.service import pre_check_org
 from koraku.core.detached_run_store import (
@@ -76,6 +81,7 @@ async def _run_worker(
         if auth_sub:
             composio_token = composio_runtime.set_composio_request_user(auth_sub)
             cloud_token = set_cloud_user_id(auth_sub)
+        exec_target = normalize_stream_execution_target(body.execution_target or None)
         async for chunk in _stream_agent_sse(
             body.msg.strip(),
             images=body.images,
@@ -88,7 +94,9 @@ async def _run_worker(
             server_mode=server_mode,
             auth_sub=auth_sub,
             auth_org_id=auth_org_id,
+            client_history=[p.model_dump() for p in body.client_history],
             stream_run_id=run_id,
+            execution_target=exec_target,
         ):
             await buf.append(chunk)
     except Exception as e:
