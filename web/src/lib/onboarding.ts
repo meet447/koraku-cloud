@@ -5,8 +5,8 @@ import {
   PROFILE_SECTION_HEADER,
 } from "@/lib/personalization-memory";
 
-export const ONBOARDING_DONE_KEY = "koraku_onboarding_done";
-export const ONBOARDING_DRAFT_KEY = "koraku_onboarding_draft";
+const ONBOARDING_DONE_KEY = "koraku_onboarding_done";
+const ONBOARDING_DRAFT_KEY = "koraku_onboarding_draft";
 export const STARTER_PROMPTS_KEY = "koraku_starter_prompts";
 
 export const ONBOARDING_STEP_IDS = [

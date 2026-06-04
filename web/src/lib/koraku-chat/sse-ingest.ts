@@ -8,7 +8,7 @@ import {
 } from "@/lib/korakuReducer";
 import type { ChatMessage, StreamingTurn } from "@/lib/koraku-chat/types";
 
-export function parseSseBlock(raw: string): { event: string; data: string; id?: string } {
+function parseSseBlock(raw: string): { event: string; data: string; id?: string } {
   let event = "message";
   let id: string | undefined;
   const dataLines: string[] = [];
@@ -63,7 +63,7 @@ export function finalizeTurnStreamStatus(error: string | null, completed: boolea
   return error?.trim() ? "failed" : "completed";
 }
 
-export function rememberServerChatSession(
+function rememberServerChatSession(
   uiSessionId: string,
   payload: Record<string, unknown>,
   mapRef: MutableRefObject<Record<string, string>>,

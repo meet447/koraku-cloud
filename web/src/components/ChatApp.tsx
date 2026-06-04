@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { PanelRight } from "lucide-react";
 import { useKorakuChatThread } from "@/context/KorakuChatContext";
@@ -18,35 +19,11 @@ import { RunWorkspaceAttachments } from "./RunWorkspaceAttachments";
 import { StreamingReplySkeleton } from "./StreamingReplySkeleton";
 import { initialRunState } from "@/lib/korakuReducer";
 import { shouldShowRunFooterStatus } from "@/lib/runStatusText";
+import { readStarterPrompts } from "@/lib/starter-prompts";
+import { ChatMessagesSkeleton } from "@/components/ChatMessagesSkeleton";
 
 /** Use windowed rendering when a thread has at least this many rows. */
 const VIRTUALIZE_MESSAGE_COUNT = 10;
-
-function ChatMessagesSkeleton() {
-  const line = (w: string, delay?: string) => (
-    <div
-      className={`koraku-shimmer h-3.5 rounded-md ${w}${delay ? ` ${delay}` : ""}`}
-    />
-  );
-  const block = (key: string) => (
-    <div key={key} className="mb-10 space-y-4">
-      <div className="flex justify-end">
-        <div className="koraku-shimmer h-11 w-[min(72%,18rem)] rounded-3xl" />
-      </div>
-      <div className="space-y-2.5 pl-1">
-        {line("w-[78%] max-w-xl")}
-        {line("w-[58%] max-w-md", "[animation-delay:120ms]")}
-        <div className="koraku-shimmer mt-3 h-28 w-full max-w-2xl rounded-2xl [animation-delay:200ms]" />
-      </div>
-    </div>
-  );
-  return (
-    <div className="space-y-2" aria-busy aria-label="Loading conversation">
-      {block("a")}
-      {block("b")}
-    </div>
-  );
-}
 
 function ChatMessageRow({
   m,
@@ -72,10 +49,12 @@ function ChatMessageRow({
                   key={im.id}
                   className="h-28 w-28 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={im.previewUrl}
                     alt=""
+                    width={112}
+                    height={112}
+                    unoptimized
                     className="h-full w-full object-cover"
                   />
                 </div>
@@ -185,7 +164,7 @@ function ChatMessageRow({
 /** Main chat column; must render inside ``KorakuAppShell`` (provides chat context + chrome). */
 export function ChatConversation() {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [starterPrompts, setStarterPrompts] = useState<string[]>([]);
+  const [starterPrompts] = useState(readStarterPrompts);
   const {
     hydrated,
     messagesLoadingSessionIds,
@@ -204,26 +183,6 @@ export function ChatConversation() {
   const chatMainLoading =
     !hydrated ||
     (Boolean(activeId) && messagesLoadingSessionIds.includes(activeId));
-
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem("koraku_starter_prompts");
-      if (!raw) {
-        setStarterPrompts([
-          "Remember how I like to work and ask three setup questions.",
-          "Create a second-brain note for my current priorities.",
-          "Suggest one useful daily automation I can safely try.",
-        ]);
-        return;
-      }
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        setStarterPrompts(parsed.filter((p): p is string => typeof p === "string").slice(0, 3));
-      }
-    } catch {
-      setStarterPrompts([]);
-    }
-  }, []);
 
   const lastAssistant = useMemo((): Extract<ChatMessage, { role: "assistant" }> | undefined => {
     for (let i = messages.length - 1; i >= 0; i--) {

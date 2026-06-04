@@ -97,8 +97,11 @@ export function UserProfileSection({
 
       <div className={clsx(hideIntro ? "space-y-3" : "mt-4 space-y-3")}>
         <div className={korakuUi.cardPanel}>
-          <label className={korakuUi.fieldLabel}>Your name</label>
+          <label htmlFor="profile-user-name" className={korakuUi.fieldLabel}>
+            Your name
+          </label>
           <input
+            id="profile-user-name"
             type="text"
             value={profile.userName}
             onChange={(e) => setProfile((p) => ({ ...p, userName: e.target.value }))}
@@ -111,8 +114,11 @@ export function UserProfileSection({
         </div>
 
         <div className={korakuUi.cardPanel}>
-          <label className={korakuUi.fieldLabel}>About you</label>
+          <label htmlFor="profile-about" className={korakuUi.fieldLabel}>
+            About you
+          </label>
           <textarea
+            id="profile-about"
             value={profile.about}
             onChange={(e) => setProfile((p) => ({ ...p, about: e.target.value }))}
             placeholder="What you do, your role, and context Koraku should remember…"
@@ -122,8 +128,8 @@ export function UserProfileSection({
           />
         </div>
 
-        <div className={korakuUi.cardPanel}>
-          <p className={korakuUi.fieldLabel}>Koraku should help me with</p>
+        <fieldset className={korakuUi.cardPanel}>
+          <legend className={korakuUi.fieldLabel}>Koraku should help me with</legend>
           <div className="mt-3 flex flex-wrap gap-2">
             {ONBOARDING_HELP_OPTIONS.map((item) => (
               <button
@@ -147,7 +153,7 @@ export function UserProfileSection({
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-end gap-3">

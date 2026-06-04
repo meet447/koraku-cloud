@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { featureDescriptions } from "@/components/landing/landing-data";
 import { LANDING_CONTAINER, LANDING_PAGE_BG, LANDING_SECTION, LANDING_SURFACE } from "@/components/landing/landing-layout";
 
@@ -74,8 +75,14 @@ export function ChaptersSection() {
                     key={name}
                     className="flex h-[58px] flex-col items-center justify-center rounded-md border border-black/10 bg-white shadow-[4px_4px_0_rgba(0,0,0,0.04)]"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt="" width={22} height={22} className="h-[22px] w-[22px] object-contain" />
+                    <Image
+                      src={src}
+                      alt=""
+                      width={22}
+                      height={22}
+                      unoptimized
+                      className="h-[22px] w-[22px] object-contain"
+                    />
                     <span className="mt-1 font-mono text-[9px] uppercase tracking-tight text-stone-500">
                       {name}
                     </span>
@@ -94,12 +101,12 @@ export function ChaptersSection() {
 
           <article className="relative flex min-h-[400px] flex-col justify-end overflow-hidden rounded-lg border border-black/10 bg-white text-left shadow-[10px_10px_0_rgba(0,0,0,0.03)]">
             <div className="landing-mesh-overlay pointer-events-none absolute inset-0" aria-hidden />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="https://pub-f170a2592d2c4a1485466404c36807be.r2.dev/viktor/library%20icon.svg"
               alt=""
               width={170}
               height={140}
+              unoptimized
               className="absolute left-1/2 top-[50px] w-[170px] -translate-x-1/2 opacity-80 grayscale drop-shadow-[0_15px_25px_rgba(0,0,0,0.08)]"
             />
             <div className="absolute left-1/2 top-[220px] z-[2] flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-md border border-black bg-white px-[18px] py-1.5 text-xs font-medium text-slate-800 shadow-[4px_4px_0_rgba(0,0,0,0.1)]">

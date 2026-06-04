@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import clsx from "clsx";
 import type { User } from "@supabase/supabase-js";
@@ -21,12 +22,12 @@ export function UserAvatar({
 
   if (avatarUrl && !broken) {
     return (
-      /* eslint-disable-next-line @next/next/no-img-element */
-      <img
+      <Image
         src={avatarUrl}
         alt=""
         width={size}
         height={size}
+        unoptimized
         referrerPolicy="no-referrer"
         onError={() => setBroken(true)}
         className={clsx(

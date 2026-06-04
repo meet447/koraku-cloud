@@ -3,7 +3,7 @@
 import type { User } from "@supabase/supabase-js";
 import { LogIn, LogOut, UserPlus } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { UserAvatar } from "@/components/UserAvatar";
 import { clearOnboardingClientState } from "@/lib/onboarding";
@@ -14,7 +14,6 @@ const iconStroke = 1.5;
 
 export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [user, setUser] = useState<User | null | undefined>(undefined);
 
   const supabase = useMemo(() => {
@@ -32,14 +31,18 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
     }
 
     let cancelled = false;
+    const applyUser = (next: User | null) => {
+      if (!cancelled) setUser(next);
+    };
+
     void supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setUser(data.user ?? null);
+      applyUser(data.user ?? null);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      applyUser(session?.user ?? null);
     });
 
     return () => {
@@ -108,7 +111,7 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
     void (async () => {
       clearOnboardingClientState();
       await supabase.auth.signOut();
-      if (pathname.startsWith("/app")) {
+      if (window.location.pathname.startsWith("/app")) {
         router.replace("/");
       } else {
         router.refresh();

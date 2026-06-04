@@ -2,14 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { motion } from "motion/react";
+import { LazyMotion, domAnimation, m } from "motion/react";
 import { LANDING_CONTAINER, LANDING_PAGE_BG, LANDING_SECTION } from "@/components/landing/landing-layout";
 
 export function HeroSection() {
   return (
     <section className={`border-b border-black/10 ${LANDING_PAGE_BG} ${LANDING_SECTION}`}>
       <div className={LANDING_CONTAINER}>
-        <motion.div
+        <LazyMotion features={domAnimation}>
+        <m.div
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: "easeOut" }}
@@ -57,7 +58,8 @@ export function HeroSection() {
               <span aria-hidden>›</span>
             </Link>
           </div>
-        </motion.div>
+        </m.div>
+        </LazyMotion>
 
         <div className="relative mt-12 overflow-hidden rounded-t-2xl border border-black/10 bg-[#d5d7d3] shadow-[0_24px_80px_-50px_rgba(0,0,0,0.35)] sm:mt-14">
           <Image

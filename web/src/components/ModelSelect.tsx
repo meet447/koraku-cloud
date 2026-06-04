@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -72,12 +73,13 @@ function ModelRowIcon({
   if (logoUrl) {
     /* No frame/shadow — logo only (composer + chat chrome). */
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <Image
         src={logoUrl}
         alt=""
+        width={28}
+        height={28}
+        unoptimized
         className="h-7 w-7 shrink-0 object-contain"
-        loading="lazy"
         referrerPolicy="no-referrer-when-downgrade"
       />
     );
@@ -281,19 +283,15 @@ export function ModelSelect({
       </button>
 
       {open && options.length > 0 ? (
-        <div
-          role="listbox"
-          className="absolute bottom-full left-0 z-50 mb-2 w-[min(calc(100vw-2rem),18rem)] overflow-hidden rounded-2xl border border-neutral-200/90 bg-white py-1.5 shadow-lg"
+        <ul
+          className="absolute bottom-full left-0 z-50 mb-2 max-h-[min(70vh,20rem)] w-[min(calc(100vw-2rem),18rem)] list-none overflow-y-auto overscroll-contain rounded-2xl border border-neutral-200/90 bg-white px-1 py-1.5 shadow-lg"
         >
-          <div className="max-h-[min(70vh,20rem)] overflow-y-auto overscroll-contain px-1">
             {options.map((o) => {
               const isSel = o.value === value;
               return (
+                <li key={o.value}>
                 <button
-                  key={o.value}
                   type="button"
-                  role="option"
-                  aria-selected={isSel}
                   disabled={o.disabled}
                   onClick={() => pick(o.value)}
                   className={clsx(
@@ -323,10 +321,10 @@ export function ModelSelect({
                     <span className="h-4 w-4 shrink-0" aria-hidden />
                   )}
                 </button>
+                </li>
               );
             })}
-          </div>
-        </div>
+        </ul>
       ) : null}
     </div>
   );

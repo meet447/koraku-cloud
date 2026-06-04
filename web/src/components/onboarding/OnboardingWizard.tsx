@@ -34,11 +34,26 @@ function toggleChip(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 }
 
+function readInitialOnboarding() {
+  const draft = loadOnboardingDraft();
+  if (draft) {
+    const { stepIndex, ...form } = draft;
+    return { form, stepIndex, hydrated: true, needsRemote: false as const };
+  }
+  return {
+    form: defaultOnboardingFormData(),
+    stepIndex: 0,
+    hydrated: false,
+    needsRemote: true as const,
+  };
+}
+
 export function OnboardingWizard() {
   const router = useRouter();
-  const [stepIndex, setStepIndex] = useState(0);
-  const [form, setForm] = useState<OnboardingFormData>(defaultOnboardingFormData);
-  const [hydrated, setHydrated] = useState(false);
+  const [initial] = useState(readInitialOnboarding);
+  const [stepIndex, setStepIndex] = useState(initial.stepIndex);
+  const [form, setForm] = useState<OnboardingFormData>(initial.form);
+  const [hydrated, setHydrated] = useState(initial.hydrated);
   const [stepError, setStepError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -48,50 +63,47 @@ export function OnboardingWizard() {
   const isFirst = stepIndex === 0;
   const isLast = stepIndex === ONBOARDING_STEPS.length - 1;
 
-  const patchForm = useCallback((patch: Partial<OnboardingFormData>) => {
-    setForm((prev) => ({ ...prev, ...patch }));
-  }, []);
-
-  useEffect(() => {
-    const draft = loadOnboardingDraft();
-    if (draft) {
-      setForm({
-        userName: draft.userName,
-        about: draft.about,
-        helpWith: draft.helpWith,
-        agentName: draft.agentName,
-        preferences: draft.preferences,
-        persona: draft.persona,
+  const patchForm = useCallback(
+    (patch: Partial<OnboardingFormData>) => {
+      setForm((prev) => {
+        const next = { ...prev, ...patch };
+        if (hydrated) saveOnboardingDraft(next, stepIndex);
+        return next;
       });
-      setStepIndex(draft.stepIndex);
-    } else {
-      void loadPersonalization()
-        .then((data) => {
-          if (!data.agent_name && !data.memory && !data.soul) return;
-          const { profile, preferences } = parseMemorySections(data.memory);
-          setForm((prev) => ({
-            ...prev,
-            userName: profile.userName || prev.userName,
-            about: profile.about || prev.about,
-            helpWith: profile.helpWith.length ? profile.helpWith : prev.helpWith,
-            agentName: data.agent_name || prev.agentName,
-            preferences: preferences || prev.preferences,
-            persona: data.soul || prev.persona,
-          }));
-        })
-        .catch(() => {});
-    }
-    setHydrated(true);
-  }, []);
+    },
+    [hydrated, stepIndex],
+  );
 
   useEffect(() => {
-    if (!hydrated) return;
-    saveOnboardingDraft(form, stepIndex);
-  }, [form, stepIndex, hydrated]);
+    if (!initial.needsRemote) {
+      setHydrated(true);
+      return;
+    }
+    void loadPersonalization()
+      .then((data) => {
+        if (!data.agent_name && !data.memory && !data.soul) return;
+        const { profile, preferences } = parseMemorySections(data.memory);
+        setForm((prev) => ({
+          ...prev,
+          userName: profile.userName || prev.userName,
+          about: profile.about || prev.about,
+          helpWith: profile.helpWith.length ? profile.helpWith : prev.helpWith,
+          agentName: data.agent_name || prev.agentName,
+          preferences: preferences || prev.preferences,
+          persona: data.soul || prev.persona,
+        }));
+      })
+      .catch(() => {})
+      .finally(() => setHydrated(true));
+  }, [initial.needsRemote]);
 
   function goBack() {
     setStepError(null);
-    setStepIndex((i) => Math.max(0, i - 1));
+    setStepIndex((i) => {
+      const next = Math.max(0, i - 1);
+      if (hydrated) saveOnboardingDraft(form, next);
+      return next;
+    });
   }
 
   function goNext() {
@@ -101,7 +113,11 @@ export function OnboardingWizard() {
       return;
     }
     setStepError(null);
-    setStepIndex((i) => Math.min(ONBOARDING_STEPS.length - 1, i + 1));
+    setStepIndex((i) => {
+      const next = Math.min(ONBOARDING_STEPS.length - 1, i + 1);
+      if (hydrated) saveOnboardingDraft(form, next);
+      return next;
+    });
   }
 
   async function finish() {
@@ -224,7 +240,6 @@ function StepFields({
             value={form.userName}
             onChange={(e) => patchForm({ userName: e.target.value })}
             placeholder="Alex"
-            autoFocus
             className={clsx(korakuUi.input, "mt-3")}
             maxLength={120}
             autoComplete="name"
@@ -243,7 +258,6 @@ function StepFields({
               rows={5}
               placeholder="I'm a product lead at a startup. I juggle email, Notion docs, and weekly planning…"
               className={clsx(korakuUi.textarea, "mt-3")}
-              autoFocus
             />
           </label>
           <div>
@@ -277,7 +291,6 @@ function StepFields({
             value={form.agentName}
             onChange={(e) => patchForm({ agentName: e.target.value })}
             placeholder="Koraku"
-            autoFocus
             className={clsx(korakuUi.input, "mt-3")}
             maxLength={120}
           />
@@ -311,7 +324,6 @@ function StepFields({
               onChange={(e) => patchForm({ preferences: e.target.value })}
               rows={8}
               className={clsx(korakuUi.textarea, "mt-3")}
-              autoFocus
             />
           </label>
         </div>
@@ -345,7 +357,6 @@ function StepFields({
               rows={6}
               placeholder="e.g. warm mentor, direct and practical"
               className={clsx(korakuUi.textarea, "mt-3")}
-              autoFocus
             />
           </label>
         </div>

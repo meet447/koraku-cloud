@@ -16,17 +16,6 @@ export async function GET() {
   }
   const { supabase, userId, orgId } = authed.ctx;
 
-  const jar = await cookies();
-  if (!jar.get(ORG_ID_COOKIE)?.value?.trim()) {
-    jar.set(ORG_ID_COOKIE, orgId, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-    });
-  }
-
   const orgs = await listUserOrgs(supabase, userId);
   const active =
     orgs.find((o) => o.id === orgId) ??

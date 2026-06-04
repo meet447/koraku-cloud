@@ -1,19 +1,18 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useRef, useState } from "react";
 import clsx from "clsx";
 import { ArrowUp, Plus, X } from "lucide-react";
+import {
+  readComposerImagesFromFiles,
+  type ComposerImage,
+} from "@/lib/composer-images";
 import { ModelSelect } from "./ModelSelect";
 
 const MAX_IMAGES = 8;
-const MAX_BYTES_PER_IMAGE = 4 * 1024 * 1024;
 
-export type ComposerImage = {
-  id: string;
-  media_type: string;
-  data: string;
-  previewUrl: string;
-};
+export type { ComposerImage };
 
 export function Composer({
   busy,
@@ -35,15 +34,11 @@ export function Composer({
   ) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const modelRef = useRef({ provider: "", model: "", dropdownModelLabel: "" });
   const [text, setText] = useState("");
   const [images, setImages] = useState<ComposerImage[]>([]);
-  const [provider, setProvider] = useState("");
-  const [model, setModel] = useState("");
-  const [dropdownModelLabel, setDropdownModelLabel] = useState("");
   const syncModel = useCallback((p: string, m: string, label: string) => {
-    setProvider(p);
-    setModel(m);
-    setDropdownModelLabel(label);
+    modelRef.current = { provider: p, model: m, dropdownModelLabel: label };
   }, []);
 
   const removeImage = (id: string) => {
@@ -56,43 +51,10 @@ export function Composer({
     });
   };
 
-  const readOneImage = (file: File): Promise<ComposerImage | null> => {
-    const allowed = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
-    const mt = (file.type || "").toLowerCase();
-    if (!allowed.has(mt) || file.size > MAX_BYTES_PER_IMAGE) {
-      return Promise.resolve(null);
-    }
-    return new Promise((resolve) => {
-      const id = crypto.randomUUID();
-      const previewUrl = URL.createObjectURL(file);
-      const reader = new FileReader();
-      reader.onload = () => {
-        const r = String(reader.result || "");
-        const m = r.match(/^data:[^;]+;base64,(.+)$/);
-        if (!m?.[1]) {
-          URL.revokeObjectURL(previewUrl);
-          resolve(null);
-          return;
-        }
-        resolve({ id, media_type: mt, data: m[1], previewUrl });
-      };
-      reader.onerror = () => {
-        URL.revokeObjectURL(previewUrl);
-        resolve(null);
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
   const onFiles = (files: FileList | null) => {
     if (!files?.length) return;
     void (async () => {
-      const rows: ComposerImage[] = [];
-      for (const file of Array.from(files)) {
-        if (rows.length >= MAX_IMAGES) break;
-        const row = await readOneImage(file);
-        if (row) rows.push(row);
-      }
+      const rows = await readComposerImagesFromFiles(files, MAX_IMAGES);
       if (!rows.length) return;
       setImages((prev) => [...prev, ...rows].slice(0, MAX_IMAGES));
     })();
@@ -103,6 +65,7 @@ export function Composer({
     const t = text.trim();
     const ready = images.filter((i) => i.data.length > 0);
     if (!t && ready.length === 0) return;
+    const { provider, model, dropdownModelLabel } = modelRef.current;
     onSend(t, provider, model, dropdownModelLabel, ready);
     setText("");
     for (const row of images) URL.revokeObjectURL(row.previewUrl);
@@ -147,8 +110,14 @@ export function Composer({
                 key={img.id}
                 className="relative h-14 w-14 overflow-hidden rounded-lg border border-neutral-200/80 bg-white"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img.previewUrl} alt="" className="h-full w-full object-cover" />
+                <Image
+                  src={img.previewUrl}
+                  alt=""
+                  width={56}
+                  height={56}
+                  unoptimized
+                  className="h-full w-full object-cover"
+                />
                 <button
                   type="button"
                   disabled={disabled}
@@ -164,6 +133,7 @@ export function Composer({
         ) : null}
         <textarea
           rows={2}
+          aria-label={placeholder}
           value={text}
           disabled={disabled}
           onChange={(e) => setText(e.target.value)}

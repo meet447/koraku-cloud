@@ -77,7 +77,6 @@ export function UsageActivityGraph({
         <div className="min-w-0 flex-1">
           <div
             className="overflow-x-auto rounded-xl bg-white ring-1 ring-neutral-200/60"
-            role="img"
             aria-label="Credit usage by time of day over the selected period"
           >
             <div
@@ -98,14 +97,15 @@ export function UsageActivityGraph({
                 }}
               >
                 {loading
-                  ? Array.from({ length: ACTIVITY_HOUR_LABELS.length * model.days }).map(
-                      (_, i) => (
-                        <div
-                          key={i}
-                          className="animate-pulse rounded-[2px] bg-neutral-100"
-                        />
-                      ),
-                    )
+                  ? Array.from(
+                      { length: ACTIVITY_HOUR_LABELS.length * model.days },
+                      (_, i) => `skeleton-${i}`,
+                    ).map((key) => (
+                      <div
+                        key={key}
+                        className="animate-pulse rounded-[2px] bg-neutral-100"
+                      />
+                    ))
                   : model.grid.flatMap((row, rowIdx) =>
                       row.map((value, colIdx) => {
                         const level = heatmapCellLevel(value, model.maxValue);
@@ -136,7 +136,7 @@ export function UsageActivityGraph({
             {model.dayLabels.map(({ index, day }) =>
               day != null ? (
                 <span
-                  key={index}
+                  key={`day-label-${day}`}
                   className="absolute -translate-x-1/2 tabular-nums"
                   style={{ left: `${((index + 0.5) / model.days) * 100}%` }}
                 >
@@ -163,7 +163,6 @@ export function UsageActivityGraph({
       <div className="mt-3 flex justify-center">
         <div
           className="flex gap-0.5 rounded-full bg-white p-0.5 shadow-sm ring-1 ring-neutral-200/80"
-          role="group"
           aria-label="Activity range"
         >
           {ACTIVITY_WINDOW_DAYS.map((d) => (

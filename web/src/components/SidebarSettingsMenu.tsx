@@ -12,11 +12,7 @@ export function SidebarSettingsMenu({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname() || "";
 
   return (
-    <div
-      className="shrink-0"
-      role="region"
-      aria-label="Settings menu"
-    >
+    <section className="shrink-0" aria-label="Settings menu">
       <div className="rounded-[18px] bg-white px-1.5 py-1.5 shadow-sm ring-1 ring-neutral-200/60">
         <button
           type="button"
@@ -59,6 +55,6 @@ export function SidebarSettingsMenu({ onClose }: { onClose?: () => void }) {
           })}
         </ul>
       </div>
-    </div>
+    </section>
   );
 }

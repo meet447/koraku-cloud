@@ -3,15 +3,23 @@ export type LocalContextPlace = {
   temperatureC: number | null;
 };
 
+const localTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
+
 /** Compact clock label, e.g. `5:48PM`. */
 export function formatLocalTime(date: Date, locale?: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  })
-    .format(date)
-    .replace(/\s/g, "");
+  const formatter =
+    locale != null
+      ? new Intl.DateTimeFormat(locale, {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        })
+      : localTimeFormatter;
+  return formatter.format(date).replace(/\s/g, "");
 }
 
 function isPrivateOrLocalIp(ip: string): boolean {

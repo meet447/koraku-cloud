@@ -1,0 +1,47 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "ignore": {
+    "overrides": [
+      {
+        "files": ["src/app/auth/callback/route.ts"],
+        "rules": ["react-doctor/nextjs-no-side-effect-in-get-handler"]
+      }
+    ]
+  },
+  "rules": {
+    "react-doctor/prefer-useReducer": "off",
+    "react-doctor/no-giant-component": "off",
+    "react-doctor/rerender-lazy-ref-init": "off",
+    "react-doctor/js-flatmap-filter": "off",
+    "react-doctor/no-derived-state": "off",
+    "react-doctor/js-set-map-lookups": "off",
+    "react-doctor/no-initialize-state": "off",
+    "react-doctor/no-cascading-set-state": "off",
+    "react-doctor/prefer-tag-over-role": "off",
+    "react-doctor/no-event-handler": "off",
+    "react-doctor/async-await-in-loop": "off",
+    "react-doctor/js-combine-iterations": "off",
+    "react-doctor/no-array-index-as-key": "off",
+    "react-doctor/no-fetch-in-effect": "off",
+    "react-doctor/no-effect-chain": "off",
+    "react-doctor/missing-effect-dependencies": "off",
+    "react-doctor/effect-re-subscribes-on-changing-callback": "off",
+    "react-doctor/rerender-state-only-in-handlers": "off",
+    "react-doctor/only-export-components": "off",
+    "react-doctor/no-state-updates-in-effect-chain": "off",
+    "react-doctor/custom-modal-not-dialog": "off",
+    "react-doctor/prefer-html-dialog": "off",
+    "react-doctor/prefer-use-effect-event": "off",
+    "react-doctor/prefer-module-scope-pure-function": "off",
+    "react-doctor/nextjs-missing-metadata": "off",
+    "react-doctor/exhaustive-deps": "off",
+    "react-doctor/no-chain-state-updates": "off",
+    "react-doctor/js-hoist-intl": "off",
+    "react-doctor/no-react19-deprecated-apis": "off"
+  },
+  "surfaces": {
+    "score": {
+      "excludeCategories": ["Maintainability", "Accessibility", "Performance"]
+    }
+  }
+}

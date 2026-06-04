@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { errorMessage } from "@/lib/error-message";
@@ -128,12 +129,12 @@ export function OnboardingConnectionsStep() {
                 {busted ? (
                   <span className="text-sm font-bold text-neutral-400">{toolkit.name.slice(0, 1)}</span>
                 ) : (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
+                  <Image
                     src={toolkitIconUrl(toolkit.icon_slug)}
                     alt=""
                     width={32}
                     height={32}
+                    unoptimized
                     className="h-7 w-7 object-contain"
                     onError={() => setIconBroken((prev) => ({ ...prev, [toolkit.slug]: true }))}
                   />

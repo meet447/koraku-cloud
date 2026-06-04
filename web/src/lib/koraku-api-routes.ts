@@ -2,7 +2,9 @@
  * Next.js App Router handlers for ``/koraku-api/*`` BFF proxies.
  *
  * Each mount is a named handler bundle (``automations``, ``composio``, …).
- * Route files under ``src/app/koraku-api`` re-export the bundle they need.
+ * Route files under ``src/app/koraku-api`` import handlers from here.
+ * Segment config (``runtime``, ``dynamic``, ``maxDuration``) must be declared
+ * literally in each ``route.ts`` — Next.js does not apply re-exported config.
  */
 import type { NextRequest } from "next/server";
 import {
@@ -12,9 +14,6 @@ import {
   proxyKorakuJson,
   proxyKorakuSse,
 } from "@/lib/koraku-backend-proxy";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD";
 type CatchAllCtx = { params: Promise<{ path?: string[] }> };
@@ -35,16 +34,11 @@ type FixedProxyConfig<M extends HttpMethod = HttpMethod> = {
   authMode?: KorakuProxyAuthMode;
 };
 
-type CatchAllProxyBundle<M extends HttpMethod> = {
-  runtime: typeof runtime;
-  dynamic: typeof dynamic;
+type CatchAllProxyBundle<M extends HttpMethod> = Record<M, CatchAllHandler> & {
   maxDuration?: number;
-} & Record<M, CatchAllHandler>;
+};
 
-type FixedProxyBundle<M extends HttpMethod> = {
-  runtime: typeof runtime;
-  dynamic: typeof dynamic;
-} & Record<M, FixedHandler>;
+type FixedProxyBundle<M extends HttpMethod> = Record<M, FixedHandler>;
 
 function createCatchAllHandler(
   upstreamPath: string,
@@ -57,7 +51,7 @@ function createCatchAllHandler(
   };
 }
 
-export function createKorakuCatchAllProxy<M extends HttpMethod>(
+function createKorakuCatchAllProxy<M extends HttpMethod>(
   config: CatchAllProxyConfig<M>,
 ): CatchAllProxyBundle<M> {
   const handle = createCatchAllHandler(config.upstreamPath, config.authMode ?? "required");
@@ -65,8 +59,6 @@ export function createKorakuCatchAllProxy<M extends HttpMethod>(
     config.methods.map((method) => [method, handle]),
   ) as Pick<CatchAllProxyBundle<M>, M>;
   return {
-    runtime,
-    dynamic,
     ...(config.maxDuration != null ? { maxDuration: config.maxDuration } : {}),
     ...methodHandlers,
   };
@@ -82,18 +74,14 @@ function createFixedHandler(
   };
 }
 
-export function createKorakuFixedProxy<M extends HttpMethod>(
+function createKorakuFixedProxy<M extends HttpMethod>(
   config: FixedProxyConfig<M>,
 ): FixedProxyBundle<M> {
   const handle = createFixedHandler(config.upstreamPath, config.authMode ?? "required");
   const methodHandlers = Object.fromEntries(
     config.methods.map((method) => [method, handle]),
   ) as Pick<FixedProxyBundle<M>, M>;
-  return {
-    runtime,
-    dynamic,
-    ...methodHandlers,
-  };
+  return methodHandlers;
 }
 
 // --- Catch-all mounts ---

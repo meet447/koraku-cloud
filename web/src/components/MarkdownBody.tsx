@@ -26,20 +26,26 @@ export function MarkdownBody({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          h1: (p) => (
+          h1: ({ children, ...p }) => (
             <h1
               className="mt-6 mb-3 text-xl font-bold tracking-tight text-koraku-ink"
               {...p}
-            />
+            >
+              {children}
+            </h1>
           ),
-          h2: (p) => (
+          h2: ({ children, ...p }) => (
             <h2
               className="mt-5 mb-2 text-lg font-bold tracking-tight text-koraku-ink"
               {...p}
-            />
+            >
+              {children}
+            </h2>
           ),
-          h3: (p) => (
-            <h3 className="mt-4 mb-2 text-base font-bold text-koraku-ink" {...p} />
+          h3: ({ children, ...p }) => (
+            <h3 className="mt-4 mb-2 text-base font-bold text-koraku-ink" {...p}>
+              {children}
+            </h3>
           ),
           p: (p) => <p className="mb-3 text-neutral-800" {...p} />,
           strong: (p) => (

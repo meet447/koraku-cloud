@@ -8,7 +8,7 @@ import {
   safeUpstreamFetch,
 } from "@/lib/proxy-fetch";
 
-export const korakuBackendBase = (process.env.KORAKU_BACKEND_URL ?? "http://127.0.0.1:8000").replace(
+const korakuBackendBase = (process.env.KORAKU_BACKEND_URL ?? "http://127.0.0.1:8000").replace(
   /\/$/,
   "",
 );
@@ -30,7 +30,7 @@ const STRIP_INBOUND = new Set(["cookie", "authorization"]);
 type UpstreamKind = "json" | "sse" | "body";
 
 /** Copy safe inbound headers from the browser request (hop-by-hop headers omitted). */
-export function copyInboundHeaders(req: NextRequest, target: Headers): void {
+function copyInboundHeaders(req: NextRequest, target: Headers): void {
   req.headers.forEach((value, key) => {
     const lower = key.toLowerCase();
     if (HOP_BY_HOP.has(lower) || STRIP_INBOUND.has(lower)) {
@@ -43,7 +43,7 @@ export function copyInboundHeaders(req: NextRequest, target: Headers): void {
 export type KorakuProxyAuthMode = "required" | "optional";
 
 /** Auth + org (cookies) + optional client X-Request-ID (Bearer from session only). */
-export async function buildKorakuProxyHeaders(
+async function buildKorakuProxyHeaders(
   req: NextRequest,
   extra?: HeadersInit,
   authMode: KorakuProxyAuthMode = "required",
@@ -79,12 +79,12 @@ export function korakuUpstreamUrl(
   return `${korakuBackendBase}${base}${tail}${search}`;
 }
 
-export function isUpstreamGatewayError(status: number): boolean {
+function isUpstreamGatewayError(status: number): boolean {
   return status === 502 || status === 499;
 }
 
 /** Forward an upstream ``fetch`` response to the browser without buffering the body. */
-export function passthroughUpstreamResponse(upstream: Response, kind: UpstreamKind): Response {
+function passthroughUpstreamResponse(upstream: Response, kind: UpstreamKind): Response {
   if (isUpstreamGatewayError(upstream.status)) {
     return upstream;
   }

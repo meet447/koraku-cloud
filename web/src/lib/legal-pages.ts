@@ -17,7 +17,3 @@ export const legalPages = [
 ] as const;
 
 export type LegalPageSlug = (typeof legalPages)[number]["slug"];
-
-export function legalPageHref(slug: LegalPageSlug): string {
-  return legalPages.find((p) => p.slug === slug)?.href ?? "/";
-}

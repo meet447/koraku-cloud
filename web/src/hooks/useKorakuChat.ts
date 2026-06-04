@@ -44,6 +44,7 @@ import {
 import { safeError } from "@/lib/safe-log";
 import { supabaseAuthHeaders } from "@/lib/supabase/fetch-auth";
 import { sortChatSessions } from "@/lib/chat-sessions";
+import type { ComposerImage } from "@/lib/composer-images";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 export type { ChatMessage, ChatSession, OutboundJob } from "@/lib/koraku-chat/types";

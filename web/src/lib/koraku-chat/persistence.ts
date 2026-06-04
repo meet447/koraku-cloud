@@ -9,7 +9,7 @@ import {
 } from "@/lib/koraku-chat/types";
 import { uid } from "@/lib/koraku-chat/session-utils";
 
-export function deserializeRunState(raw: unknown): RunState {
+function deserializeRunState(raw: unknown): RunState {
   const b = initialRunState();
   if (!raw || typeof raw !== "object") return b;
   const o = raw as Partial<RunState>;

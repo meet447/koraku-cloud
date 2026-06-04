@@ -104,8 +104,11 @@ export function PersonalizationSection({
 
       <div className={clsx(hideIntro ? "space-y-3" : "mt-4 space-y-3")}>
         <div className={korakuUi.cardPanel}>
-          <label className={korakuUi.fieldLabel}>Agent name</label>
+          <label htmlFor="personalization-agent-name" className={korakuUi.fieldLabel}>
+            Agent name
+          </label>
           <input
+            id="personalization-agent-name"
             type="text"
             value={agentName}
             onChange={(e) => setAgentName(e.target.value)}
@@ -118,11 +121,15 @@ export function PersonalizationSection({
         </div>
 
         <div className={korakuUi.cardPanel}>
-          <label className={korakuUi.fieldLabel}>Preferences</label>
-          <p className="mt-1 text-sm font-medium text-neutral-600">
+          <label htmlFor="personalization-preferences" className={korakuUi.fieldLabel}>
+            Preferences
+          </label>
+          <p id="personalization-preferences-hint" className="mt-1 text-sm font-medium text-neutral-600">
             Standing instructions and stable facts you want in every conversation.
           </p>
           <textarea
+            id="personalization-preferences"
+            aria-describedby="personalization-preferences-hint"
             value={memory}
             onChange={(e) => setMemory(e.target.value)}
             placeholder={
@@ -135,11 +142,15 @@ export function PersonalizationSection({
         </div>
 
         <div className={korakuUi.cardPanel}>
-          <label className={korakuUi.fieldLabel}>Persona</label>
-          <p className="mt-1 text-sm font-medium text-neutral-600">
+          <label htmlFor="personalization-persona" className={korakuUi.fieldLabel}>
+            Persona
+          </label>
+          <p id="personalization-persona-hint" className="mt-1 text-sm font-medium text-neutral-600">
             Optional tone and style layered on top of base Koraku behavior.
           </p>
           <textarea
+            id="personalization-persona"
+            aria-describedby="personalization-persona-hint"
             value={soul}
             onChange={(e) => setSoul(e.target.value)}
             placeholder="e.g. warm mentor, direct and practical, no fluff"

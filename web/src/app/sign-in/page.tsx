@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import { OAuthSignInButtons } from "@/components/OAuthSignInButtons";
 import { KorakuAuthShell } from "@/components/KorakuAuthShell";
 import { AuthPageLayout } from "@/components/landing/AuthPageLayout";
+
+export const metadata: Metadata = {
+  title: "Sign in · Koraku",
+  description: "Sign in to Koraku with Google or GitHub.",
+};
 
 export const dynamic = "force-dynamic";
 

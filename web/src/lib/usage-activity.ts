@@ -46,7 +46,7 @@ export function hourBucketForDate(d: Date): number {
   return Math.min(HOUR_BUCKETS - 1, Math.floor(h / BUCKET_HOURS));
 }
 
-export function startOfLocalDay(d: Date): Date {
+function startOfLocalDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 

@@ -24,23 +24,25 @@ import { SetupStatusBanner } from "@/components/SetupStatusBanner";
 function OnboardingGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
   const router = useRouter();
-  const [complete, setComplete] = useState<boolean | null>(null);
+  const [complete, setComplete] = useState<boolean | null>(() =>
+    typeof window !== "undefined" && isOnboardingComplete() ? true : null,
+  );
 
   useEffect(() => {
+    if (complete !== null) return;
+    let cancelled = false;
     if (isOnboardingComplete()) {
       setComplete(true);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
-    let cancelled = false;
     void loadPersonalization()
       .then((data) => {
         if (cancelled) return;
-        if (hasPersonalizationOnboardingProfile(data.memory)) {
-          markOnboardingComplete();
-          setComplete(true);
-        } else {
-          setComplete(false);
-        }
+        const profileComplete = hasPersonalizationOnboardingProfile(data.memory);
+        if (profileComplete) markOnboardingComplete();
+        setComplete(profileComplete);
       })
       .catch(() => {
         if (!cancelled) setComplete(false);
@@ -48,22 +50,30 @@ function OnboardingGate({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [complete]);
 
   const onOnboarding = isOnboardingRoute(pathname);
   const inApp = isAppRoute(pathname);
   const resolving = complete === null;
 
-  useEffect(() => {
-    if (resolving) return;
+  if (!resolving) {
     if (onOnboarding && complete) {
       router.replace(APP_BASE);
-      return;
+      return (
+        <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
+          Loading…
+        </div>
+      );
     }
     if (inApp && !onOnboarding && !complete) {
       router.replace(ONBOARDING_PATH);
+      return (
+        <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
+          Loading…
+        </div>
+      );
     }
-  }, [resolving, onOnboarding, inApp, complete, router]);
+  }
 
   if (resolving) {
     return (
@@ -127,10 +137,6 @@ function ProductShell({ children }: { children: ReactNode }) {
     },
     [chat, pathname, router],
   );
-
-  useEffect(() => {
-    void fetch("/api/org/current", { method: "POST" }).catch(() => {});
-  }, []);
 
   const prevPathRef = useRef(pathname);
   useEffect(() => {

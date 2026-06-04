@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Cpu } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LANDING_CONTAINER, LANDING_FOOTER_BG, LANDING_PAGE_BG, LANDING_SECTION, LANDING_SURFACE } from "@/components/landing/landing-layout";
@@ -14,12 +15,12 @@ function ModelIcon({ model }: { model: LandingLlmModel }) {
   const logoUrl = resolveModelLogo(model);
   if (logoUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <Image
         src={logoUrl}
         alt=""
         width={52}
         height={52}
+        unoptimized
         className="h-[52px] w-[52px] object-contain"
         loading="lazy"
         referrerPolicy="no-referrer-when-downgrade"

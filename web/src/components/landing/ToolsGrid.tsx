@@ -1,3 +1,4 @@
+import Image from "next/image";
 import {
   integrationCategories,
   integrationShowcase,
@@ -38,12 +39,12 @@ export function ToolsGrid() {
               key={integration.toolkit}
               className={`flex min-h-[108px] flex-col items-center justify-center rounded-lg border border-black/10 ${LANDING_SURFACE} px-2 py-5 text-center transition hover:border-black/20 hover:bg-white`}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={integrationIcon(integration.iconSlug, "hex" in integration ? integration.hex : undefined)}
                 alt=""
                 width={32}
                 height={32}
+                unoptimized
                 className="h-8 w-8 object-contain"
               />
               <p className="mt-3 text-xs font-semibold leading-4 text-stone-700">

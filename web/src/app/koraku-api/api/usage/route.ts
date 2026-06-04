@@ -1,3 +1,6 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 import { usage } from "@/lib/koraku-api-routes";
 
-export const { GET, runtime, dynamic } = usage;
+export const GET = usage.GET;

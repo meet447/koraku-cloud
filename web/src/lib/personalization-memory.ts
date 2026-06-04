@@ -1,9 +1,9 @@
 /** Split ``memory`` text into onboarding profile vs agent preferences. */
 
 export const PROFILE_SECTION_HEADER = "## Onboarding profile";
-export const PREFERENCES_SECTION_HEADER = "## Preferences";
+const PREFERENCES_SECTION_HEADER = "## Preferences";
 
-export const PROFILE_SAFETY_LINE =
+const PROFILE_SAFETY_LINE =
   "- When suggesting external actions, verify the target app/account and ask for confirmation before sending or changing data.";
 
 export type UserProfileFields = {
@@ -17,15 +17,6 @@ export const emptyUserProfile = (): UserProfileFields => ({
   about: "",
   helpWith: [],
 });
-
-export function parseUserProfileFromMemory(memory: string): UserProfileFields {
-  const { profile } = parseMemorySections(memory);
-  return profile;
-}
-
-export function parsePreferencesFromMemory(memory: string): string {
-  return parseMemorySections(memory).preferences;
-}
 
 export function parseMemorySections(memory: string): {
   profile: UserProfileFields;
