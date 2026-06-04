@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from koraku_cloud.automations.supabase_store import _headers, _require_config, _rest_url
-from koraku_cloud.integrations.supabase_rest import get_http_client
+from koraku_cloud.integrations.supabase_rest import get_http_client, supabase_rest_configured
 from koraku.core.config import settings
 from koraku.core.tenant import ORG_ID_HEADER
 from koraku.core.ttl_cache import TtlCache
@@ -17,11 +17,7 @@ _ORG_MEMBERSHIP_CACHE: TtlCache[list[str]] = TtlCache(max_size=512)
 
 
 def supabase_tenant_configured() -> bool:
-    try:
-        _require_config()
-        return True
-    except RuntimeError:
-        return False
+    return supabase_rest_configured()
 
 
 def ensure_personal_org_sync(user_id: str) -> str | None:

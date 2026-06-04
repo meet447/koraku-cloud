@@ -6,7 +6,8 @@ import logging
 from typing import Any
 
 from koraku_cloud.integrations.supabase_personalization import (
-    fetch_personalization_sync,
+    empty_personalization,
+    fetch_personalization_async,
     supabase_personalization_configured,
 )
 from koraku_cloud.integrations.supabase_tenant import ensure_personal_org_sync
@@ -33,12 +34,8 @@ async def prepare_automation_agent_context(
 
     account_p: dict[str, str] | None = None
     if supabase_personalization_configured():
-        fetched = await asyncio.to_thread(
-            fetch_personalization_sync, user_id, org_id=org_id
-        )
-        account_p = (
-            fetched if fetched is not None else {"agent_name": "", "memory": "", "soul": ""}
-        )
+        fetched = await fetch_personalization_async(user_id, org_id=org_id)
+        account_p = fetched if fetched is not None else empty_personalization()
 
     return org_id, account_p, tenant_token
 

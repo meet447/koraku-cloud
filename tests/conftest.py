@@ -3,9 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from koraku.core.auth import reset_auth_verifier
-from koraku.core.config import configure_sdk, reset_cloud_binding
-from koraku.plugins.memory import reset_memory_backend_cache
+from koraku.core.config import configure_sdk, reset_cloud_binding, reset_settings_caches
 from koraku.sdk import KorakuConfig
 
 
@@ -13,10 +11,8 @@ from koraku.sdk import KorakuConfig
 def _sdk_settings_for_tests() -> None:
     reset_cloud_binding()
     configure_sdk(KorakuConfig().to_sdk_settings())
-    reset_memory_backend_cache()
-    reset_auth_verifier()
+    reset_settings_caches()
     yield
     reset_cloud_binding()
     configure_sdk(KorakuConfig().to_sdk_settings())
-    reset_memory_backend_cache()
-    reset_auth_verifier()
+    reset_settings_caches()

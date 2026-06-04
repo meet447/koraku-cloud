@@ -9,6 +9,10 @@ from koraku.core.models import AgentMessage, SessionState
 from koraku.profiles import is_cloud_profile
 
 
+def _cloud_authed(auth_sub: str | None) -> bool:
+    return is_cloud_profile() and bool(auth_sub)
+
+
 def _sdk_hydration(
     session: SessionState,
     *,
@@ -34,7 +38,7 @@ def _sdk_hydration(
 def _client_history_to_messages(client_history: list[dict[str, Any]] | None) -> list[AgentMessage]:
     if not client_history:
         return []
-    return client_history_rows_to_agent_messages(list(client_history))
+    return client_history_rows_to_agent_messages(client_history)
 
 
 async def hydrate_session_for_turn(
@@ -96,16 +100,11 @@ async def fetch_account_personalization(
     auth_org_id: str | None,
 ) -> dict[str, str] | None:
     """Cloud: Supabase personalization. SDK: none (use workspace ``.koraku/`` files)."""
-    if not is_cloud_profile() or not auth_sub:
+    if not _cloud_authed(auth_sub):
         return None
-    from koraku_cloud.integrations.supabase_personalization import (
-        fetch_personalization_sync,
-        supabase_personalization_configured,
-    )
+    from koraku_cloud.integrations.supabase_personalization import fetch_personalization_async
 
-    if not supabase_personalization_configured():
-        return None
-    return await asyncio.to_thread(fetch_personalization_sync, auth_sub, org_id=auth_org_id)
+    return await fetch_personalization_async(auth_sub, org_id=auth_org_id)
 
 
 async def after_turn_memory_ingest(
@@ -117,7 +116,7 @@ async def after_turn_memory_ingest(
     run_id: str,
 ) -> None:
     """Cloud optional Supermemory ingest after a chat turn."""
-    if not is_cloud_profile() or not auth_sub:
+    if not _cloud_authed(auth_sub):
         return
     from koraku.integrations.supermemory_client import (
         extract_last_assistant_text,

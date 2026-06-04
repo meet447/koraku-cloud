@@ -143,7 +143,6 @@ def make_lifespan(
             automation_scheduler.configure_automation_scheduler(agent)
             if agent is not None:
                 automation_scheduler.start_automation_scheduler()
-        if enable_automation_scheduler:
             try:
                 from koraku_cloud.integrations.composio_webhooks import (
                     ensure_project_webhook_subscription,

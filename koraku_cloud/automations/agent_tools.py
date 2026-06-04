@@ -33,6 +33,17 @@ def _org_required() -> str:
     return oid
 
 
+_AUTOMATIONS_SUPABASE_ERR = (
+    "Error: Automations require Supabase (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) on the server."
+)
+
+
+def _automations_store_error() -> str | None:
+    if supabase_automations_configured():
+        return None
+    return _AUTOMATIONS_SUPABASE_ERR
+
+
 def _normalize_toolkits(toolkits: Any) -> list[str]:
     if toolkits is None:
         return []
@@ -44,8 +55,8 @@ def _normalize_toolkits(toolkits: Any) -> list[str]:
 
 
 async def _automations_list(**_kwargs: Any) -> str:
-    if not supabase_automations_configured():
-        return "Error: Automations require Supabase (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) on the server."
+    if err := _automations_store_error():
+        return err
     uid = _uid()
     try:
         oid = _org_required()
@@ -57,8 +68,8 @@ async def _automations_list(**_kwargs: Any) -> str:
 
 
 async def _automations_create(**kwargs: Any) -> str:
-    if not supabase_automations_configured():
-        return "Error: Automations require Supabase (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) on the server."
+    if err := _automations_store_error():
+        return err
     title = str(kwargs.get("title") or "").strip()
     natural_language_spec = str(kwargs.get("natural_language_spec") or "").strip()
     if not title or not natural_language_spec:
@@ -129,8 +140,8 @@ async def _automations_create(**kwargs: Any) -> str:
 
 
 async def _automations_update(**kwargs: Any) -> str:
-    if not supabase_automations_configured():
-        return "Error: Automations require Supabase (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) on the server."
+    if err := _automations_store_error():
+        return err
     automation_id = kwargs.get("automation_id")
     title = kwargs.get("title")
     headline = kwargs.get("headline")
@@ -192,8 +203,8 @@ async def _automations_update(**kwargs: Any) -> str:
 
 
 async def _automations_delete(**kwargs: Any) -> str:
-    if not supabase_automations_configured():
-        return "Error: Automations require Supabase (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) on the server."
+    if err := _automations_store_error():
+        return err
     automation_id = kwargs.get("automation_id")
     uid = _uid()
     try:

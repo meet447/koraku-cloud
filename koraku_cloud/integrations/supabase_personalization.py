@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from typing import Any
 
 from koraku.core.config import settings
-from koraku_cloud.integrations.supabase_rest import get_http_client, headers as rest_headers, rest_url
+from koraku_cloud.integrations.supabase_rest import (
+    get_http_client,
+    headers as rest_headers,
+    rest_url,
+    supabase_rest_configured,
+)
 from koraku.core.ttl_cache import TtlCache
 from koraku_cloud.integrations.supabase_tenant import ensure_personal_org_sync
 
@@ -18,9 +24,21 @@ _EMPTY_PERSONALIZATION = {"agent_name": "", "memory": "", "soul": ""}
 
 
 def supabase_personalization_configured() -> bool:
-    u = (settings.supabase_url or "").strip().rstrip("/")
-    k = (settings.supabase_service_role_key or "").strip()
-    return bool(u and k)
+    return supabase_rest_configured()
+
+
+def empty_personalization() -> dict[str, str]:
+    return dict(_EMPTY_PERSONALIZATION)
+
+
+async def fetch_personalization_async(
+    user_sub: str,
+    *,
+    org_id: str | None = None,
+) -> dict[str, str] | None:
+    if not supabase_personalization_configured():
+        return None
+    return await asyncio.to_thread(fetch_personalization_sync, user_sub, org_id=org_id)
 
 
 def _valid_uuid(s: str) -> bool:

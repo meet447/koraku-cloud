@@ -11,39 +11,19 @@ from koraku.core.chat_history import (
     ChatHistoryHydration,
     client_history_rows_to_agent_messages,
 )
-from koraku.core.config import settings
 from koraku.core.models import AgentMessage, SessionState
-from koraku_cloud.integrations.supabase_rest import get_http_client, headers as rest_headers, rest_url
+from koraku_cloud.integrations.supabase_rest import (
+    get_http_client,
+    headers as rest_headers,
+    rest_url,
+    supabase_rest_configured,
+)
 
 log = logging.getLogger(__name__)
 
 
 def supabase_chat_history_configured() -> bool:
-    u = (settings.supabase_url or "").strip().rstrip("/")
-    k = (settings.supabase_service_role_key or "").strip()
-    return bool(u and k)
-
-
-def _require_rest() -> tuple[str, str]:
-    u = (settings.supabase_url or "").strip().rstrip("/")
-    k = (settings.supabase_service_role_key or "").strip()
-    if not u or not k:
-        raise RuntimeError("Supabase URL and service role key required for chat history fetch.")
-    return u, k
-
-
-def _headers() -> dict[str, str]:
-    _, key = _require_rest()
-    return {
-        "apikey": key,
-        "Authorization": f"Bearer {key}",
-        "Content-Type": "application/json",
-    }
-
-
-def _rest_url(path: str) -> str:
-    base, _ = _require_rest()
-    return f"{base}/rest/v1{path}"
+    return supabase_rest_configured()
 
 
 def _user_text_from_content_json(cj: dict[str, Any]) -> str:
