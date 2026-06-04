@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, Callable
 from koraku.integrations.blaxel_lazy import clear_lazy_blaxel_session, set_lazy_blaxel_session
 from koraku.agent.runtime_context import AgentRunContext
 from koraku_cloud.automations import async_ops
-from koraku_cloud.automations.imessage_notify import send_automation_result_via_imessage
 from koraku_cloud.automations.run_context import prepare_automation_agent_context, reset_automation_tenant
 from koraku.core.config import settings
 from koraku.core.models import SessionState, utcnow
@@ -194,7 +193,6 @@ def build_automation_user_message(
     natural_language_spec: str,
     trigger_summary: str,
     toolkits: list[str] | None = None,
-    notify_via_imessage: bool = False,
 ) -> str:
     tk = _normalize_toolkits(toolkits or [])
     toolkit_line = ""
@@ -203,21 +201,23 @@ def build_automation_user_message(
             f"\n**Preferred integrations:** When you need external apps, call **ComposioRun** "
             f"with these ACTIVE toolkit slugs where relevant: {', '.join(tk)}.\n"
         )
-    delivery_line = ""
-    if notify_via_imessage:
-        delivery_line = (
-            "\n**Delivery (iMessage):** Koraku will automatically text your final reply to the "
-            "user's linked iMessage. Write that final reply as the message they should read—"
-            "concise, plain text, no markdown headings. Do NOT use ChannelSend or any send/SMS "
-            "tools. Do NOT say you lack iMessage, phone, or SMS integration, and do NOT ask them "
-            "to enable connections for delivery—the outbound text is handled by the platform.\n"
+    imessage_line = ""
+    if (
+        settings.sendblue_api_key
+        and settings.sendblue_api_secret
+        and settings.sendblue_from_number
+    ):
+        imessage_line = (
+            "\n**iMessage:** To notify the user on their phone, call **IMessageSend** with a "
+            "short plain-text message (their phone must be linked in External). Do not claim "
+            "you lack iMessage or SMS tools when IMessageSend is available.\n"
         )
     return (
         "You are executing a saved Koraku automation (automated run).\n\n"
         f"**Automation title:** {title}\n\n"
         f"**What the user wants:**\n{natural_language_spec.strip()}\n\n"
         f"**Trigger context:**\n{trigger_summary.strip()}\n"
-        f"{toolkit_line}{delivery_line}\n"
+        f"{toolkit_line}{imessage_line}\n"
         "Follow the instructions completely. Prefer concrete actions (tools) when needed. "
         "End with a short summary of what you did."
     )
@@ -270,7 +270,6 @@ async def execute_automation(
                 natural_language_spec=auto["natural_language_spec"],
                 trigger_summary=trigger_summary,
                 toolkits=auto.get("toolkits"),
-                notify_via_imessage=bool(auto.get("notify_via_imessage")),
             )
 
             run_org_id, account_p, tenant_tok = await prepare_automation_agent_context(
@@ -322,28 +321,6 @@ async def execute_automation(
             await _finalize_automation_run(
                 user_id, oid, automation_id, run_id, status, err, res, started, finished
             )
-
-            if auto.get("notify_via_imessage"):
-                try:
-                    sent = await send_automation_result_via_imessage(
-                        user_id,
-                        title=str(auto.get("title") or "Automation"),
-                        status=status,
-                        result_summary=res,
-                        error=err,
-                    )
-                    if not sent:
-                        log.warning(
-                            "automation imessage notify failed automation_id=%s run_id=%s",
-                            automation_id,
-                            run_id,
-                        )
-                except Exception:
-                    log.exception(
-                        "automation imessage notify error automation_id=%s run_id=%s",
-                        automation_id,
-                        run_id,
-                    )
 
             elapsed_ms = int((time.perf_counter() - t0) * 1000)
             log.info(

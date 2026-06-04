@@ -61,7 +61,6 @@ def _row_to_automation(o: dict[str, Any]) -> dict[str, Any]:
         "updated_at": o.get("updated_at"),
         "last_run_at": o.get("last_run_at"),
         "next_run_at": o.get("next_run_at"),
-        "notify_via_imessage": bool(o.get("notify_via_imessage")),
     }
 
 
@@ -91,8 +90,7 @@ def list_scheduled_active_all_users() -> list[dict[str, Any]]:
     q = (
         f"/{_TABLE}?trigger_mode=eq.scheduled&status=eq.active"
         "&select=id,user_id,org_id,title,headline,natural_language_spec,trigger_mode,status,"
-        "timezone,cron_expression,event_display,toolkits,notify_via_imessage,"
-        "created_at,updated_at,last_run_at,next_run_at"
+        "timezone,cron_expression,event_display,toolkits,created_at,updated_at,last_run_at,next_run_at"
     )
     r = _client().get(_rest_url(q), headers=_headers())
     r.raise_for_status()
@@ -137,7 +135,6 @@ def insert_automation(
     cron_expression: str | None,
     event_display: str | None,
     toolkits: list[str],
-    notify_via_imessage: bool = False,
 ) -> dict[str, Any]:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
@@ -158,7 +155,6 @@ def insert_automation(
         "cron_expression": cron_expression,
         "event_display": event_display,
         "toolkits": [t.strip().upper() for t in toolkits if t.strip()],
-        "notify_via_imessage": bool(notify_via_imessage),
         "created_at": now,
         "updated_at": now,
     }
@@ -187,7 +183,6 @@ def update_automation(
     cron_expression: str | None = None,
     event_display: str | None = None,
     toolkits: list[str] | None = None,
-    notify_via_imessage: bool | None = None,
 ) -> dict[str, Any] | None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
@@ -209,8 +204,6 @@ def update_automation(
         patch["event_display"] = event_display
     if toolkits is not None:
         patch["toolkits"] = [t.strip().upper() for t in toolkits if t.strip()]
-    if notify_via_imessage is not None:
-        patch["notify_via_imessage"] = bool(notify_via_imessage)
     if len(patch) <= 1:
         return get_automation(uid, aid, org_id=oid)
     q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"

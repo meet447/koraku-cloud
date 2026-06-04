@@ -447,6 +447,15 @@ class Agent:
             )
         elif execution_target == "cloud" and cloud_blaxel_block_reason(settings):
             env_note = cloud_blaxel_block_reason(settings)
+        imessage_budget_tok = None
+        if (
+            settings.sendblue_api_key
+            and settings.sendblue_api_secret
+            and settings.sendblue_from_number
+        ):
+            from koraku_cloud.tools.imessage_send_tool import reset_imessage_send_budget
+
+            imessage_budget_tok = reset_imessage_send_budget()
         try:
             with (
                 agent_workspace_scope(ws),
@@ -567,6 +576,12 @@ class Agent:
                     if delegate_tok is not None:
                         reset_composio_delegate_context(delegate_tok)
         finally:
+            if imessage_budget_tok is not None:
+                from koraku_cloud.tools.imessage_send_tool import (
+                    restore_imessage_send_budget,
+                )
+
+                restore_imessage_send_budget(imessage_budget_tok)
             reset_execution_target(exec_tok)
 
     async def _synthesize_final_reply(

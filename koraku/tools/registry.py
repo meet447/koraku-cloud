@@ -635,6 +635,10 @@ def _build_available_tools() -> list[Tool]:
         from koraku_cloud.automations.agent_tools import build_automation_tools
 
         tools.extend(build_automation_tools())
+        if settings.sendblue_api_key and settings.sendblue_api_secret and settings.sendblue_from_number:
+            from koraku_cloud.tools.imessage_send_tool import IMESSAGE_SEND_TOOL
+
+            tools.append(IMESSAGE_SEND_TOOL)
     out: list[Tool] = []
     for t in tools:
         if t.name == "WebSearch" and not settings.exa_api_key:
