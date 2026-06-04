@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Network,
   Loader2,
@@ -23,6 +23,8 @@ import { sortChatSessions } from "@/lib/chat-sessions";
 import { BrandMark } from "@/components/BrandMark";
 import { AccountMenu } from "@/components/AccountMenu";
 import { APP_BASE } from "@/lib/app-path";
+import { isSettingsRoute, SETTINGS_PANEL_HREF } from "@/lib/settings-panel";
+import { SidebarSettingsMenu } from "@/components/SidebarSettingsMenu";
 
 const iconStroke = 1.5;
 
@@ -64,7 +66,15 @@ export function Sidebar({
   onDeleteChat: (id: string) => void | Promise<void>;
   onRefreshChat: (id: string) => void | Promise<void>;
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
+  const router = useRouter();
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const onSettingsRoute = isSettingsRoute(pathname);
+
+  useEffect(() => {
+    if (onSettingsRoute && !collapsed) setSettingsMenuOpen(true);
+  }, [onSettingsRoute, collapsed]);
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const streamingSet = new Set(streamingSessionIds);
@@ -332,20 +342,37 @@ export function Sidebar({
 
       <div
         className={clsx(
-          "mt-auto flex shrink-0 flex-col gap-2",
+          "mt-auto flex min-h-0 shrink-0 flex-col gap-2",
           !collapsed && "border-t border-neutral-200/60 pt-2",
         )}
       >
-        <Link
-          href={`${APP_BASE}/settings`}
+        {!collapsed && settingsMenuOpen ? (
+          <div className="min-h-0 overflow-y-auto overscroll-y-contain">
+            <SidebarSettingsMenu onNavigate={() => setSettingsMenuOpen(false)} />
+          </div>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={() => {
+            if (collapsed) {
+              router.push(SETTINGS_PANEL_HREF.profile);
+              return;
+            }
+            setSettingsMenuOpen((open) => !open);
+          }}
+          aria-expanded={!collapsed && settingsMenuOpen}
           className={clsx(
-            "flex w-full items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold text-neutral-600 transition hover:bg-white/80 hover:text-neutral-900",
+            "flex w-full shrink-0 items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold transition",
+            !collapsed && (settingsMenuOpen || onSettingsRoute)
+              ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200/80"
+              : "text-neutral-600 hover:bg-white/80 hover:text-neutral-900",
             collapsed && "justify-center px-0",
           )}
         >
           <Settings2 className="h-4 w-4 shrink-0" strokeWidth={iconStroke} />
           {!collapsed && "Settings"}
-        </Link>
+        </button>
         <div
           className={clsx(
             "min-w-0",

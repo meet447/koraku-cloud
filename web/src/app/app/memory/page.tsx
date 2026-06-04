@@ -29,7 +29,7 @@ export default function MemoryPage() {
           description={KORAKU_COPY.memoryIntro}
           action={
             <Link
-              href={`${APP_BASE}/settings#personalization`}
+              href={`${APP_BASE}/settings/agent`}
               className="inline-flex items-center justify-center rounded-full border border-neutral-200/90 bg-white px-5 py-2.5 text-sm font-semibold text-koraku-ink shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50"
             >
               Settings

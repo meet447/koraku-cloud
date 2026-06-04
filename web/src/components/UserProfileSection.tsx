@@ -22,7 +22,7 @@ function toggleChip(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 }
 
-export function UserProfileSection() {
+export function UserProfileSection({ embedded = false }: { embedded?: boolean }) {
   const [profile, setProfile] = useState<UserProfileFields>(emptyUserProfile);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,7 +67,10 @@ export function UserProfileSection() {
   }
 
   return (
-    <section id="your-profile" className={clsx(korakuUi.card, "scroll-mt-6")}>
+    <section
+      id="your-profile"
+      className={clsx(embedded ? "scroll-mt-2" : [korakuUi.card, "scroll-mt-6"])}
+    >
       <h2 className="text-lg font-bold text-koraku-ink">Your profile</h2>
       <p className="mt-2 text-sm font-medium leading-relaxed text-koraku-muted">
         What you shared during onboarding — your name, background, and how you want Koraku to help.

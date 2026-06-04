@@ -114,7 +114,7 @@ export function Composer({
   return (
     <div
       className={clsx(
-        "pointer-events-auto mx-auto w-full min-w-0 max-w-3xl px-4 pb-3 pt-0.5",
+        "pointer-events-auto mx-auto w-full min-w-0 max-w-3xl px-4 pb-1 pt-0.5",
         disabled && "opacity-55",
       )}
     >

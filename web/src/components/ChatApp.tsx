@@ -301,11 +301,12 @@ export function ChatConversation() {
             </button>
           </div>
 
-          <div
-            ref={scrollParentRef}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
-          >
-            <div className="mx-auto max-w-3xl px-4 py-8 pb-6">
+          <div className="relative min-h-0 flex-1">
+            <div
+              ref={scrollParentRef}
+              className="absolute inset-0 overflow-y-auto overscroll-y-contain"
+            >
+            <div className="mx-auto max-w-3xl px-4 py-8 pb-36">
               {chatMainLoading ? (
                 <ChatMessagesSkeleton />
               ) : (
@@ -384,21 +385,22 @@ export function ChatConversation() {
                 </>
               )}
             </div>
-          </div>
+            </div>
 
-          <div
-            className={clsx(
-              "shrink-0 border-t border-neutral-200/50 bg-white pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3",
-              chatMainLoading && "pointer-events-none opacity-60",
-            )}
-          >
-            <MessageQueueBar items={queuedMessages} onRemove={removeQueuedMessage} />
-            <Composer
-              busy={busy}
-              disabled={chatMainLoading}
-              placeholder={busy ? "Give Koraku a follow-up…" : "Ask anything"}
-              onSend={send}
-            />
+            <div
+              className={clsx(
+                "pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col bg-gradient-to-t from-white from-40% via-white/90 to-transparent pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-10",
+                chatMainLoading && "opacity-60",
+              )}
+            >
+              <MessageQueueBar items={queuedMessages} onRemove={removeQueuedMessage} />
+              <Composer
+                busy={busy}
+                disabled={chatMainLoading}
+                placeholder={busy ? "Give Koraku a follow-up…" : "Ask anything"}
+                onSend={send}
+              />
+            </div>
           </div>
         </section>
 

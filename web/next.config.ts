@@ -50,7 +50,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/automations", destination: "/app/automations", permanent: false },
       { source: "/connections", destination: "/app/connections", permanent: false },
-      { source: "/personalization", destination: "/app/settings", permanent: false },
+      { source: "/personalization", destination: "/app/settings/agent", permanent: false },
       { source: "/skills", destination: "/app/connections", permanent: false },
       { source: "/app/skills", destination: "/app/connections", permanent: false },
     ];

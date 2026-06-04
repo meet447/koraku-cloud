@@ -50,7 +50,9 @@ export function AppChrome({
           onRefreshChat={onRefreshChat}
         />
       </div>
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-white">{children}</div>
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+        {children}
+      </div>
     </div>
   );
 }

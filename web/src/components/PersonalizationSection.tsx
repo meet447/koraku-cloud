@@ -18,7 +18,7 @@ import { korakuUi } from "@/lib/koraku-ui";
 import { KorakuAlert } from "@/components/KorakuAlert";
 import { KorakuButton } from "@/components/KorakuButton";
 
-export function PersonalizationSection() {
+export function PersonalizationSection({ embedded = false }: { embedded?: boolean }) {
   const [agentName, setAgentName] = useState("");
   const [memory, setMemory] = useState("");
   const [soul, setSoul] = useState("");
@@ -70,7 +70,10 @@ export function PersonalizationSection() {
   }
 
   return (
-    <section id="personalization" className={clsx(korakuUi.card, "scroll-mt-6")}>
+    <section
+      id="personalization"
+      className={clsx(embedded ? "scroll-mt-2" : [korakuUi.card, "scroll-mt-6"])}
+    >
       <h2 className="text-lg font-bold text-koraku-ink">Agent personalization</h2>
       <p className="mt-2 text-sm font-medium leading-relaxed text-koraku-muted">
         How your agent shows up in chat: display name, standing preferences, and persona. Facts
