@@ -11,6 +11,7 @@ import {
 import { initialRunState, type RunState } from "@/lib/korakuReducer";
 import type { QueuedMessagePreview } from "@/components/MessageQueueBar";
 import {
+  detachedChatMode,
   fetchDetachedRunStatusJson,
   refreshDetachedRunsCapability,
   shouldUseDetachedStreamingForPayload,
@@ -28,6 +29,7 @@ import {
   runStateForStreamReplay,
 } from "@/lib/koraku-chat/sse-ingest";
 import {
+  isDefaultChatTitle,
   isEmptyUnusedSession,
   jobPreviewText,
   uid,
