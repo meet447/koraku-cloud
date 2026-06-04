@@ -14,10 +14,6 @@ function client(): Redis | null {
   return _redis;
 }
 
-export function isRedisConfigured(): boolean {
-  return Boolean(process.env.REDIS_URL?.trim());
-}
-
 export async function getCachedJson<T>(key: string): Promise<T | null> {
   const r = client();
   if (!r) return null;

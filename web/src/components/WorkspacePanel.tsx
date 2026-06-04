@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   useCallback,
   useEffect,
@@ -409,15 +410,6 @@ export function WorkspacePanel({
   }, [filePreview]);
 
   useEffect(() => {
-    if (visible) {
-      setRelPath("");
-      setFileRel(null);
-      setFilePreview(null);
-      setError(null);
-    }
-  }, [visible]);
-
-  useEffect(() => {
     if (!visible || !serverSessionId) return;
     void loadTree();
   }, [visible, serverSessionId, relPath, loadTree, workspaceRefreshToken]);
@@ -449,12 +441,10 @@ export function WorkspacePanel({
           )}
         />
       ) : null}
+      {visible ? (
       <div
-        className={clsx(
-          "flex h-full min-h-0 w-full flex-col",
-          visible ? "min-w-[300px]" : "min-w-0",
-          !visible && "pointer-events-none opacity-0",
-        )}
+        key={serverSessionId ?? "workspace"}
+        className="flex h-full min-h-0 w-full min-w-[300px] flex-col"
       >
         <header className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-neutral-200/70 bg-neutral-100/90 px-2.5">
           <span className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-500">
@@ -653,18 +643,17 @@ export function WorkspacePanel({
                     </ul>
                   </div>
 
-                  <div
-                    role="separator"
-                    aria-orientation="vertical"
+                  <button
+                    type="button"
                     aria-label="Resize explorer"
                     onMouseDown={startTreeResize}
                     className={clsx(
-                      "group relative z-10 w-1 shrink-0 cursor-col-resize touch-none bg-neutral-200/40",
+                      "group relative z-10 w-1 shrink-0 cursor-col-resize touch-none border-0 bg-neutral-200/40 p-0",
                       resizeMode === "tree" && "bg-neutral-300",
                     )}
                   >
-                    <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-neutral-200/80 group-hover:bg-neutral-300" />
-                  </div>
+                    <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-neutral-200/80 group-hover:bg-neutral-300" />
+                  </button>
                 </>
               )}
 
@@ -721,23 +710,28 @@ export function WorkspacePanel({
                       <iframe
                         title="PDF preview"
                         src={filePreview.blobUrl}
+                        sandbox=""
                         className="min-h-0 w-full flex-1 border-0 bg-neutral-100"
                       />
                     ) : null}
                     {filePreview.kind === "image" ? (
                       <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-neutral-50 p-3">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <Image
                           src={filePreview.blobUrl}
                           alt=""
+                          width={800}
+                          height={600}
+                          unoptimized
                           className="max-h-[min(85dvh,48rem)] max-w-full object-contain shadow-sm ring-1 ring-neutral-200/60"
                         />
                       </div>
                     ) : null}
                     {filePreview.kind === "docx" ? (
-                      <div
-                        className="koraku-md min-h-0 flex-1 overflow-auto break-words px-4 py-3 text-[13px] leading-relaxed text-neutral-800"
-                        dangerouslySetInnerHTML={{ __html: filePreview.html }}
+                      <iframe
+                        title="Document preview"
+                        sandbox=""
+                        srcDoc={filePreview.html}
+                        className="koraku-md min-h-0 w-full flex-1 border-0 bg-white"
                       />
                     ) : null}
                   </div>
@@ -753,6 +747,9 @@ export function WorkspacePanel({
           </>
         )}
       </div>
+      ) : (
+        <div className="flex h-full min-h-0 w-full min-w-0 flex-col opacity-0 pointer-events-none" aria-hidden />
+      )}
     </aside>
   );
 }

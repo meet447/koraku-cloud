@@ -22,7 +22,13 @@ function toggleChip(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 }
 
-export function UserProfileSection() {
+export function UserProfileSection({
+  embedded = false,
+  hideIntro = false,
+}: {
+  embedded?: boolean;
+  hideIntro?: boolean;
+}) {
   const [profile, setProfile] = useState<UserProfileFields>(emptyUserProfile);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,48 +73,63 @@ export function UserProfileSection() {
   }
 
   return (
-    <section id="your-profile" className={clsx(korakuUi.card, "scroll-mt-6")}>
-      <h2 className="text-lg font-bold text-koraku-ink">Your profile</h2>
-      <p className="mt-2 text-sm font-medium leading-relaxed text-koraku-muted">
-        What you shared during onboarding — your name, background, and how you want Koraku to help.
-        This is stored in your account memory and used in every chat.
-      </p>
+    <section
+      id="your-profile"
+      className={clsx(
+        embedded ? "scroll-mt-2" : hideIntro ? korakuUi.card : [korakuUi.card, "scroll-mt-6"],
+      )}
+    >
+      {hideIntro ? null : (
+        <>
+          <h2 className="text-base font-bold text-koraku-ink">Your profile</h2>
+          <p className="mt-1.5 text-sm font-medium leading-snug text-koraku-muted">
+            What you shared during onboarding — your name, background, and how you want Koraku to
+            help. This is stored in your account memory and used in every chat.
+          </p>
+        </>
+      )}
 
       {error ? (
-        <KorakuAlert variant="error" className="mt-4">
+        <KorakuAlert variant="error" className={hideIntro ? "mb-3" : "mt-4"}>
           {error}
         </KorakuAlert>
       ) : null}
 
-      <div className="mt-6 space-y-5">
+      <div className={clsx(hideIntro ? "space-y-3" : "mt-4 space-y-3")}>
         <div className={korakuUi.cardPanel}>
-          <label className={korakuUi.fieldLabel}>Your name</label>
+          <label htmlFor="profile-user-name" className={korakuUi.fieldLabel}>
+            Your name
+          </label>
           <input
+            id="profile-user-name"
             type="text"
             value={profile.userName}
             onChange={(e) => setProfile((p) => ({ ...p, userName: e.target.value }))}
             placeholder="Your name"
             disabled={loading}
-            className={clsx(korakuUi.input, "mt-3")}
+            className={clsx(korakuUi.input, "mt-2")}
             maxLength={120}
             autoComplete="name"
           />
         </div>
 
         <div className={korakuUi.cardPanel}>
-          <label className={korakuUi.fieldLabel}>About you</label>
+          <label htmlFor="profile-about" className={korakuUi.fieldLabel}>
+            About you
+          </label>
           <textarea
+            id="profile-about"
             value={profile.about}
             onChange={(e) => setProfile((p) => ({ ...p, about: e.target.value }))}
             placeholder="What you do, your role, and context Koraku should remember…"
             disabled={loading}
             rows={5}
-            className={clsx(korakuUi.textarea, "mt-3")}
+            className={clsx(korakuUi.textarea, "mt-2")}
           />
         </div>
 
-        <div className={korakuUi.cardPanel}>
-          <p className={korakuUi.fieldLabel}>Koraku should help me with</p>
+        <fieldset className={korakuUi.cardPanel}>
+          <legend className={korakuUi.fieldLabel}>Koraku should help me with</legend>
           <div className="mt-3 flex flex-wrap gap-2">
             {ONBOARDING_HELP_OPTIONS.map((item) => (
               <button
@@ -132,10 +153,10 @@ export function UserProfileSection() {
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
         {savedAt ? (
           <span className="text-xs font-medium text-koraku-muted">Saved</span>
         ) : null}

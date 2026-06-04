@@ -11,6 +11,7 @@ from koraku.core.chat_history import (
     ChatHistoryHydration,
     client_history_rows_to_agent_messages,
 )
+from koraku.core.config import settings
 from koraku.core.models import AgentMessage, SessionState
 from koraku_cloud.integrations.supabase_rest import (
     get_http_client,
@@ -132,13 +133,19 @@ def fetch_thread_messages_sync(
         if not isinstance(trows, list) or len(trows) == 0:
             return None
 
-        mq = f"/chat_message?thread_id=eq.{tid}&order=created_at.asc&select=role,content_json"
+        lim = max(1, min(int(settings.chat_history_supabase_limit or 60), 500))
+        mq = (
+            f"/chat_message?thread_id=eq.{tid}"
+            f"&order=created_at.desc&limit={lim}&select=role,content_json"
+        )
         mr = client.get(rest_url(mq), headers=h)
         mr.raise_for_status()
         mrows = mr.json()
         if not isinstance(mrows, list):
             return []
-        return [x for x in mrows if isinstance(x, dict)]
+        rows = [x for x in mrows if isinstance(x, dict)]
+        rows.reverse()
+        return rows
     except Exception as e:
         log.warning("supabase chat history fetch failed: %s", e)
         return None
@@ -185,6 +192,11 @@ async def hydrate_session_messages_from_db(
     # Follow-up turns in an active session already carry prior messages in memory/Redis.
     if messages_before > 0:
         return report("session", "warm", 0, messages_before)
+
+    if auth_sub and bool(settings.chat_hydrate_prefer_client_history):
+        preferred = apply_client_history("client_preferred")
+        if preferred is not None:
+            return preferred
 
     if not configured:
         fallback_report = apply_client_history("supabase_not_configured")

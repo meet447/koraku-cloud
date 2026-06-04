@@ -21,7 +21,7 @@ const securityHeaders = [
           key: "Content-Security-Policy",
           value: [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+            "script-src 'self' 'unsafe-inline'",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: blob: https:",
             "font-src 'self' data:",
@@ -50,7 +50,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/automations", destination: "/app/automations", permanent: false },
       { source: "/connections", destination: "/app/connections", permanent: false },
-      { source: "/personalization", destination: "/app/settings", permanent: false },
+      { source: "/personalization", destination: "/app/settings/agent", permanent: false },
       { source: "/skills", destination: "/app/connections", permanent: false },
       { source: "/app/skills", destination: "/app/connections", permanent: false },
     ];
@@ -59,10 +59,7 @@ const nextConfig: NextConfig = {
     return [
       // /koraku-api/stream is handled by src/app/koraku-api/stream/route.ts (true streaming).
       { source: "/koraku-api/health", destination: `${backend}/health` },
-      {
-        source: "/koraku-api/api/chat-models",
-        destination: `${backend}/api/chat-models`,
-      },
+      // /koraku-api/api/chat-models → Route Handler (session Bearer required)
       // /koraku-api/api/personalization → Route Handler (forwards Supabase Bearer from cookies)
       // /koraku-api/api/composio/* is handled by src/app/koraku-api/api/composio/[[...path]]/route.ts
       // so Authorization (Supabase Bearer token) is forwarded to Python.

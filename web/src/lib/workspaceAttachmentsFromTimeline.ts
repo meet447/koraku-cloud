@@ -6,7 +6,7 @@ export type RunWorkspaceFileTouch = {
 };
 
 /** Heuristic paths to workspace files mentioned in Bash stdout/stderr (e.g. savefig, print). */
-export function workspacePathsFromBashOutput(text: string): string[] {
+function workspacePathsFromBashOutput(text: string): string[] {
   const raw = text.replace(/\r\n/g, "\n");
   if (!raw.trim()) return [];
   const seen = new Set<string>();

@@ -15,21 +15,21 @@ function isAbortError(e: unknown): boolean {
   return e instanceof Error && (e.name === "AbortError" || e.name === "DOMException");
 }
 
-export function sseUpstreamErrorResponse(message: string): Response {
+function sseUpstreamErrorResponse(message: string): Response {
   const body =
     `event: error\ndata: ${JSON.stringify({ error: message, code: "upstream_unavailable" })}\n\n` +
     `event: done\n\n`;
   return new Response(body, { status: 502, headers: SSE_HEADERS });
 }
 
-export function jsonUpstreamErrorResponse(message: string): Response {
+function jsonUpstreamErrorResponse(message: string): Response {
   return new Response(
     JSON.stringify({ error: message, code: "upstream_unavailable" }),
     { status: 502, headers: JSON_HEADERS },
   );
 }
 
-export function clientAbortedResponse(): Response {
+function clientAbortedResponse(): Response {
   return new Response(null, { status: 499 });
 }
 

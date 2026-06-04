@@ -6,7 +6,7 @@ export type ChatSessionLike = {
   pinned?: boolean;
 };
 
-export function isPinnedChatSession(session: ChatSessionLike): boolean {
+function isPinnedChatSession(session: ChatSessionLike): boolean {
   return session.channel === "imessage" || Boolean(session.pinned);
 }
 

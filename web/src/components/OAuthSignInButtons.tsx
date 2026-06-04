@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import { KorakuAlert } from "@/components/KorakuAlert";
 import { LANDING_SURFACE } from "@/components/landing/landing-layout";
@@ -80,8 +81,14 @@ export function OAuthSignInButtons() {
             "hover:border-black/20 hover:bg-white disabled:cursor-not-allowed disabled:opacity-50",
           )}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={provider.icon} alt="" width={18} height={18} className="h-[18px] w-[18px] object-contain" />
+          <Image
+            src={provider.icon}
+            alt=""
+            width={18}
+            height={18}
+            unoptimized
+            className="h-[18px] w-[18px] object-contain"
+          />
           {loading === provider.id ? "Redirecting…" : provider.label}
         </button>
       ))}

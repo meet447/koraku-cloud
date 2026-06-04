@@ -11,7 +11,12 @@ import {
   isOnboardingRoute,
   ONBOARDING_PATH,
 } from "@/lib/app-path";
-import { isOnboardingComplete } from "@/lib/onboarding";
+import { loadPersonalization } from "@/lib/koraku-personalization";
+import {
+  hasPersonalizationOnboardingProfile,
+  isOnboardingComplete,
+  markOnboardingComplete,
+} from "@/lib/onboarding";
 import { AppChrome } from "@/components/AppChrome";
 import { ChatConversation } from "@/components/ChatApp";
 import { SetupStatusBanner } from "@/components/SetupStatusBanner";
@@ -19,28 +24,58 @@ import { SetupStatusBanner } from "@/components/SetupStatusBanner";
 function OnboardingGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
   const router = useRouter();
-  const [ready, setReady] = useState(false);
+  const [complete, setComplete] = useState<boolean | null>(() =>
+    typeof window !== "undefined" && isOnboardingComplete() ? true : null,
+  );
 
   useEffect(() => {
-    setReady(true);
-  }, []);
+    if (complete !== null) return;
+    let cancelled = false;
+    if (isOnboardingComplete()) {
+      setComplete(true);
+      return () => {
+        cancelled = true;
+      };
+    }
+    void loadPersonalization()
+      .then((data) => {
+        if (cancelled) return;
+        const profileComplete = hasPersonalizationOnboardingProfile(data.memory);
+        if (profileComplete) markOnboardingComplete();
+        setComplete(profileComplete);
+      })
+      .catch(() => {
+        if (!cancelled) setComplete(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [complete]);
 
-  const complete = isOnboardingComplete();
   const onOnboarding = isOnboardingRoute(pathname);
   const inApp = isAppRoute(pathname);
+  const resolving = complete === null;
 
-  useEffect(() => {
-    if (!ready) return;
+  if (!resolving) {
     if (onOnboarding && complete) {
       router.replace(APP_BASE);
-      return;
+      return (
+        <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
+          Loading…
+        </div>
+      );
     }
     if (inApp && !onOnboarding && !complete) {
       router.replace(ONBOARDING_PATH);
+      return (
+        <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
+          Loading…
+        </div>
+      );
     }
-  }, [ready, onOnboarding, inApp, complete, router]);
+  }
 
-  if (!ready) {
+  if (resolving) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
         Loading…
@@ -56,7 +91,11 @@ function OnboardingGate({ children }: { children: ReactNode }) {
   }
 
   if (inApp && !complete) {
-    return null;
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
+        Loading…
+      </div>
+    );
   }
 
   return <>{children}</>;
@@ -98,10 +137,6 @@ function ProductShell({ children }: { children: ReactNode }) {
     },
     [chat, pathname, router],
   );
-
-  useEffect(() => {
-    void fetch("/api/org/current", { method: "POST" }).catch(() => {});
-  }, []);
 
   const prevPathRef = useRef(pathname);
   useEffect(() => {

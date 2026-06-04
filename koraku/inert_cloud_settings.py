@@ -83,6 +83,31 @@ class CloudSettings(BaseSettings):
         default=12,
         validation_alias=AliasChoices("CHAT_RATE_LIMIT_PER_MINUTE", "chat_rate_limit_per_minute"),
     )
+    chat_hydrate_prefer_client_history: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "CHAT_HYDRATE_PREFER_CLIENT_HISTORY",
+            "chat_hydrate_prefer_client_history",
+        ),
+    )
+    chat_history_supabase_limit: int = Field(
+        default=60,
+        validation_alias=AliasChoices(
+            "CHAT_HISTORY_SUPABASE_LIMIT",
+            "chat_history_supabase_limit",
+        ),
+    )
+    credits_free_monthly_limit: int = Field(
+        default=100_000,
+        validation_alias=AliasChoices(
+            "CREDITS_FREE_MONTHLY_LIMIT",
+            "credits_free_monthly_limit",
+        ),
+    )
+    credits_min_reserve: int = Field(
+        default=500,
+        validation_alias=AliasChoices("CREDITS_MIN_RESERVE", "credits_min_reserve"),
+    )
     automation_rate_limit_per_minute: int = Field(
         default=6,
         validation_alias=AliasChoices("AUTOMATION_RATE_LIMIT_PER_MINUTE", "automation_rate_limit_per_minute"),
@@ -128,7 +153,7 @@ class CloudSettings(BaseSettings):
         ),
     )
     personalization_cache_ttl_seconds: float = Field(
-        default=300.0,
+        default=0.0,
         validation_alias=AliasChoices(
             "PERSONALIZATION_CACHE_TTL_SECONDS",
             "personalization_cache_ttl_seconds",

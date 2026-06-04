@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { useDeferredValue, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { safeMarkdownHref } from "@/lib/safe-markdown-href";
 import { stripInlineToolJsonFromAnswer } from "@/lib/stripInlineToolJson";
 
 export function MarkdownBody({
@@ -25,20 +26,26 @@ export function MarkdownBody({
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          h1: (p) => (
+          h1: ({ children, ...p }) => (
             <h1
               className="mt-6 mb-3 text-xl font-bold tracking-tight text-koraku-ink"
               {...p}
-            />
+            >
+              {children}
+            </h1>
           ),
-          h2: (p) => (
+          h2: ({ children, ...p }) => (
             <h2
               className="mt-5 mb-2 text-lg font-bold tracking-tight text-koraku-ink"
               {...p}
-            />
+            >
+              {children}
+            </h2>
           ),
-          h3: (p) => (
-            <h3 className="mt-4 mb-2 text-base font-bold text-koraku-ink" {...p} />
+          h3: ({ children, ...p }) => (
+            <h3 className="mt-4 mb-2 text-base font-bold text-koraku-ink" {...p}>
+              {children}
+            </h3>
           ),
           p: (p) => <p className="mb-3 text-neutral-800" {...p} />,
           strong: (p) => (
@@ -51,12 +58,23 @@ export function MarkdownBody({
             <ol className="mb-3 list-decimal space-y-1 pl-5 text-neutral-800" {...p} />
           ),
           li: (p) => <li className="marker:text-neutral-400" {...p} />,
-          a: (p) => (
-            <a
-              className="font-medium text-koraku-accent underline decoration-koraku-accent/30 underline-offset-2 hover:decoration-koraku-accent"
-              {...p}
-            />
-          ),
+          a: ({ href, children, ...rest }) => {
+            const safe = safeMarkdownHref(href);
+            if (!safe) {
+              return <span className="text-koraku-accent">{children}</span>;
+            }
+            return (
+              <a
+                href={safe}
+                rel="noopener noreferrer"
+                target="_blank"
+                className="font-medium text-koraku-accent underline decoration-koraku-accent/30 underline-offset-2 hover:decoration-koraku-accent"
+                {...rest}
+              >
+                {children}
+              </a>
+            );
+          },
           code: ({ className, children, ...rest }) => {
             const block = /language-\w+/.test(String(className || ""));
             if (!block) {

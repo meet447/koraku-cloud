@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
-export async function createServerSupabase() {
+async function createServerSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) {
@@ -29,12 +29,6 @@ export async function createServerSupabase() {
       },
     },
   });
-}
-
-/** Resolves the signed-in user from the JWT (server-side). */
-export async function getAuthenticatedUserId(): Promise<string | null> {
-  const auth = await requireSupabaseAuth();
-  return auth.ok ? auth.userId : null;
 }
 
 /**

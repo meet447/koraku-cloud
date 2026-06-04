@@ -5,6 +5,7 @@ import os
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from koraku.core.secret_compare import secrets_equal
 from koraku.core.auth_supabase import (
     SUPABASE_JWT_REQUEST_ERROR_MESSAGES,
     SupabaseJwtResult,
@@ -67,7 +68,7 @@ class ApiKeyAuthVerifier:
         token = raw[7:].strip().split()[0] if raw[7:].strip() else ""
         if not token:
             return AuthResult(sub=None, reason="empty_token")
-        if token != self._api_key:
+        if not secrets_equal(self._api_key, token):
             return AuthResult(sub=None, reason="api_key_invalid")
         return AuthResult(sub=self._subject, reason="ok")
 

@@ -1,4 +1,10 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+
+export const metadata: Metadata = {
+  title: "Sign up · Koraku",
+  description: "Create your Koraku account.",
+};
 
 export const dynamic = "force-dynamic";
 

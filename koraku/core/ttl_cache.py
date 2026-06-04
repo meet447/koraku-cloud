@@ -23,8 +23,10 @@ class TtlCache(Generic[T]):
         row = self._data.get(k)
         if row is None:
             return None
-        ts, value = row
-        if (time.monotonic() - ts) >= max(0.0, float(ttl_seconds)):
+        _ts, value = row
+        ttl = float(ttl_seconds)
+        # ttl_seconds <= 0: no expiry (invalidate explicitly via ``invalidate``).
+        if ttl > 0 and (time.monotonic() - _ts) >= ttl:
             self._data.pop(k, None)
             return None
         return value

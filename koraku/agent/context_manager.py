@@ -271,11 +271,7 @@ class ContextManager:
         return [messages[0]] + messages[-(self.max_messages - 1):]
 
     def estimate_tokens(self, messages: list[AgentMessage]) -> int:
-        """Rough token estimate (4 chars ~ 1 token for English)."""
-        total_chars = 0
-        for msg in messages:
-            if isinstance(msg.content, str):
-                total_chars += len(msg.content)
-            else:
-                total_chars += len(json.dumps(msg.content))
-        return total_chars // 4
+        """Rough token estimate for context telemetry."""
+        from koraku.credits.token_estimator import estimate_messages_tokens
+
+        return estimate_messages_tokens(messages)

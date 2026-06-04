@@ -259,16 +259,9 @@ export function ToolTimeline({
   /** While true (live last assistant turn), expand details; collapse when the turn finishes. */
   streamingExpand?: boolean;
 }) {
-  const [cardOpen, setCardOpen] = useState(false);
+  const [manualCardOpen, setManualCardOpen] = useState<boolean | null>(null);
+  const cardOpen = manualCardOpen ?? streamingExpand;
   const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    if (streamingExpand) setCardOpen(true);
-  }, [streamingExpand]);
-
-  useEffect(() => {
-    if (!streamingExpand) setCardOpen(false);
-  }, [streamingExpand]);
 
   useEffect(() => {
     if (!activeThought) return;
@@ -336,7 +329,7 @@ export function ToolTimeline({
     <div className="mb-6 bg-transparent px-0 py-1">
       <button
         type="button"
-        onClick={() => setCardOpen((o) => !o)}
+        onClick={() => setManualCardOpen((o) => !(o ?? streamingExpand))}
         className="flex w-full items-center gap-2 text-left text-sm font-bold tracking-tight text-koraku-ink"
       >
         {cardOpen ? (

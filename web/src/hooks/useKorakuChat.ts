@@ -7,473 +7,48 @@ import {
   useMemo,
   useRef,
   useState,
-  type Dispatch,
-  type MutableRefObject,
-  type SetStateAction,
 } from "react";
-import {
-  applyKorakuSseEvent,
-  initialRunState,
-  parseKorakuEventInner,
-  type RunState,
-  type TurnStreamStatus,
-} from "@/lib/korakuReducer";
-import type { ComposerImage } from "@/components/Composer";
+import { initialRunState, type RunState } from "@/lib/korakuReducer";
 import type { QueuedMessagePreview } from "@/components/MessageQueueBar";
+import {
+  detachedChatMode,
+  fetchDetachedRunStatusJson,
+  refreshDetachedRunsCapability,
+  shouldUseDetachedStreamingForPayload,
+} from "@/lib/koraku-chat/detached-streaming";
+import {
+  apiRowToChatMessage,
+  chatMessageToApiRow,
+  chatMessagesToClientHistory,
+  messagesReadyToPersist,
+} from "@/lib/koraku-chat/persistence";
+import {
+  collectStreamingTurns,
+  finalizeTurnStreamStatus,
+  ingestKorakuSseFromReader,
+  runStateForStreamReplay,
+} from "@/lib/koraku-chat/sse-ingest";
+import {
+  isDefaultChatTitle,
+  isEmptyUnusedSession,
+  jobPreviewText,
+  uid,
+} from "@/lib/koraku-chat/session-utils";
+import {
+  EMPTY_THREAD_MESSAGES,
+  MAX_CONCURRENT_CHAT_STREAMS,
+  type ChatMessage,
+  type ChatSession,
+  type OutboundJob,
+} from "@/lib/koraku-chat/types";
 import { safeError } from "@/lib/safe-log";
-import { isDetachedRunsRedisCapable } from "@/lib/koraku-health";
 import { supabaseAuthHeaders } from "@/lib/supabase/fetch-auth";
 import { sortChatSessions } from "@/lib/chat-sessions";
+import type { ComposerImage } from "@/lib/composer-images";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
-export type ChatMessage =
-  | {
-      id: string;
-      role: "user";
-      text: string;
-      images?: { id: string; previewUrl: string }[];
-    }
-  | { id: string; role: "assistant"; run: RunState };
-
-/** Max agent streams open at once across all sidebar threads. */
-export const MAX_CONCURRENT_CHAT_STREAMS = 3;
-
-const CLIENT_HISTORY_MAX_MESSAGES = 24;
-const CLIENT_HISTORY_MAX_TEXT_CHARS = 8_000;
-
-/**
- * Detached streaming (``POST /runs`` + ``GET /runs/:id/stream``) for tab-close resume on the same API worker.
- *
- * ``NEXT_PUBLIC_KORAKU_DETACHED_CHAT``:
- * - ``off`` / ``0`` — inline ``POST /stream`` only (lowest latency; refresh aborts the turn).
- * - ``1`` / ``true`` / ``always`` — every chat turn uses detached runs.
- * - ``heavy`` / ``long`` / ``auto`` — detached only for long text (≥3200 chars) or any inline images.
- * - empty (default) — detached for signed-in persisted chats; inline for local-only guests.
- */
-type DetachedChatMode = "default" | "off" | "always" | "heavy";
-
-/** Cached from ``GET /koraku-api/health`` — ``false`` when API uses in-memory detached runs only. */
-let detachedRunsRedisCapable: boolean | null = null;
-
-async function refreshDetachedRunsCapability(): Promise<void> {
-  detachedRunsRedisCapable = await isDetachedRunsRedisCapable();
-}
-
-function detachedChatMode(): DetachedChatMode {
-  const v = (process.env.NEXT_PUBLIC_KORAKU_DETACHED_CHAT ?? "").trim().toLowerCase();
-  if (v === "off" || v === "0" || v === "false") return "off";
-  if (v === "1" || v === "true" || v === "yes" || v === "always") return "always";
-  if (v === "heavy" || v === "long" || v === "auto") return "heavy";
-  return "default";
-}
-
-function shouldUseDetachedStreamingForPayload(
-  textLen: number,
-  imageCount: number,
-  persistenceEnabled: boolean,
-): boolean {
-  const mode = detachedChatMode();
-  if (mode === "always") return true;
-  if (mode === "heavy") {
-    return textLen >= 3200 || imageCount > 0;
-  }
-  if (mode === "off") return false;
-  // Default: detached when persisted + Redis-backed runs (multi-worker safe).
-  if (!persistenceEnabled) return false;
-  if (detachedRunsRedisCapable === false) return false;
-  return true;
-}
-
-async function fetchDetachedRunStatusJson(
-  runId: string,
-  authHeaders: Record<string, string>,
-): Promise<{ state?: string; hint?: string } | null> {
-  try {
-    const r = await fetch(`/koraku-api/runs/${encodeURIComponent(runId)}/status`, {
-      method: "GET",
-      headers: { Accept: "application/json", ...authHeaders },
-    });
-    if (!r.ok) return null;
-    return (await r.json()) as { state?: string; hint?: string };
-  } catch {
-    return null;
-  }
-}
-
-const EMPTY_THREAD_MESSAGES: ChatMessage[] = [];
-
-export type ChatSession = {
-  id: string;
-  title: string;
-  channel?: string;
-  pinned?: boolean;
-};
-
-export type OutboundJob = {
-  id: string;
-  text: string;
-  provider: string;
-  model: string;
-  dropdownModelLabel: string;
-  images: ComposerImage[];
-};
-
-function uid(): string {
-  return crypto.randomUUID();
-}
-
-function isDefaultChatTitle(title: string): boolean {
-  const t = title.trim();
-  return !t || t === "New chat";
-}
-
-function isEmptyUnusedSession(
-  sid: string,
-  sessions: ChatSession[],
-  messagesBySession: Record<string, ChatMessage[]>,
-  streaming: ReadonlySet<string>,
-): boolean {
-  if (!sid || streaming.has(sid)) return false;
-  if ((messagesBySession[sid] ?? []).length > 0) return false;
-  const row = sessions.find((x) => x.id === sid);
-  return isDefaultChatTitle(row?.title ?? "");
-}
-
-function parseSseBlock(raw: string): { event: string; data: string; id?: string } {
-  let event = "message";
-  let id: string | undefined;
-  const dataLines: string[] = [];
-  for (const line of raw.split("\n")) {
-    const L = line.replace(/\r$/, "");
-    if (L.startsWith("event:")) event = L.slice(6).trim();
-    else if (L.startsWith("id:")) id = L.slice(3).trim();
-    else if (L.startsWith("data:")) dataLines.push(L.slice(5).trimStart());
-  }
-  return { event, data: dataLines.join("\n"), id };
-}
-
-type StreamingTurn = {
-  threadId: string;
-  assistantMsgId: string;
-  turnId: string;
-  startedAt: number;
-};
-
-/** In-flight detached turns persisted on assistant rows (``streamStatus: streaming``). */
-function collectStreamingTurns(
-  sessionList: { id: string }[],
-  messagesBySession: Record<string, ChatMessage[]>,
-): StreamingTurn[] {
-  const out: StreamingTurn[] = [];
-  const seen = new Set<string>();
-  for (const s of sessionList) {
-    for (const m of messagesBySession[s.id] ?? []) {
-      if (m.role !== "assistant") continue;
-      if (m.run.streamStatus !== "streaming") continue;
-      const turnId = (m.run.turnId || m.run.runId || m.id).trim();
-      if (!turnId || seen.has(turnId)) continue;
-      seen.add(turnId);
-      out.push({
-        threadId: s.id,
-        assistantMsgId: m.id,
-        turnId,
-        startedAt: m.run.streamStartedAt ?? 0,
-      });
-    }
-  }
-  return out;
-}
-
-/** Clear partial UI so a full SSE replay from ``after=-1`` renders cleanly. */
-function runStateForStreamReplay(prev: RunState): RunState {
-  return {
-    ...initialRunState(),
-    turnId: prev.turnId,
-    runId: prev.runId || prev.turnId,
-    streamStatus: "streaming",
-    sseAfter: -1,
-    streamStartedAt: prev.streamStartedAt,
-    dropdownModelLabel: prev.dropdownModelLabel,
-    statusText: "Reconnecting…",
-  };
-}
-
-function finalizeTurnStreamStatus(error: string | null, completed: boolean): TurnStreamStatus {
-  if (!completed) return "streaming";
-  return error?.trim() ? "failed" : "completed";
-}
-
-/** Read SSE chunks from a detached-run subscribe response and apply Koraku payloads. */
-async function ingestKorakuSseFromReader(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-  opts: {
-    sessionId: string;
-    assistantMsgId: string;
-    runId: string | null;
-    serverChatSessionRef: MutableRefObject<Record<string, string>>;
-    setServerChatSessionByUi: Dispatch<SetStateAction<Record<string, string>>>;
-    updateAssistantRun: (
-      sessionId: string,
-      assistantMessageId: string,
-      updater: (r: RunState) => RunState,
-    ) => void;
-    onSseAfter?: (after: number) => void;
-  },
-): Promise<boolean> {
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let sawDoneEvent = false;
-  const {
-    sessionId: sid,
-    assistantMsgId,
-    runId,
-    serverChatSessionRef,
-    setServerChatSessionByUi,
-    updateAssistantRun,
-    onSseAfter,
-  } = opts;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const payloads: Record<string, unknown>[] = [];
-    let sawStreamDone = false;
-    for (;;) {
-      const sepRn = buffer.indexOf("\r\n\r\n");
-      const sepN = buffer.indexOf("\n\n");
-      let sep = -1;
-      let skip = 0;
-      if (sepRn !== -1 && (sepN === -1 || sepRn <= sepN)) {
-        sep = sepRn;
-        skip = 4;
-      } else if (sepN !== -1) {
-        sep = sepN;
-        skip = 2;
-      }
-      if (sep === -1) break;
-      const rawBlock = buffer.slice(0, sep);
-      buffer = buffer.slice(sep + skip);
-      const { event, data, id } = parseSseBlock(rawBlock);
-      if (event === "done") {
-        sawStreamDone = true;
-        sawDoneEvent = true;
-        break;
-      }
-      if (event === "ping") continue;
-      if (runId && id && /^\d+$/.test(id)) {
-        onSseAfter?.(Number(id));
-      }
-      if (!data) continue;
-      try {
-        payloads.push(JSON.parse(data) as Record<string, unknown>);
-      } catch {
-        continue;
-      }
-    }
-    if (payloads.length > 0) {
-      for (const payload of payloads) {
-        rememberServerChatSession(sid, payload, serverChatSessionRef);
-      }
-      const mapped = serverChatSessionRef.current[sid]?.trim();
-      if (mapped) {
-        setServerChatSessionByUi((prev) =>
-          prev[sid] === mapped ? prev : { ...prev, [sid]: mapped },
-        );
-      }
-      updateAssistantRun(sid, assistantMsgId, (r) =>
-        payloads.reduce<RunState>(
-          (acc, p) => applyKorakuSseEvent(acc, p),
-          r,
-        ),
-      );
-    }
-    if (sawStreamDone) {
-      return true;
-    }
-  }
-  return sawDoneEvent;
-}
-
-function jobPreviewText(job: OutboundJob): string {
-  const t = job.text.trim();
-  if (t) {
-    return t.length > 120 ? `${t.slice(0, 117)}…` : t;
-  }
-  if (job.images.length > 1) return `${job.images.length} images`;
-  if (job.images.length === 1) return "Image";
-  return "…";
-}
-
-function rememberServerChatSession(
-  uiSessionId: string,
-  payload: Record<string, unknown>,
-  mapRef: MutableRefObject<Record<string, string>>,
-) {
-  const t = String(payload.type || "");
-  if (t === "koraku.started") {
-    const d = payload.data as Record<string, unknown> | undefined;
-    const id = d?.chatSessionId;
-    if (typeof id === "string" && id.length > 8) mapRef.current[uiSessionId] = id;
-    return;
-  }
-  if (t === "agent.mode") {
-    const d = payload.data as Record<string, unknown> | undefined;
-    const id = d?.session_id;
-    if (typeof id === "string" && id.length > 8) mapRef.current[uiSessionId] = id;
-    return;
-  }
-  if (t === "koraku.event") {
-    const inner = parseKorakuEventInner(payload.data);
-    if (
-      inner &&
-      inner.type === "koraku.trace" &&
-      inner.trace === "mode" &&
-      inner.data &&
-      typeof inner.data === "object"
-    ) {
-      const id = (inner.data as Record<string, unknown>).session_id;
-      if (typeof id === "string" && id.length > 8) mapRef.current[uiSessionId] = id;
-    }
-  }
-}
-
-function deserializeRunState(raw: unknown): RunState {
-  const b = initialRunState();
-  if (!raw || typeof raw !== "object") return b;
-  const o = raw as Partial<RunState>;
-  return {
-    ...b,
-    ...o,
-    timeline: Array.isArray(o.timeline) ? o.timeline : b.timeline,
-    pendingToolByUseId:
-      o.pendingToolByUseId && typeof o.pendingToolByUseId === "object"
-        ? o.pendingToolByUseId
-        : b.pendingToolByUseId,
-    blockKindByIndex:
-      o.blockKindByIndex && typeof o.blockKindByIndex === "object"
-        ? o.blockKindByIndex
-        : b.blockKindByIndex,
-    blockNameByIndex:
-      o.blockNameByIndex && typeof o.blockNameByIndex === "object"
-        ? o.blockNameByIndex
-        : b.blockNameByIndex,
-    partialJsonByIndex:
-      o.partialJsonByIndex && typeof o.partialJsonByIndex === "object"
-        ? o.partialJsonByIndex
-        : b.partialJsonByIndex,
-    sawToolUseThisTurn:
-      typeof o.sawToolUseThisTurn === "boolean" ? o.sawToolUseThisTurn : b.sawToolUseThisTurn,
-    assistantBubbleMode:
-      o.assistantBubbleMode === "step" || o.assistantBubbleMode === "final"
-        ? o.assistantBubbleMode
-        : b.assistantBubbleMode,
-    stepCaption: typeof o.stepCaption === "string" ? o.stepCaption : b.stepCaption,
-    turnId: typeof o.turnId === "string" ? o.turnId : b.turnId,
-    streamStatus:
-      o.streamStatus === "streaming" ||
-      o.streamStatus === "completed" ||
-      o.streamStatus === "failed"
-        ? o.streamStatus
-        : b.streamStatus,
-    sseAfter: typeof o.sseAfter === "number" ? o.sseAfter : b.sseAfter,
-  };
-}
-
-function apiRowToChatMessage(row: {
-  id: string;
-  role: string;
-  contentJson: unknown;
-}): ChatMessage | null {
-  const c = row.contentJson;
-  if (row.role === "user") {
-    if (!c || typeof c !== "object") {
-      return { id: row.id, role: "user", text: "" };
-    }
-    const o = c as Record<string, unknown>;
-    const text = typeof o.text === "string" ? o.text : "";
-    let images: { id: string; previewUrl: string }[] | undefined;
-    if (Array.isArray(o.images)) {
-      images = o.images
-        .map((x) => {
-          if (!x || typeof x !== "object") return null;
-          const im = x as Record<string, unknown>;
-          const id = typeof im.id === "string" ? im.id : uid();
-          const previewUrl = typeof im.previewUrl === "string" ? im.previewUrl : "";
-          return previewUrl ? { id, previewUrl } : null;
-        })
-        .filter((x): x is { id: string; previewUrl: string } => x != null);
-    }
-    return { id: row.id, role: "user", text, images: images?.length ? images : undefined };
-  }
-  if (row.role === "assistant") {
-    const runRaw =
-      c && typeof c === "object" && "run" in (c as object)
-        ? (c as { run: unknown }).run
-        : c;
-    const run = deserializeRunState(runRaw);
-    if (!run.turnId) {
-      run.turnId = run.runId || row.id;
-    }
-    if (!run.runId && run.turnId) {
-      run.runId = run.turnId;
-    }
-    return { id: row.id, role: "assistant", run };
-  }
-  return null;
-}
-
-/** Omit empty completed assistant rows; keep in-flight turns for DB resume. */
-function messagesReadyToPersist(msgs: ChatMessage[]): ChatMessage[] {
-  return msgs.filter((m) => {
-    if (m.role !== "assistant") return true;
-    if (m.run.streamStatus === "streaming") return true;
-    return Boolean(m.run.assistantMarkdown.trim() || m.run.error?.trim());
-  });
-}
-
-function chatMessageToApiRow(m: ChatMessage): {
-  id: string;
-  role: string;
-  contentJson: unknown;
-} {
-  if (m.role === "user") {
-    const images = m.images?.map(({ id, previewUrl }) => ({
-      id,
-      previewUrl: previewUrl.length < 48_000 ? previewUrl : "",
-    }));
-    return {
-      id: m.id,
-      role: "user",
-      contentJson: {
-        text: m.text,
-        ...(images?.some((i) => i.previewUrl) ? { images } : {}),
-      },
-    };
-  }
-  return { id: m.id, role: "assistant", contentJson: { run: m.run } };
-}
-
-function chatMessagesToClientHistory(messages: ChatMessage[]): {
-  role: "user" | "assistant";
-  text: string;
-}[] {
-  return messages
-    .slice(-CLIENT_HISTORY_MAX_MESSAGES)
-    .map((m) => {
-      const text = m.role === "user" ? m.text : m.run.assistantMarkdown;
-      const clean = text.trim();
-      if (!clean) return null;
-      return {
-        role: m.role,
-        text:
-          clean.length > CLIENT_HISTORY_MAX_TEXT_CHARS
-            ? `${clean.slice(0, CLIENT_HISTORY_MAX_TEXT_CHARS - 1)}…`
-            : clean,
-      };
-    })
-    .filter((m): m is { role: "user" | "assistant"; text: string } => m != null);
-}
+export type { ChatMessage, ChatSession, OutboundJob } from "@/lib/koraku-chat/types";
+export { MAX_CONCURRENT_CHAT_STREAMS } from "@/lib/koraku-chat/types";
 
 export function useKorakuChat() {
   const [hydrated, setHydrated] = useState(false);
@@ -609,49 +184,54 @@ export function useKorakuChat() {
           channel: t.channel,
           pinned: t.pinned,
         }));
+        const newId = uid();
+        draftSessionIdsRef.current.add(newId);
+        const sessionsWithNew = sortChatSessions([
+          { id: newId, title: "New chat" },
+          ...sessList,
+        ]);
         const msgMap: Record<string, ChatMessage[]> = Object.fromEntries(
-          sessList.map((s) => [s.id, [] as ChatMessage[]]),
+          sessionsWithNew.map((s) => [s.id, [] as ChatMessage[]]),
         );
-        let focusId = sessList[0]!.id;
         for (const s of sessList) {
           serverChatSessionRef.current[s.id] = s.id;
         }
         setServerChatSessionByUi(Object.fromEntries(sessList.map((s) => [s.id, s.id])));
-        const mr = await fetch(`/api/chat/threads/${focusId}/messages`, {
-          credentials: "include",
-        });
-        if (cancelled) return;
-        if (mr.ok) {
+
+        const loadMessages = async (threadId: string) => {
+          const mr = await fetch(`/api/chat/threads/${threadId}/messages`, {
+            credentials: "include",
+          });
+          if (cancelled || !mr.ok) return;
           const mp = (await mr.json()) as {
             messages?: { id: string; role: string; contentJson: unknown }[];
           };
-          msgMap[focusId] = (mp.messages ?? [])
+          msgMap[threadId] = (mp.messages ?? [])
             .map(apiRowToChatMessage)
             .filter((m): m is ChatMessage => m != null);
+        };
+
+        // Prefetch recent threads so in-flight streams can resume without switching focus.
+        const prefetchIds = new Set<string>();
+        for (const s of sessList.slice(0, 5)) {
+          prefetchIds.add(s.id);
         }
-        const streaming = collectStreamingTurns(sessList, msgMap);
-        if (streaming.length > 0) {
-          const latest = streaming.reduce((a, b) =>
-            a.startedAt >= b.startedAt ? a : b,
-          );
-          focusId = latest.threadId;
-          if (focusId !== sessList[0]!.id && msgMap[focusId]?.length === 0) {
-            const mr2 = await fetch(`/api/chat/threads/${focusId}/messages`, {
-              credentials: "include",
-            });
-            if (!cancelled && mr2.ok) {
-              const mp2 = (await mr2.json()) as {
-                messages?: { id: string; role: string; contentJson: unknown }[];
-              };
-              msgMap[focusId] = (mp2.messages ?? [])
-                .map(apiRowToChatMessage)
-                .filter((m): m is ChatMessage => m != null);
-            }
-          }
+        for (const threadId of prefetchIds) {
+          await loadMessages(threadId);
         }
-        messagesLoadedForThreadRef.current = new Set([focusId]);
-        setSessions(sortChatSessions(sessList));
-        setActiveId(focusId);
+        let streaming = collectStreamingTurns(sessList, msgMap);
+        for (const t of streaming) {
+          if ((msgMap[t.threadId]?.length ?? 0) > 0) continue;
+          await loadMessages(t.threadId);
+        }
+        streaming = collectStreamingTurns(sessList, msgMap);
+        for (const t of streaming) {
+          messagesLoadedForThreadRef.current.add(t.threadId);
+        }
+
+        messagesLoadedForThreadRef.current.add(newId);
+        setSessions(sessionsWithNew);
+        setActiveId(newId);
         setMessagesBySession(msgMap);
         setHydrated(true);
       } catch {
@@ -986,10 +566,23 @@ export function useKorakuChat() {
 
             if (!startRes.ok) {
               const errText = await startRes.text().catch(() => startRes.statusText);
+              let displayError = `HTTP ${startRes.status}: ${errText.slice(0, 400)}`;
+              if (startRes.status === 402) {
+                try {
+                  const body = JSON.parse(errText) as { detail?: { message?: string } };
+                  displayError =
+                    body.detail?.message ||
+                    "Monthly credit limit reached. Open Settings → Usage for details.";
+                } catch {
+                  displayError =
+                    "Monthly credit limit reached. Open Settings → Usage for details.";
+                }
+              }
               updateAssistantRun(sid, assistantMsgId, (r) => ({
                 ...r,
-                error: r.error || `HTTP ${startRes.status}: ${errText.slice(0, 400)}`,
-                statusText: "Request failed",
+                error: r.error || displayError,
+                statusText:
+                  startRes.status === 402 ? "Credits exhausted" : "Request failed",
               }));
               return;
             }
@@ -1047,12 +640,24 @@ export function useKorakuChat() {
               }
             }
             const errText = await streamRes.text().catch(() => streamRes.statusText);
+            let displayError = `Stream HTTP ${streamRes.status}: ${errText.slice(0, 400)}${extra}`.trim();
+            if (streamRes.status === 402) {
+              try {
+                const body = JSON.parse(errText) as {
+                  detail?: { message?: string };
+                };
+                displayError =
+                  body.detail?.message ||
+                  "Monthly credit limit reached. Open Settings → Usage for details.";
+              } catch {
+                displayError =
+                  "Monthly credit limit reached. Open Settings → Usage for details.";
+              }
+            }
             updateAssistantRun(sid, assistantMsgId, (r) => ({
               ...r,
-              error:
-                r.error ||
-                `Stream HTTP ${streamRes.status}: ${errText.slice(0, 400)}${extra}`.trim(),
-              statusText: "Subscribe failed",
+              error: r.error || displayError,
+              statusText: streamRes.status === 402 ? "Credits exhausted" : "Subscribe failed",
             }));
             return;
           }
@@ -1151,9 +756,6 @@ export function useKorakuChat() {
       if (streamingSidsRef.current.has(p.threadId)) continue;
 
       detachResumeStartedRef.current.add(p.turnId);
-      if (activeIdRef.current !== p.threadId) {
-        setActiveId(p.threadId);
-      }
 
       void (async () => {
         let streamMarked = false;

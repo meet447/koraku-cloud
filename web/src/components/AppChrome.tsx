@@ -2,6 +2,7 @@
 
 import { Sidebar } from "./Sidebar";
 import type { ChatSession } from "@/hooks/useKorakuChat";
+import { EMPTY_CHAT_SESSIONS, EMPTY_STRING_ARRAY } from "@/lib/empty-arrays";
 
 export function AppChrome({
   collapsed,
@@ -9,9 +10,9 @@ export function AppChrome({
   chatsLoading = false,
   sessions,
   activeId,
-  streamingSessionIds = [],
-  deletingSessionIds = [],
-  refreshingSessionIds = [],
+  streamingSessionIds = EMPTY_STRING_ARRAY,
+  deletingSessionIds = EMPTY_STRING_ARRAY,
+  refreshingSessionIds = EMPTY_STRING_ARRAY,
   onSelectSession,
   onNewChat,
   onDeleteChat,
@@ -50,7 +51,9 @@ export function AppChrome({
           onRefreshChat={onRefreshChat}
         />
       </div>
-      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-white">{children}</div>
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
+        {children}
+      </div>
     </div>
   );
 }

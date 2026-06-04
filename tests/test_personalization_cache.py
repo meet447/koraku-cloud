@@ -62,4 +62,39 @@ def test_upsert_invalidates_personalization_cache(monkeypatch) -> None:
 
     monkeypatch.setattr(sp, "get_http_client", lambda: FakeClient())
     sp.upsert_personalization_sync(uid, "New", "mem", "soul", org_id=oid)
-    assert sp._PERSONALIZATION_CACHE.get(sp._cache_key(uid, oid), ttl_seconds=300.0) is None
+    assert sp._PERSONALIZATION_CACHE.get(sp._cache_key(uid, oid), ttl_seconds=0) is None
+
+
+def test_fetch_personalization_cache_no_expiry_until_invalidate(monkeypatch) -> None:
+    sp._PERSONALIZATION_CACHE.clear()
+    calls = {"n": 0}
+
+    monkeypatch.setattr(sp, "_valid_uuid", lambda _uid: True)
+    monkeypatch.setattr(sp, "supabase_personalization_configured", lambda: True)
+    monkeypatch.setattr(sp.settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(sp.settings, "supabase_service_role_key", "test-service-role")
+    monkeypatch.setattr(sp.settings, "personalization_cache_ttl_seconds", 0.0)
+
+    class FakeResp:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return [{"agent_name": "Cached", "memory": "M", "soul": "S"}]
+
+    class FakeClient:
+        def get(self, *_args, **_kwargs):
+            calls["n"] += 1
+            return FakeResp()
+
+    monkeypatch.setattr(sp, "get_http_client", lambda: FakeClient())
+
+    uid = "55555555-5555-4555-8555-555555555555"
+    oid = "66666666-6666-4666-8666-666666666666"
+    assert sp.fetch_personalization_sync(uid, org_id=oid) == {
+        "agent_name": "Cached",
+        "memory": "M",
+        "soul": "S",
+    }
+    assert sp.fetch_personalization_sync(uid, org_id=oid)["agent_name"] == "Cached"
+    assert calls["n"] == 1

@@ -1,28 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   Network,
-  Loader2,
   PanelLeftClose,
   PanelLeft,
   MessageCircle,
   Plug,
   Plus,
-  Search,
   Settings2,
-  RefreshCw,
-  Trash2,
   Wand2,
 } from "lucide-react";
 import clsx from "clsx";
 import type { ChatSession } from "@/hooks/useKorakuChat";
-import { sortChatSessions } from "@/lib/chat-sessions";
 import { BrandMark } from "@/components/BrandMark";
 import { AccountMenu } from "@/components/AccountMenu";
 import { APP_BASE } from "@/lib/app-path";
+import { isSettingsRoute, SETTINGS_PANEL_HREF } from "@/lib/settings-panel";
+import { SidebarSettingsMenu } from "@/components/SidebarSettingsMenu";
+import { SidebarChatList } from "@/components/SidebarChatList";
+import { EMPTY_STRING_ARRAY } from "@/lib/empty-arrays";
 
 const iconStroke = 1.5;
 
@@ -34,9 +33,6 @@ const nav = [
   { href: `${APP_BASE}/automations`, label: "Automations", icon: Wand2 },
 ];
 
-const CHAT_SKELETON_KEYS = ["a", "b", "c", "d", "e", "f"] as const;
-const CHAT_SKELETON_WIDTHS = ["w-[88%]", "w-[72%]", "w-[80%]", "w-[64%]", "w-[76%]", "w-[56%]"] as const;
-
 export function Sidebar({
   collapsed,
   onToggleCollapse,
@@ -44,8 +40,8 @@ export function Sidebar({
   sessions,
   activeId,
   streamingSessionIds,
-  deletingSessionIds = [],
-  refreshingSessionIds = [],
+  deletingSessionIds = EMPTY_STRING_ARRAY,
+  refreshingSessionIds = EMPTY_STRING_ARRAY,
   onSelectSession,
   onNewChat,
   onDeleteChat,
@@ -64,19 +60,15 @@ export function Sidebar({
   onDeleteChat: (id: string) => void | Promise<void>;
   onRefreshChat: (id: string) => void | Promise<void>;
 }) {
-  const pathname = usePathname();
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const streamingSet = new Set(streamingSessionIds);
-  const deletingSet = new Set(deletingSessionIds);
-  const refreshingSet = new Set(refreshingSessionIds);
-  const visibleSessions = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const list = q
-      ? sessions.filter((s) => s.title.toLowerCase().includes(q))
-      : sessions;
-    return sortChatSessions(list);
-  }, [query, sessions]);
+  const pathname = usePathname() || "";
+  const router = useRouter();
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [settingsMenuDismissed, setSettingsMenuDismissed] = useState(false);
+  const onSettingsRoute = isSettingsRoute(pathname);
+  const showSettingsMenu =
+    !collapsed &&
+    !settingsMenuDismissed &&
+    (onSettingsRoute || settingsMenuOpen);
 
   return (
     <aside
@@ -167,185 +159,52 @@ export function Sidebar({
         })}
       </nav>
 
-      {!collapsed && (
-        <div className="mt-4 flex min-h-0 flex-1 flex-col">
-          <div className="mb-2 flex shrink-0 items-center justify-between px-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
-              Chats
-            </span>
-            <button
-              type="button"
-              onClick={() => setSearchOpen((o) => !o)}
-              className="rounded-md p-1 text-neutral-400 transition hover:bg-white/80 hover:text-neutral-600"
-              aria-label="Search chats"
-            >
-              <Search className="h-3.5 w-3.5" strokeWidth={iconStroke} />
-            </button>
-          </div>
-          {searchOpen ? (
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search chats..."
-              className="mb-2 w-full rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-[13px] font-medium text-neutral-800 outline-none placeholder:text-neutral-400 focus:ring-2 focus:ring-neutral-200"
-              autoFocus
-            />
-          ) : null}
-          <div
-            className="min-h-0 flex-1 space-y-0.5 overflow-y-auto overflow-x-hidden pr-0.5"
-            aria-busy={chatsLoading}
-            aria-label={chatsLoading ? "Loading chats" : undefined}
-          >
-            {chatsLoading ? (
-              <div className="space-y-0.5">
-                {CHAT_SKELETON_KEYS.map((key, i) => (
-                  <div
-                    key={key}
-                    className="flex w-full min-w-0 items-center gap-2 rounded-[1.1rem] px-2.5 py-2"
-                    aria-hidden
-                  >
-                    <span className="h-3.5 w-3.5 shrink-0 rounded bg-neutral-200/80" />
-                    <span
-                      className={clsx(
-                        "h-3.5 shrink-0 rounded-lg bg-neutral-200/80 animate-pulse",
-                        CHAT_SKELETON_WIDTHS[i],
-                      )}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : visibleSessions.length === 0 ? (
-              <p className="px-2.5 py-3 text-xs font-medium text-neutral-400">
-                {query.trim() ? "No matching chats." : "No chats yet."}
-              </p>
-            ) : (
-              visibleSessions.map((s) => {
-                const deleting = deletingSet.has(s.id);
-                const refreshing = refreshingSet.has(s.id);
-                const isImessage = s.channel === "imessage" || s.pinned;
-                return (
-                  <div
-                    key={s.id}
-                    aria-busy={deleting || refreshing}
-                    className={clsx(
-                      "group flex w-full min-w-0 items-center gap-0.5 rounded-[1.1rem] py-1.5 pl-2.5 pr-1 transition",
-                      s.id === activeId
-                        ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200/60"
-                        : "text-neutral-600 hover:bg-white/70 hover:text-neutral-900",
-                      (deleting || refreshing) && "opacity-70",
-                    )}
-                  >
-                    <button
-                      type="button"
-                      disabled={deleting || refreshing}
-                      onClick={() => onSelectSession(s.id)}
-                      className="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-0.5 text-left text-[13px] font-medium disabled:cursor-wait"
-                    >
-                      {deleting || refreshing ? (
-                        <Loader2
-                          className="h-3.5 w-3.5 shrink-0 animate-spin text-neutral-500"
-                          aria-hidden
-                        />
-                      ) : streamingSet.has(s.id) ? (
-                        <Loader2
-                          className="h-3.5 w-3.5 shrink-0 animate-spin text-neutral-400"
-                          aria-hidden
-                        />
-                      ) : isImessage ? (
-                        <MessageCircle
-                          className="h-3.5 w-3.5 shrink-0 text-violet-500"
-                          aria-hidden
-                        />
-                      ) : (
-                        <span className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      )}
-                      <span className="min-w-0 flex-1 truncate">{s.title}</span>
-                    </button>
-                    {isImessage ? (
-                      <button
-                        type="button"
-                        disabled={refreshing || deleting}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void onRefreshChat(s.id);
-                        }}
-                        className={clsx(
-                          "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition",
-                          "hover:bg-violet-50 hover:text-violet-700 disabled:pointer-events-none disabled:opacity-100",
-                          refreshing
-                            ? "opacity-100"
-                            : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100",
-                        )}
-                        aria-label={
-                          refreshing
-                            ? `Refreshing chat: ${s.title}`
-                            : `Refresh iMessage history: ${s.title}`
-                        }
-                        title={refreshing ? "Refreshing…" : "Refresh from iMessage"}
-                      >
-                        <RefreshCw
-                          className={clsx(
-                            "h-3.5 w-3.5",
-                            refreshing && "animate-spin text-violet-600",
-                          )}
-                          strokeWidth={iconStroke}
-                          aria-hidden
-                        />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={deleting}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void onDeleteChat(s.id);
-                        }}
-                        className={clsx(
-                          "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition",
-                          "hover:bg-red-50 hover:text-red-600 disabled:pointer-events-none disabled:opacity-100",
-                          deleting
-                            ? "opacity-100"
-                            : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100",
-                        )}
-                        aria-label={
-                          deleting ? `Deleting chat: ${s.title}` : `Delete chat: ${s.title}`
-                        }
-                        title={deleting ? "Deleting…" : "Delete chat"}
-                      >
-                        <Trash2
-                          className={clsx(
-                            "h-3.5 w-3.5",
-                            deleting && "animate-pulse text-neutral-400",
-                          )}
-                          strokeWidth={iconStroke}
-                          aria-hidden
-                        />
-                      </button>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
+      {!collapsed ? (
+        <SidebarChatList
+          chatsLoading={chatsLoading}
+          sessions={sessions}
+          activeId={activeId}
+          streamingSessionIds={streamingSessionIds}
+          deletingSessionIds={deletingSessionIds}
+          refreshingSessionIds={refreshingSessionIds}
+          onSelectSession={onSelectSession}
+          onDeleteChat={onDeleteChat}
+          onRefreshChat={onRefreshChat}
+        />
+      ) : null}
 
-      <div
-        className={clsx(
-          "mt-auto flex shrink-0 flex-col gap-2",
-          !collapsed && "border-t border-neutral-200/60 pt-2",
+      <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-neutral-200/60 pt-2">
+        {showSettingsMenu ? (
+          <SidebarSettingsMenu
+            onClose={() => {
+              setSettingsMenuDismissed(true);
+              setSettingsMenuOpen(false);
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              if (collapsed) {
+                router.push(SETTINGS_PANEL_HREF.profile);
+                return;
+              }
+              setSettingsMenuDismissed(false);
+              setSettingsMenuOpen(true);
+            }}
+            aria-expanded={false}
+            className={clsx(
+              "flex w-full shrink-0 items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold transition",
+              !collapsed && onSettingsRoute
+                ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200/80"
+                : "text-neutral-600 hover:bg-white/80 hover:text-neutral-900",
+              collapsed && "justify-center px-0",
+            )}
+          >
+            <Settings2 className="h-4 w-4 shrink-0" strokeWidth={iconStroke} />
+            {!collapsed && "Settings"}
+          </button>
         )}
-      >
-        <Link
-          href={`${APP_BASE}/settings`}
-          className={clsx(
-            "flex w-full items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold text-neutral-600 transition hover:bg-white/80 hover:text-neutral-900",
-            collapsed && "justify-center px-0",
-          )}
-        >
-          <Settings2 className="h-4 w-4 shrink-0" strokeWidth={iconStroke} />
-          {!collapsed && "Settings"}
-        </Link>
         <div
           className={clsx(
             "min-w-0",

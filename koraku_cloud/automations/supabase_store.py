@@ -41,6 +41,18 @@ def _client():
     return supabase_rest.get_http_client()
 
 
+def _normalize_uuid(value: str, *, field: str) -> str | None:
+    """Return canonical UUID string for PostgREST filters, or ``None`` if invalid."""
+    s = (value or "").strip()
+    if not s:
+        return None
+    try:
+        return str(uuid.UUID(s))
+    except ValueError:
+        log.debug("invalid %s for supabase filter: %r", field, value[:80] if value else value)
+        return None
+
+
 def _row_to_automation(o: dict[str, Any]) -> dict[str, Any]:
     tk = o.get("toolkits") or []
     if not isinstance(tk, list):
@@ -79,7 +91,10 @@ def _automation_scope(user_id: str, org_id: str, *, automation_id: str | None = 
     oid = (org_id or "").strip()
     parts = [f"user_id=eq.{uid}", f"org_id=eq.{oid}"]
     if automation_id:
-        parts.insert(0, f"id=eq.{(automation_id or '').strip()}")
+        aid = _normalize_uuid(automation_id, field="automation_id")
+        if not aid:
+            raise ValueError("invalid automation_id")
+        parts.insert(0, f"id=eq.{aid}")
     return "&".join(parts)
 
 
@@ -119,10 +134,15 @@ def get_automation(
     org_id: str | None = None,
 ) -> dict[str, Any] | None:
     uid = (user_id or "").strip()
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return None
     oid = (org_id or "").strip()
     if oid:
-        q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}&limit=1"
+        try:
+            q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}&limit=1"
+        except ValueError:
+            return None
     else:
         q = f"/{_TABLE}?id=eq.{aid}&user_id=eq.{uid}&limit=1"
     r = _client().get(_rest_url(q), headers=_headers())
@@ -220,7 +240,9 @@ def update_automation(
 ) -> dict[str, Any] | None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return None
     patch: dict[str, Any] = {"updated_at": _iso(datetime.now(_UTC))}
     if title is not None:
         patch["title"] = title.strip()
@@ -250,7 +272,10 @@ def update_automation(
         patch["event_source"] = event_source
     if len(patch) <= 1:
         return get_automation(uid, aid, org_id=oid)
-    q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    try:
+        q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    except ValueError:
+        return None
     r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
     if r.status_code == 404 or r.status_code == 406:
         return None
@@ -264,8 +289,13 @@ def update_automation(
 def delete_automation(user_id: str, org_id: str, automation_id: str) -> bool:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    aid = (automation_id or "").strip()
-    q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return False
+    try:
+        q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    except ValueError:
+        return False
     r = _client().delete(_rest_url(q), headers=_headers())
     if r.status_code == 404:
         return False
@@ -283,7 +313,9 @@ def set_automation_run_times(
 ) -> None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return
     patch: dict[str, Any] = {"updated_at": _iso(datetime.now(_UTC))}
     if last_run_at is not None:
         patch["last_run_at"] = _iso(last_run_at)
@@ -313,7 +345,9 @@ def list_automations_by_composio_trigger_id(trigger_id: str) -> list[dict[str, A
 
 
 def get_automation_for_event(automation_id: str) -> dict[str, Any] | None:
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return None
     q = f"/{_TABLE}?id=eq.{aid}&trigger_mode=eq.event&limit=1"
     r = _client().get(_rest_url(q), headers=_headers())
     r.raise_for_status()
@@ -325,7 +359,9 @@ def get_automation_for_event(automation_id: str) -> dict[str, Any] | None:
 
 
 def get_event_webhook_hash(automation_id: str) -> str | None:
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return None
     q = f"/{_TABLE}?id=eq.{aid}&select=event_webhook_token_hash&limit=1"
     r = _client().get(_rest_url(q), headers=_headers())
     if r.status_code != 200:
@@ -340,7 +376,9 @@ def get_event_webhook_hash(automation_id: str) -> str | None:
 def has_running_run(user_id: str, org_id: str, automation_id: str) -> bool:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return False
     q = (
         f"/{_RUN_TABLE}?automation_id=eq.{aid}&user_id=eq.{uid}&org_id=eq.{oid}"
         "&status=eq.running&limit=1&select=id"
@@ -361,7 +399,9 @@ def set_current_run_id(
 ) -> None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return
     patch: dict[str, Any] = {
         "updated_at": _iso(datetime.now(_UTC)),
         "current_run_id": run_id,
@@ -381,7 +421,9 @@ def record_automation_after_run(
 ) -> None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return
     patch: dict[str, Any] = {
         "updated_at": _iso(datetime.now(_UTC)),
         "current_run_id": None,
@@ -408,7 +450,9 @@ def insert_run_start(
 ) -> str:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return ""
     rid = str(uuid.uuid4())
     now = _iso(datetime.now(_UTC))
     body = {
@@ -435,7 +479,9 @@ def insert_run_skipped(
 ) -> str:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return ""
     rid = str(uuid.uuid4())
     now = _iso(datetime.now(_UTC))
     body = {
@@ -465,7 +511,9 @@ def patch_run_progress(
 ) -> None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    rid = (run_id or "").strip()
+    rid = _normalize_uuid(run_id, field="run_id")
+    if not rid:
+        return
     patch: dict[str, Any] = {}
     if progress_phase is not None:
         patch["progress_phase"] = progress_phase[:120]
@@ -481,7 +529,9 @@ def patch_run_progress(
 def get_run(user_id: str, org_id: str, run_id: str) -> dict[str, Any] | None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    rid = (run_id or "").strip()
+    rid = _normalize_uuid(run_id, field="run_id")
+    if not rid:
+        return None
     q = (
         f"/{_RUN_TABLE}?id=eq.{rid}&user_id=eq.{uid}&org_id=eq.{oid}&limit=1"
         "&select=id,automation_id,status,trigger_summary,result_summary,error,"
@@ -527,7 +577,9 @@ def finish_run(
 ) -> None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    rid = (run_id or "").strip()
+    rid = _normalize_uuid(run_id, field="run_id")
+    if not rid:
+        return
     duration_ms = int((finished_at - started_at).total_seconds() * 1000)
     patch = {
         "status": status,
@@ -555,7 +607,9 @@ def list_runs(
 ) -> list[dict[str, Any]]:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
-    aid = (automation_id or "").strip()
+    aid = _normalize_uuid(automation_id, field="automation_id")
+    if not aid:
+        return []
     lim = max(1, min(int(limit), 200))
     q = (
         f"/{_RUN_TABLE}?automation_id=eq.{aid}&user_id=eq.{uid}&org_id=eq.{oid}"

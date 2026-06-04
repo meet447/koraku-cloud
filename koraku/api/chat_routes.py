@@ -16,9 +16,15 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from koraku.agent import _step_budget, get_or_create_chat_session
+from koraku.core.session_store import get_session_store
 from koraku.agent.runtime_context import AgentRunContext, ExecutionTarget
 from koraku.agent.unconfigured import run_unconfigured
 from koraku.core.config import settings
+from koraku.credits.service import (
+    credits_summary_event,
+    pre_check_org,
+    settle_run,
+)
 from koraku.core.rate_limit import RateLimit, enforce_rate_limit, rate_limit_key
 from koraku.core.request_auth import resolve_request_auth
 from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
@@ -84,6 +90,21 @@ class StreamClientHistoryMessage(BaseModel):
 
     role: Literal["user", "assistant"]
     text: str = Field(..., max_length=20_000)
+
+
+def client_history_rows_for_hydration(
+    rows: list[StreamClientHistoryMessage] | list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Normalize client history for hydration (Pydantic models or plain dicts)."""
+    out: list[dict[str, Any]] = []
+    for row in rows or []:
+        if isinstance(row, dict):
+            out.append(row)
+        elif isinstance(row, BaseModel):
+            out.append(row.model_dump())
+        else:
+            out.append({"role": getattr(row, "role", "user"), "text": getattr(row, "text", "")})
+    return out
 
 
 class StreamChatBody(BaseModel):
@@ -170,7 +191,7 @@ async def _stream_agent_sse(
     server_mode: str,
     auth_sub: str | None = None,
     auth_org_id: str | None = None,
-    client_history: list[StreamClientHistoryMessage] | None = None,
+    client_history: list[StreamClientHistoryMessage] | list[dict[str, Any]] | None = None,
     request: Request | None = None,
     cancel_event: asyncio.Event | None = None,
     stream_run_id: str | None = None,
@@ -187,6 +208,8 @@ async def _stream_agent_sse(
     stream_state = KorakuStreamState()
     if stream_run_id and str(stream_run_id).strip():
         stream_state.run_id = str(stream_run_id).strip()
+    if images:
+        stream_state.usage.image_count = len(images)
     stream_state.resolved_model = resolved_model if server_mode == "live" else "koraku-unconfigured"
     stream_state.eff_provider = eff_provider if server_mode == "live" else "unconfigured"
 
@@ -234,7 +257,7 @@ async def _stream_agent_sse(
             incoming_user_text=msg.strip(),
             auth_sub=auth_sub,
             auth_org_id=auth_org_id,
-            client_history=[p.model_dump() for p in (client_history or [])],
+            client_history=client_history_rows_for_hydration(client_history),
         )
     )
 
@@ -366,6 +389,8 @@ async def _stream_agent_sse(
                 session=session,
                 run_id=stream_state.run_id,
             )
+            session.touch()
+            get_session_store().save(session)
             clear_lazy_blaxel_session(lazy_tok, lazy_root_tok)
             try:
                 queue.put_nowait(None)
@@ -397,12 +422,29 @@ async def _stream_agent_sse(
             await task
 
     await _stop_disconnect_watch()
+
+    if auth_org_id and server_mode == "live":
+        credits_payload = await settle_run(
+            auth_org_id,
+            run_id=stream_state.run_id,
+            usage=stream_state.usage,
+            kind="chat",
+            model=stream_state.resolved_model,
+            provider=stream_state.eff_provider,
+        )
+        credit_evt = credits_summary_event(credits_payload)
+        if credit_evt:
+            yield format_sse(credit_evt)
+            await asyncio.sleep(0)
+
     yield "event: done\n\n"
 
 
 @router.get("/api/chat-models")
-async def chat_models():
+async def chat_models(request: Request):
     """Model IDs for the chat UI dropdown (per provider + optional CHAT_MODEL_OPTIONS)."""
+    resolved = resolve_request_auth(request)
+    resolved.require_chat_access()
     return ui_chat_models()
 
 
@@ -421,6 +463,7 @@ async def stream_endpoint_post(body: StreamChatBody, request: Request):
             limit=settings.chat_rate_limit_per_minute,
         )
     )
+    await pre_check_org(auth_org_id)
 
     agent = getattr(request.app.state, "koraku_agent", None)
     server_mode = getattr(request.app.state, "server_mode", "unconfigured")
@@ -447,7 +490,7 @@ async def stream_endpoint_post(body: StreamChatBody, request: Request):
                 server_mode=server_mode,
                 auth_sub=auth_sub,
                 auth_org_id=auth_org_id,
-                client_history=body.client_history,
+                client_history=list(body.client_history),
                 request=request,
                 execution_target=exec_target,
             ):

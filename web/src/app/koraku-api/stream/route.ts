@@ -1,4 +1,6 @@
-import { korakuStreamPost, runtime, dynamic } from "@/lib/koraku-api-routes";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export { runtime, dynamic };
+import { korakuStreamPost } from "@/lib/koraku-api-routes";
+
 export const POST = korakuStreamPost;

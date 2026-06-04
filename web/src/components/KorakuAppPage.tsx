@@ -8,16 +8,19 @@ import {
 export function KorakuAppPage({
   children,
   maxWidth = "3xl",
+  density = "default",
   className,
 }: {
   children: ReactNode;
   maxWidth?: KorakuAppPageWidth;
+  density?: "default" | "compact";
   className?: string;
 }) {
   return (
     <main
       className={clsx(
-        "min-h-0 flex-1 overflow-y-auto bg-white px-6 py-10",
+        "min-h-0 flex-1 overflow-y-auto bg-white",
+        density === "compact" ? "px-5 py-5 sm:px-6" : "px-6 py-10",
         className,
       )}
     >

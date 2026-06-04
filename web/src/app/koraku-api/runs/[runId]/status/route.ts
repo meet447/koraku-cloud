@@ -1,4 +1,6 @@
-import { korakuRunStatusGet, runtime, dynamic } from "@/lib/koraku-api-routes";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-export { runtime, dynamic };
+import { korakuRunStatusGet } from "@/lib/koraku-api-routes";
+
 export const GET = korakuRunStatusGet;

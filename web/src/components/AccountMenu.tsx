@@ -3,9 +3,10 @@
 import type { User } from "@supabase/supabase-js";
 import { LogIn, LogOut, UserPlus } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { UserAvatar } from "@/components/UserAvatar";
+import { clearOnboardingClientState } from "@/lib/onboarding";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { getUserDisplayName } from "@/lib/user-profile";
 
@@ -13,7 +14,6 @@ const iconStroke = 1.5;
 
 export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [user, setUser] = useState<User | null | undefined>(undefined);
 
   const supabase = useMemo(() => {
@@ -31,14 +31,18 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
     }
 
     let cancelled = false;
+    const applyUser = (next: User | null) => {
+      if (!cancelled) setUser(next);
+    };
+
     void supabase.auth.getUser().then(({ data }) => {
-      if (!cancelled) setUser(data.user ?? null);
+      applyUser(data.user ?? null);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      applyUser(session?.user ?? null);
     });
 
     return () => {
@@ -105,8 +109,9 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
 
   const signOut = () => {
     void (async () => {
+      clearOnboardingClientState();
       await supabase.auth.signOut();
-      if (pathname.startsWith("/app")) {
+      if (window.location.pathname.startsWith("/app")) {
         router.replace("/");
       } else {
         router.refresh();
@@ -134,22 +139,22 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
   }
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-2">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <UserAvatar user={user} size={32} />
-        <span
-          className="min-w-0 flex-1 truncate text-[13px] font-medium text-neutral-800"
-          title={user.email ?? undefined}
-        >
-          {label}
-        </span>
-      </div>
+    <div className="flex w-full min-w-0 items-center gap-2 rounded-2xl bg-white/60 px-1 py-1 ring-1 ring-neutral-200/50">
+      <UserAvatar user={user} size={32} />
+      <span
+        className="min-w-0 flex-1 truncate text-[13px] font-medium text-neutral-800"
+        title={user.email ?? undefined}
+      >
+        {label}
+      </span>
       <button
         type="button"
-        className="w-full shrink-0 rounded-2xl border border-neutral-200 px-2.5 py-2 text-left text-[13px] font-semibold text-neutral-700 transition hover:bg-white/80"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-neutral-200 text-neutral-600 transition hover:bg-white hover:text-neutral-900"
         onClick={signOut}
+        aria-label="Sign out"
+        title="Sign out"
       >
-        Sign out
+        <LogOut className="h-3.5 w-3.5" strokeWidth={iconStroke} aria-hidden />
       </button>
     </div>
   );
