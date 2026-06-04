@@ -10,7 +10,7 @@ from koraku.core.request_auth import resolve_request_auth
 from koraku.integrations.brain_graph import fetch_memory_graph_sync
 from koraku.integrations.supermemory_client import supermemory_configured
 from koraku_cloud.integrations.supabase_personalization import (
-    fetch_personalization_sync,
+    fetch_personalization_async,
     supabase_personalization_configured,
 )
 
@@ -37,13 +37,10 @@ async def memory_graph(
 
     explicit_memory = ""
     explicit_soul = ""
-    if supabase_personalization_configured():
-        row = await asyncio.to_thread(
-            fetch_personalization_sync, resolved.sub, org_id=resolved.org_id
-        )
-        if row:
-            explicit_memory = row.get("memory") or ""
-            explicit_soul = row.get("soul") or ""
+    row = await fetch_personalization_async(resolved.sub, org_id=resolved.org_id)
+    if row:
+        explicit_memory = row.get("memory") or ""
+        explicit_soul = row.get("soul") or ""
 
     payload = await asyncio.to_thread(
         fetch_memory_graph_sync,

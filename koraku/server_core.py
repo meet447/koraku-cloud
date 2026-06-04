@@ -16,7 +16,7 @@ from koraku.agent import Agent
 from koraku.core.config import settings
 from koraku.core.startup_checks import assert_redis_for_multi_worker
 from koraku.llm.catalog import any_llm_configured, default_model_for_provider
-from koraku.profiles import is_cloud_profile
+from koraku.core.product_hooks import product_hooks_active, runtime_mode_label
 from koraku.workspace.paths import workspace_dir
 
 log = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ def assert_cors_safe(mode: str) -> None:
 
 
 def warn_startup_profile() -> None:
-    if not is_cloud_profile():
+    if not product_hooks_active():
         log.info(
             "Koraku SDK HTTP server (no Supabase product routes). "
             "Run koraku_cloud.app for Koraku Cloud.",
@@ -143,7 +143,6 @@ def make_lifespan(
             automation_scheduler.configure_automation_scheduler(agent)
             if agent is not None:
                 automation_scheduler.start_automation_scheduler()
-        if enable_automation_scheduler:
             try:
                 from koraku_cloud.integrations.composio_webhooks import (
                     ensure_project_webhook_subscription,
@@ -213,7 +212,7 @@ def attach_index_route(app: FastAPI, *, variant: str) -> None:
         return {
             "service": settings.agent_name,
             "version": settings.version,
-            "runtime": "cloud" if is_cloud_profile() else "sdk",
+            "runtime": runtime_mode_label(),
             "health": "/health",
             "ui": ui,
         }

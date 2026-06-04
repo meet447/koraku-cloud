@@ -90,6 +90,25 @@ def _partition_settings_kwargs(
     return sdk_kwargs, cloud_kwargs
 
 
+def _bind_cloud_kwargs(cloud_kwargs: dict[str, Any], *, construct: bool) -> None:
+    if not cloud_kwargs:
+        return
+    CloudSettings = _cloud_settings_module().CloudSettings
+    if construct:
+        cloud = CloudSettings.model_construct(**cloud_kwargs)
+    else:
+        cloud = CloudSettings(**cloud_kwargs)
+    bind_cloud_settings(cloud)
+
+
+def reset_settings_caches() -> None:
+    from koraku.core.auth import reset_auth_verifier
+    from koraku.plugins.memory import reset_memory_backend_cache
+
+    reset_memory_backend_cache()
+    reset_auth_verifier()
+
+
 def _get_cloud_layer() -> Any:
     global _inert_cloud
     if _cloud_bound and _cloud_settings is not None:
@@ -141,9 +160,6 @@ def get_sdk_settings() -> SdkSettings:
 
 
 def configure_sdk(settings_obj: SdkSettings | None = None, **kwargs: Any) -> SdkSettings:
-    from koraku.core.auth import reset_auth_verifier
-    from koraku.plugins.memory import reset_memory_backend_cache
-
     global _default_sdk, _default_merged
     if settings_obj is not None:
         _default_sdk = settings_obj
@@ -152,8 +168,7 @@ def configure_sdk(settings_obj: SdkSettings | None = None, **kwargs: Any) -> Sdk
     else:
         _default_sdk = SdkSettings()
     _default_merged = None
-    reset_memory_backend_cache()
-    reset_auth_verifier()
+    reset_settings_caches()
     return _default_sdk
 
 
@@ -184,9 +199,7 @@ class _MergedSettings:
         raise AttributeError(name)
 
     def model_copy(self, *, update: dict[str, Any] | None = None, deep: bool = False) -> _MergedSettings:
-        update = dict(update or {})
-        sdk_keys = {k: v for k, v in update.items() if k in _SDK_FIELD_NAMES}
-        cloud_keys = {k: v for k, v in update.items() if k in _cloud_field_names()}
+        sdk_keys, cloud_keys = _partition_settings_kwargs(dict(update or {}))
         sdk = self._sdk.model_copy(update=sdk_keys) if sdk_keys else self._sdk
         if cloud_keys:
             _update_cloud_layer(**cloud_keys)
@@ -201,9 +214,7 @@ class _MergedSettings:
     def model_construct(cls, **_kwargs: Any) -> _MergedSettings:
         sdk_kwargs, cloud_kwargs = _partition_settings_kwargs(_kwargs)
         sdk = SdkSettings.model_construct(**sdk_kwargs)
-        if cloud_kwargs:
-            CloudSettings = _cloud_settings_module().CloudSettings
-            bind_cloud_settings(CloudSettings.model_construct(**cloud_kwargs))
+        _bind_cloud_kwargs(cloud_kwargs, construct=True)
         return cls(sdk)
 
     def __repr__(self) -> str:
@@ -219,9 +230,7 @@ class _SettingsMeta(type):
             return _merged_default()
         sdk_kwargs, cloud_kwargs = _partition_settings_kwargs(kwargs)
         sdk = SdkSettings(**sdk_kwargs) if sdk_kwargs else SdkSettings()
-        if cloud_kwargs:
-            CloudSettings = _cloud_settings_module().CloudSettings
-            bind_cloud_settings(CloudSettings(**cloud_kwargs))
+        _bind_cloud_kwargs(cloud_kwargs, construct=False)
         return _MergedSettings(sdk)
 
     def __instancecheck__(cls, instance: object) -> bool:
@@ -267,9 +276,6 @@ settings = _SettingsProxy()
 
 
 def configure(settings_obj: SdkSettings | Settings | None = None, **kwargs: Any) -> Settings:
-    from koraku.core.auth import reset_auth_verifier
-    from koraku.plugins.memory import reset_memory_backend_cache
-
     global _default_merged, _default_sdk
     if isinstance(settings_obj, SdkSettings):
         _default_sdk = settings_obj
@@ -284,8 +290,7 @@ def configure(settings_obj: SdkSettings | Settings | None = None, **kwargs: Any)
     else:
         _default_sdk = SdkSettings()
         _default_merged = None
-    reset_memory_backend_cache()
-    reset_auth_verifier()
+    reset_settings_caches()
     return get_settings()
 
 

@@ -88,19 +88,21 @@ class FilesystemLearnedMemoryBackend:
         return f"## Learned memory (local)\n{block}\n"
 
 
-async def _tool_search(query: str, limit: int = 8) -> str:
+def _active_workspace() -> str | None:
     from koraku.workspace.agent_workspace import get_active_agent_workspace
 
-    ws = get_active_agent_workspace()
+    return get_active_agent_workspace()
+
+
+async def _tool_search(query: str, limit: int = 8) -> str:
+    ws = _active_workspace()
     if not ws:
         return "Error: No active workspace for memory search."
     return _search_learned(ws, query, limit=max(1, min(int(limit), 20)))
 
 
 async def _tool_save(content: str) -> str:
-    from koraku.workspace.agent_workspace import get_active_agent_workspace
-
-    ws = get_active_agent_workspace()
+    ws = _active_workspace()
     if not ws:
         return "Error: No active workspace for memory save."
     _append_learned(ws, content)

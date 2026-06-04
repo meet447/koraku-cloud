@@ -36,6 +36,27 @@ def _run_prefix(owner_org_id: str | None, run_id: str) -> str:
     return f"koraku:run:{run_id}"
 
 
+def _detached_run_allows_owner(
+    owner_sub: str | None,
+    owner_org_id: str | None,
+    auth_sub: str | None,
+    auth_org_id: str | None = None,
+) -> bool:
+    if owner_sub is None:
+        return True
+    if auth_sub != owner_sub:
+        return False
+    if owner_org_id and auth_org_id != owner_org_id:
+        return False
+    return True
+
+
+def _wrap_sse_chunk(seq: int, raw_chunk: str) -> str:
+    if raw_chunk.startswith("id: "):
+        return raw_chunk
+    return f"id: {seq}\n{raw_chunk}"
+
+
 class DetachedRunBuffer(ABC):
     owner_sub: str | None
     owner_org_id: str | None
@@ -77,13 +98,9 @@ class MemoryRunBuffer(DetachedRunBuffer):
         self.subscribers: list[asyncio.Queue[Any]] = []
 
     def allows(self, auth_sub: str | None, auth_org_id: str | None = None) -> bool:
-        if self.owner_sub is None:
-            return True
-        if auth_sub != self.owner_sub:
-            return False
-        if self.owner_org_id and auth_org_id != self.owner_org_id:
-            return False
-        return True
+        return _detached_run_allows_owner(
+            self.owner_sub, self.owner_org_id, auth_sub, auth_org_id
+        )
 
     async def append(self, raw_chunk: str) -> None:
         async with self.lock:
@@ -91,10 +108,7 @@ class MemoryRunBuffer(DetachedRunBuffer):
                 return
             seq = self.next_seq
             self.next_seq += 1
-            if raw_chunk.startswith("id: "):
-                wrapped = raw_chunk
-            else:
-                wrapped = f"id: {seq}\n{raw_chunk}"
+            wrapped = _wrap_sse_chunk(seq, raw_chunk)
             self.chunks.append((seq, wrapped))
             if len(self.chunks) > _MAX_CHUNKS_PER_RUN:
                 self.chunks.pop(0)
@@ -190,13 +204,9 @@ class RedisRunBuffer(DetachedRunBuffer):
         return f"{self._prefix}:live"
 
     def allows(self, auth_sub: str | None, auth_org_id: str | None = None) -> bool:
-        if self.owner_sub is None:
-            return True
-        if auth_sub != self.owner_sub:
-            return False
-        if self.owner_org_id and auth_org_id != self.owner_org_id:
-            return False
-        return True
+        return _detached_run_allows_owner(
+            self.owner_sub, self.owner_org_id, auth_sub, auth_org_id
+        )
 
     async def _client(self) -> Any:
         client = await redis_async.get_client()
@@ -220,10 +230,7 @@ class RedisRunBuffer(DetachedRunBuffer):
             return
         client = await self._client()
         seq = int(await client.incr(f"{self._prefix}:seq")) - 1
-        if raw_chunk.startswith("id: "):
-            wrapped = raw_chunk
-        else:
-            wrapped = f"id: {seq}\n{raw_chunk}"
+        wrapped = _wrap_sse_chunk(seq, raw_chunk)
         entry = json.dumps({"seq": seq, "data": wrapped}, ensure_ascii=False)
         pipe = client.pipeline()
         pipe.rpush(self._chunks_key(), entry)

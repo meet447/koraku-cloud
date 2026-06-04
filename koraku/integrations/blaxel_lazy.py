@@ -55,6 +55,32 @@ def lazy_blaxel_session_active() -> bool:
     return bool((_lazy_session_id.get() or "").strip())
 
 
+_CLOUD_FILE_TOOL_BLOCK_MSG = (
+    "Error: Cloud file tools require the Blaxel sandbox (still starting or unavailable). "
+    "Retry shortly."
+)
+
+
+def cloud_file_tools_use_blaxel() -> bool:
+    """True when cloud execution uses Blaxel — host filesystem must not be used."""
+    from koraku.agent.runtime_context import get_active_execution_target
+
+    if get_active_execution_target() != "cloud":
+        return False
+    return bool(settings.blaxel_cloud_sandbox_enabled)
+
+
+async def cloud_file_tool_block_reason(*, try_ensure: bool = False) -> str | None:
+    """Return an error message when cloud file/shell tools cannot run; else ``None``."""
+    if not cloud_file_tools_use_blaxel():
+        return None
+    if get_active_blaxel_sandbox() is not None:
+        return None
+    if try_ensure and await ensure_blaxel_for_file_tool():
+        return None
+    return _CLOUD_FILE_TOOL_BLOCK_MSG
+
+
 def _lock_for_user() -> asyncio.Lock:
     key = effective_cloud_user_id()
     lock = _ensure_locks.get(key)
