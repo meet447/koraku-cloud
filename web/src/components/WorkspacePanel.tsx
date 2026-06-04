@@ -20,6 +20,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { MarkdownBody } from "@/components/MarkdownBody";
+import { PptxSlidePreview } from "@/components/PptxSlidePreview";
 import { korakuFetch } from "@/lib/koraku-fetch";
 import { sanitizeHtml } from "@/lib/sanitize-html";
 
@@ -77,7 +78,8 @@ type FilePreview =
   | { kind: "text"; path: string; content: string; truncated: boolean }
   | { kind: "pdf"; path: string; blobUrl: string }
   | { kind: "image"; path: string; blobUrl: string }
-  | { kind: "docx"; path: string; html: string };
+  | { kind: "docx"; path: string; html: string }
+  | { kind: "pptx"; path: string; buffer: ArrayBuffer };
 
 function joinRel(parent: string, name: string): string {
   const p = parent.trim();
@@ -122,6 +124,10 @@ function isImageExt(ext: string): boolean {
 
 function imageMimeType(ext: string): string {
   return IMAGE_EXT_MIME[ext] ?? "application/octet-stream";
+}
+
+function isOfficeDownloadExt(ext: string): boolean {
+  return ext === ".xlsx";
 }
 
 function isTextLikeExt(ext: string): boolean {
@@ -344,7 +350,7 @@ export function WorkspacePanel({
       setFilePreview(null);
       const ext = extensionOf(rel);
       try {
-        if (ext === ".pdf" || ext === ".docx" || isImageExt(ext)) {
+        if (ext === ".pdf" || ext === ".docx" || ext === ".pptx" || isImageExt(ext)) {
           const q = new URLSearchParams({
             session_id: serverSessionId,
             path: rel,
@@ -363,6 +369,8 @@ export function WorkspacePanel({
           } else if (ext === ".docx") {
             const html = await convertDocxToHtml(buf);
             setFilePreview({ kind: "docx", path: rel, html });
+          } else if (ext === ".pptx") {
+            setFilePreview({ kind: "pptx", path: rel, buffer: buf });
           } else {
             const blob = new Blob([buf], { type: imageMimeType(ext) });
             const blobUrl = URL.createObjectURL(blob);
@@ -393,6 +401,48 @@ export function WorkspacePanel({
           content: data.content,
           truncated: data.truncated,
         });
+      } catch (e) {
+        setError(String((e as Error)?.message || e));
+      } finally {
+        setLoadingFile(false);
+      }
+    },
+    [serverSessionId],
+  );
+
+  const downloadFile = useCallback(
+    async (rel: string) => {
+      if (!serverSessionId) return;
+      setLoadingFile(true);
+      setError(null);
+      try {
+        const q = new URLSearchParams({
+          session_id: serverSessionId,
+          path: rel,
+        });
+        const res = await korakuFetch(`/koraku-api/api/workspace/file/blob?${q}`);
+        if (!res.ok) {
+          const t = await res.text();
+          setError(t.slice(0, 400) || res.statusText);
+          return;
+        }
+        const buf = await res.arrayBuffer();
+        const ext = extensionOf(rel);
+        const mime =
+          ext === ".pptx"
+            ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            : ext === ".xlsx"
+              ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              : "application/octet-stream";
+        const blob = new Blob([buf], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const name = rel.split("/").pop() ?? "download";
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(blobUrl);
+        setFileRel(rel);
       } catch (e) {
         setError(String((e as Error)?.message || e));
       } finally {
@@ -596,9 +646,11 @@ export function WorkspacePanel({
                         const previewable =
                           ext === ".pdf" ||
                           ext === ".docx" ||
+                          ext === ".pptx" ||
                           isImageExt(ext) ||
                           isMarkdownExt(ext) ||
                           isTextLikeExt(ext);
+                        const downloadable = isOfficeDownloadExt(ext);
                         const active = fileRel === full;
                         return (
                           <li key={`f:${f.path}`}>
@@ -609,17 +661,20 @@ export function WorkspacePanel({
                                 active
                                   ? "border-orange-600 bg-white/90 text-neutral-900"
                                   : "border-transparent hover:bg-white/60",
-                                !previewable && "opacity-50",
+                                !previewable && !downloadable && "opacity-50",
                               )}
                               title={
-                                previewable
-                                  ? undefined
-                                  : "No in-panel preview for this type yet"
+                                downloadable
+                                  ? "Download"
+                                  : previewable
+                                    ? undefined
+                                    : "No in-panel preview for this type yet"
                               }
-                              onClick={() =>
-                                previewable ? void loadFile(full) : undefined
-                              }
-                              disabled={!previewable}
+                              onClick={() => {
+                                if (previewable) void loadFile(full);
+                                else if (downloadable) void downloadFile(full);
+                              }}
+                              disabled={!previewable && !downloadable}
                             >
                               <FileText className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
                               <span className="truncate">{f.name}</span>
@@ -733,6 +788,9 @@ export function WorkspacePanel({
                         srcDoc={filePreview.html}
                         className="koraku-md min-h-0 w-full flex-1 border-0 bg-white"
                       />
+                    ) : null}
+                    {filePreview.kind === "pptx" ? (
+                      <PptxSlidePreview buffer={filePreview.buffer} />
                     ) : null}
                   </div>
                 ) : null}
