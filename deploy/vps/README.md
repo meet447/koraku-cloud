@@ -74,6 +74,23 @@ sudo systemctl reload caddy
 
 ## Deploy / update
 
+One-time local config:
+
+```bash
+cp deploy/vps/deploy.env.example deploy/vps/deploy.env
+# edit host, SSH key, remote path
+```
+
+Sync and redeploy from your laptop:
+
+```bash
+./scripts/deploy-vps.sh
+```
+
+Options: `--sync-only` (rsync without Docker), `--deploy-only` (rebuild on VPS without rsync).
+
+Manual equivalent:
+
 ```bash
 cd /opt/koraku/koraku-cloud
 git pull

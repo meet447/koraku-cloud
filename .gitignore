@@ -20,6 +20,7 @@ ENV/
 .env
 .env.*
 !.env.example
+deploy/vps/deploy.env
 
 # --- Tests / coverage ---
 .pytest_cache/
