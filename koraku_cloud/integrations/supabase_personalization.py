@@ -72,9 +72,9 @@ def fetch_personalization_sync(user_sub: str, *, org_id: str | None = None) -> d
         return None
     if not supabase_personalization_configured():
         return None
-    ttl = max(0.0, float(settings.personalization_cache_ttl_seconds))
+    ttl = float(settings.personalization_cache_ttl_seconds)
     ckey = _cache_key(uid, oid or None)
-    if ttl > 0:
+    if ttl >= 0:
         cached = _PERSONALIZATION_CACHE.get(ckey, ttl_seconds=ttl)
         if cached is not None:
             return dict(cached)
@@ -104,7 +104,7 @@ def fetch_personalization_sync(user_sub: str, *, org_id: str | None = None) -> d
                     "memory": str(row.get("memory") or ""),
                     "soul": str(row.get("soul") or ""),
                 }
-        if ttl > 0:
+        if ttl >= 0:
             _PERSONALIZATION_CACHE.set(ckey, out)
         return out
     except Exception as e:

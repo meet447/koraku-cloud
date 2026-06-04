@@ -144,7 +144,7 @@ class SdkSettings(BaseSettings):
         validation_alias=AliasChoices("AGENT_LOOP_WARN_ROUND_FRACTION", "agent_loop_warn_round_fraction"),
     )
     chat_prefetch_learned_memory: bool = Field(
-        default=True,
+        default=False,
         validation_alias=AliasChoices("CHAT_PREFETCH_LEARNED_MEMORY", "chat_prefetch_learned_memory"),
     )
     agent_worker_heartbeat_seconds: float = Field(

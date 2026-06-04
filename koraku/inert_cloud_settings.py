@@ -139,7 +139,7 @@ class CloudSettings(BaseSettings):
         ),
     )
     personalization_cache_ttl_seconds: float = Field(
-        default=300.0,
+        default=0.0,
         validation_alias=AliasChoices(
             "PERSONALIZATION_CACHE_TTL_SECONDS",
             "personalization_cache_ttl_seconds",
