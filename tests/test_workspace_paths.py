@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from koraku_cloud.api.workspace_routes import safe_join_under_session_root
+from koraku.workspace.safe_paths import safe_join_under_session_root
 
 
 def test_safe_join_root_only() -> None:

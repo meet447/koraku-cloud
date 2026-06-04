@@ -1,1 +1,1 @@
-"""HTTP route modules (FastAPI ``APIRouter``) — included from ``koraku.server``."""
+"""HTTP route modules (FastAPI ``APIRouter``) — mounted from ``koraku.server_sdk`` or ``koraku_cloud.app``."""

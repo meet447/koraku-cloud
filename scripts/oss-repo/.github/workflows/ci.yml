@@ -15,13 +15,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install monorepo packages
-        run: |
-          pip install -e ".[dev,all]"
-          pip install -e ./koraku_cloud
-
-      - name: Cloud import guard
-        run: python3 scripts/check_cloud_imports.py
+      - name: Install SDK
+        run: pip install -e ".[dev,server,all]"
 
       - name: Pytest
         run: python3 -m pytest -q
@@ -35,5 +30,5 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Verify SDK wheel excludes koraku_cloud
+      - name: Verify wheel excludes koraku_cloud
         run: ./scripts/verify-sdk-wheel.sh

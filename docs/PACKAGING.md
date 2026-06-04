@@ -1,44 +1,58 @@
 # Packaging: SDK vs Cloud
 
-## Layout
+## Repositories
+
+| Repo | Contents |
+|------|----------|
+| [meet447/Koraku](https://github.com/meet447/Koraku) | Open-source `koraku` Python SDK, `@koraku/client`, examples, SDK tests |
+| **koraku-cloud** (this repo) | `koraku_cloud/`, `web/`, product docs, Docker, Cloud CI |
+
+Sync SDK sources to Koraku with:
+
+```bash
+./scripts/export-sdk-oss-repo.sh /path/to/Koraku-clone
+```
+
+## Layout (monorepo)
 
 ```
-koraku-cloud/          # this repo (monorepo)
-├── koraku/            # public SDK (agent, tools, server_sdk)
+koraku-cloud/
+├── koraku/            # SDK sources (also published from Koraku repo)
 ├── koraku_cloud/      # Cloud product (Supabase, automations, web APIs)
 ├── web/               # Next.js app
 ├── packages/koraku-client/
-├── docs/
-├── scripts/
+├── scripts/oss-repo/  # Overlay files applied on export
 └── tests/
 ```
 
 ## PyPI (`koraku`)
 
-The published wheel includes **`koraku` only** — not `koraku_cloud`.
+Build and publish wheels from the **Koraku** repo (or verify here before export):
+
+```bash
+./scripts/verify-sdk-wheel.sh
+```
+
+The wheel includes **`koraku` only** — not `koraku_cloud`.
 
 | Install | Use case |
 |---------|----------|
 | `pip install koraku` | Embed agents, local tools, filesystem memory |
-| `pip install "koraku[server]"` | Self-hosted `/health` + `/stream` (run with uvicorn) |
+| `pip install "koraku[server]"` | Self-hosted `/health` + `/stream` |
 | `pip install "koraku[all]"` | Server + Composio + Blaxel + Supermemory |
-
-Default: `KORAKU_PROFILE=sdk`.
 
 ## Monorepo / Cloud
 
 ```bash
 ./scripts/install-monorepo.sh
-export KORAKU_PROFILE=cloud
-./scripts/run-api.sh
-# or: uvicorn koraku_cloud.app:app --reload
+./scripts/run-api.sh                    # default: koraku_cloud.app:app
+KORAKU_SERVER_APP=sdk ./scripts/run-api.sh   # SDK-only server
 ```
 
-| Variable | SDK | Cloud |
-|----------|-----|-------|
-| `KORAKU_PROFILE` | `sdk` | `cloud` |
-| `KORAKU_SERVER_APP` | `sdk` | `cloud` |
-| `SUPABASE_URL` + service role | optional | required |
+| Variable | SDK server | Cloud server |
+|----------|------------|--------------|
+| `KORAKU_SERVER_APP` | `sdk` | `cloud` (default) |
+| `SUPABASE_URL` + service role | optional | required for product features |
 
 ## Server entrypoints
 
@@ -46,8 +60,7 @@ export KORAKU_PROFILE=cloud
 |-----|--------|
 | SDK | `koraku.server_sdk:app` |
 | Cloud | `koraku_cloud.app:app` |
-
-`koraku.server:create_app()` picks SDK vs Cloud from profile / `KORAKU_SERVER_APP`.
+| Either | `koraku.server:app` (uses `KORAKU_SERVER_APP`) |
 
 ## Guards
 
@@ -56,15 +69,4 @@ export KORAKU_PROFILE=cloud
 python3 scripts/check_cloud_imports.py
 ```
 
-## Future repo split
-
-| Repo | Contents |
-|------|----------|
-| **koraku-sdk** (public) | `koraku/`, `packages/koraku-client`, `examples/`, SDK docs |
-| **koraku-cloud** (private) | `koraku_cloud/`, `web/`, Dockerfile, product docs |
-
-After PyPI publish: `pip install "koraku[server,all]"` then `pip install "koraku-cloud[pypi]"`.
-
-Until then: `./scripts/install-monorepo.sh`.
-
-Keep `version` in root `pyproject.toml` and `koraku_cloud/pyproject.toml` aligned.
+Keep `version` in root `pyproject.toml` and `koraku_cloud/pyproject.toml` aligned when cutting releases.

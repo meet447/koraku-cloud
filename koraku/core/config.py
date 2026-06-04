@@ -69,10 +69,16 @@ _CLOUD_OVERRIDE_FIELDS = frozenset(
 _SDK_FIELD_NAMES = frozenset(SdkSettings.model_fields)
 
 
-def _cloud_field_names() -> frozenset[str]:
-    from koraku_cloud.cloud_settings import CloudSettings
+def _cloud_settings_module() -> Any:
+    try:
+        import koraku_cloud.cloud_settings as mod
+    except ImportError:
+        from koraku import inert_cloud_settings as mod
+    return mod
 
-    return frozenset(CloudSettings.model_fields)
+
+def _cloud_field_names() -> frozenset[str]:
+    return frozenset(_cloud_settings_module().CloudSettings.model_fields)
 
 
 def _get_cloud_layer() -> Any:
@@ -80,9 +86,7 @@ def _get_cloud_layer() -> Any:
     if _cloud_bound and _cloud_settings is not None:
         return _cloud_settings
     if _inert_cloud is None:
-        from koraku_cloud.cloud_settings import inert_cloud_settings
-
-        _inert_cloud = inert_cloud_settings()
+        _inert_cloud = _cloud_settings_module().inert_cloud_settings()
     return _inert_cloud
 
 
@@ -191,8 +195,7 @@ class _MergedSettings:
         cloud_kwargs = {k: v for k, v in _kwargs.items() if k in cloud_fields}
         sdk = SdkSettings.model_construct(**sdk_kwargs)
         if cloud_kwargs:
-            from koraku_cloud.cloud_settings import CloudSettings
-
+            CloudSettings = _cloud_settings_module().CloudSettings
             bind_cloud_settings(CloudSettings.model_construct(**cloud_kwargs))
         return cls(sdk)
 
@@ -212,8 +215,7 @@ class _SettingsMeta(type):
         cloud_kwargs = {k: v for k, v in kwargs.items() if k in cloud_fields}
         sdk = SdkSettings(**sdk_kwargs) if sdk_kwargs else SdkSettings()
         if cloud_kwargs:
-            from koraku_cloud.cloud_settings import CloudSettings
-
+            CloudSettings = _cloud_settings_module().CloudSettings
             bind_cloud_settings(CloudSettings(**cloud_kwargs))
         return _MergedSettings(sdk)
 

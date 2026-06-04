@@ -2,134 +2,86 @@
 
 Embeddable ReAct agent for Python apps, HTTP services, and web clients.
 
+**Open-source home:** [github.com/meet447/Koraku](https://github.com/meet447/Koraku) — `pip install koraku` and PyPI releases are published from that repo. This file is the export source; product-specific server behavior lives in **koraku-cloud** (`koraku_cloud/`).
+
 ## Choose an integration mode
 
 | Your project | Install | How you run Koraku |
 |--------------|---------|-------------------|
 | **Python script / CLI / bot** | `pip install koraku` | In-process via `Koraku(...)` |
-| **Cloud SaaS / backend service** | `pip install "koraku[all]"` | Host with uvicorn, call HTTP/SSE |
-| **Web app (React, Next.js, …)** | `@koraku/client` (npm) | Point at your hosted Koraku API |
-
-The Koraku web app in `web/` is a **reference UI** — not required for embedding.
+| **Self-hosted HTTP API** | `pip install "koraku[server]"` or `[all]` | `uvicorn koraku.server_sdk:app` |
+| **Web app (React, Next.js, …)** | `@koraku/client` (npm) | Point at your Koraku API base URL |
 
 ## Configuration layers
 
 | Layer | Module | What it loads |
 |-------|--------|----------------|
-| **SDK** | `koraku.core.sdk_settings.SdkSettings` | LLM keys, tools, Composio, local/cloud execution target, filesystem memory |
-| **Cloud** | `koraku_cloud.cloud_settings.CloudSettings` | Supabase, auth, Redis sessions, Blaxel, automations, SendBlue |
+| **SDK** | `koraku.core.sdk_settings.SdkSettings` | LLM keys, tools, Composio, execution target, filesystem memory |
+| **Cloud** (optional) | `koraku.inert_cloud_settings.CloudSettings` / `koraku_cloud` in monorepo | Supabase, auth, Redis, Blaxel, automations, SendBlue |
 
-Embedders use **`KorakuConfig` / `SdkSettings` only** — no Supabase env required. This monorepo’s product server calls `koraku_cloud.bootstrap.bootstrap_cloud()` on startup to bind both layers.
-
-The SDK is **not** tailored for Koraku Cloud — Cloud embeds the SDK and adds product settings on top.
+Embedders use **`KorakuConfig` / `SdkSettings` only** — no Supabase required. Koraku Cloud calls `koraku_cloud.bootstrap.bootstrap_cloud()` to bind the product layer.
 
 ```python
 from koraku import Koraku, KorakuConfig
 
-# Local-first (only an LLM key required)
 agent = Koraku(KorakuConfig(fireworks_api_key="...", workspace="."))
 ```
 
-Optional SDK plugins: Composio (`COMPOSIO_API_KEY`), web tools (`EXA_API_KEY`, `FIRECRAWL_API_KEY`). Cloud-only: Supermemory, Blaxel, Supabase (see repo `.env.example`).
+Optional: Composio (`COMPOSIO_API_KEY`), web tools (`EXA_API_KEY`, `FIRECRAWL_API_KEY`).
 
-## Auth backends (embed / SaaS)
-
-Set `AUTH_BACKEND` (or `KORAKU_AUTH_BACKEND`) on the server:
+## Auth backends (HTTP server)
 
 | Backend | Env | Use when |
 |---------|-----|----------|
-| `supabase` (default) | `SUPABASE_JWT_SECRET` or JWKS | Koraku web app + multi-user |
-| `api_key` | `KORAKU_API_KEY` | Service-to-service, single-tenant SaaS |
-| `none` | — | Local OSS with `REQUIRE_AUTH_FOR_CHAT=false` |
-
-Clients send `Authorization: Bearer <token>` for `supabase` and `api_key`.
+| `supabase` | `SUPABASE_JWT_SECRET` | Multi-user apps with Supabase Auth |
+| `api_key` | `KORAKU_API_KEY` | Service-to-service |
+| `none` | — | Local dev with `REQUIRE_AUTH_FOR_CHAT=false` |
 
 ## SDK server vs Cloud server
 
 | App module | Routes | Use |
 |------------|--------|-----|
 | `koraku.server_sdk` | `/health`, `/stream`, `/api/composio/*`, `/api/chat-models` | Embedders, self-host without Supabase |
-| `koraku_cloud.app` | SDK routes + `/runs`, `/api/personalization`, automations, memory graph, SendBlue, workspace | Koraku Cloud product only |
+| `koraku_cloud.app` | SDK routes + automations, personalization, workspace, SendBlue | Koraku Cloud only (not in PyPI wheel) |
 
-Supabase chat history and personalization load only when the Cloud layer is bound (see `koraku/api/chat_hydration.py` and `koraku_cloud.bootstrap`).
-
-## Session store and detached runs (multi-worker)
+## Session store and detached runs
 
 | Backend | Env | Use when |
 |---------|-----|----------|
-| `memory` | — | Single uvicorn worker / dev |
+| `memory` | — | Single worker / dev |
 | `redis` | `REDIS_URL` | Multiple API replicas |
 
-Set `SESSION_STORE_BACKEND=redis` when using `REDIS_URL` so chat sessions survive load balancing.
-
-Detached runs (`POST /runs`, `GET /runs/{id}/stream`):
-
-- `DETACHED_RUN_STORE_BACKEND=auto` (default) uses Redis when `REDIS_URL` is reachable (`detached_runs_redis` on `GET /health`).
-- Without Redis, buffers are in-process — use sticky sessions or a single worker.
-
-Ops snapshot: `GET /health/detail` with `HEALTH_DETAIL_TOKEN`.
-
-## Publishing
-
-Tag a release (`git tag v0.2.0 && git push origin v0.2.0`) to trigger `.github/workflows/release.yml`:
-
-- **PyPI** — requires GitHub environment `pypi` with [trusted publishing](https://docs.pypi.org/trusted-publishers/)
-- **npm** — requires GitHub environment `npm` with `NPM_TOKEN` secret
+Detached runs need Redis for multi-worker (`DETACHED_RUN_STORE_BACKEND=auto`).
 
 ## Install
 
-```bash
-# Core SDK only (in-process agent)
-pip install -e .
+From [Koraku](https://github.com/meet447/Koraku) or this monorepo during development:
 
-# Full self-hosted stack (FastAPI server + integrations)
-pip install -e ".[all]"
+```bash
+pip install koraku
+# or
+pip install -e ".[all]"   # monorepo / Koraku clone
 ```
 
-## Python — in-process embed
+## Python — in-process
 
 ```python
-from koraku import Koraku, KorakuConfig, Tool
+from koraku import Koraku, KorakuConfig
 
-async def my_tool(query: str) -> str:
-    return f"Echo: {query}"
-
-agent = Koraku(
-    KorakuConfig(fireworks_api_key="...", llm_provider="fireworks"),
-    tools=[Tool(name="Echo", description="Echo text", input_schema={
-        "type": "object",
-        "properties": {"query": {"type": "string"}},
-        "required": ["query"],
-    }, handler=my_tool)],
-)
-
-async for event in agent.stream("Use Echo on hello"):
+agent = Koraku(KorakuConfig(fireworks_api_key="...", llm_provider="fireworks"))
+async for event in agent.stream("Summarize this repo"):
     print(event)
 ```
 
 See [`examples/embed_python.py`](../examples/embed_python.py).
 
-## Python — configure process defaults
-
-```python
-from koraku import configure, KorakuConfig
-
-configure_sdk(KorakuConfig(fireworks_api_key="...").to_sdk_settings())
-# or: configure(KorakuConfig(...).to_settings())  # merged view
-```
-
-## HTTP — remote agent service
-
-Run the **SDK server** (no Supabase product routes):
+## HTTP — SDK server
 
 ```bash
-KORAKU_SERVER_APP=sdk uvicorn koraku.server_sdk:app --reload
-# monorepo Cloud API: ./scripts/run-api.sh  →  koraku_cloud.app:app
+uvicorn koraku.server_sdk:app --reload --port 8000
 ```
 
-Then call `POST /stream` from any language. Optional: `GET /health`, Composio routes when `COMPOSIO_API_KEY` is set.
-
-Koraku Cloud uses `koraku_cloud.app:app` with personalization, automations, detached runs, and Supabase-backed chat — not part of the public SDK wheel.
+Monorepo Cloud API: `./scripts/run-api.sh` → `koraku_cloud.app:app`.
 
 ## TypeScript / web
 
@@ -143,36 +95,18 @@ import { KorakuClient } from "@koraku/client";
 const client = new KorakuClient("http://127.0.0.1:8000", {
   Authorization: "Bearer <token>",
 });
-
 for await (const inner of client.streamInnerEvents("Hello")) {
   console.log(inner);
 }
 ```
 
-## Package layout
+## Packages
 
-| Package | Install | Purpose |
-|---------|---------|---------|
-| `koraku` | `pip install koraku` | Agent core, tools, LLM (`Koraku`, `Tool`, `Agent`) |
-| `koraku[server]` | `pip install "koraku[server]"` | SDK FastAPI app (`/health`, `/stream`, Composio); run with uvicorn |
-| `koraku[composio]` | optional | Connected-app toolkits |
-| `koraku[blaxel]` | optional | Cloud sandbox execution |
-| `koraku[all]` | `pip install "koraku[all]"` | Full self-hosted stack |
-| `@koraku/client` | `packages/koraku-client` | TypeScript SSE client for web/cloud apps |
-| `koraku_cloud` | monorepo only (not on PyPI) | Koraku Cloud product: Supabase routes, automations, detached runs |
+| Package | Where | Purpose |
+|---------|-------|---------|
+| `koraku` | PyPI / Koraku repo | Agent core, tools, LLM |
+| `koraku[server]` | PyPI | FastAPI `/health`, `/stream` |
+| `@koraku/client` | npm (Koraku repo) | TypeScript SSE client |
+| `koraku_cloud` | koraku-cloud only | Product server (not on PyPI) |
 
-Product code lives in `koraku_cloud/`. The PyPI wheel ships `koraku` only. See [PACKAGING.md](./PACKAGING.md).
-
-## Migration from `src/`
-
-The old `import src.agent` layout is removed. Use `koraku` instead:
-
-```python
-# before
-from src.agent import Agent
-
-# after
-from koraku import Agent
-# or
-from koraku.agent import Agent
-```
+See [PACKAGING.md](./PACKAGING.md) for monorepo layout and `./scripts/export-sdk-oss-repo.sh`.
