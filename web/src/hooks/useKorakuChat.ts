@@ -183,49 +183,54 @@ export function useKorakuChat() {
           channel: t.channel,
           pinned: t.pinned,
         }));
+        const newId = uid();
+        draftSessionIdsRef.current.add(newId);
+        const sessionsWithNew = sortChatSessions([
+          { id: newId, title: "New chat" },
+          ...sessList,
+        ]);
         const msgMap: Record<string, ChatMessage[]> = Object.fromEntries(
-          sessList.map((s) => [s.id, [] as ChatMessage[]]),
+          sessionsWithNew.map((s) => [s.id, [] as ChatMessage[]]),
         );
-        let focusId = sessList[0]!.id;
         for (const s of sessList) {
           serverChatSessionRef.current[s.id] = s.id;
         }
         setServerChatSessionByUi(Object.fromEntries(sessList.map((s) => [s.id, s.id])));
-        const mr = await fetch(`/api/chat/threads/${focusId}/messages`, {
-          credentials: "include",
-        });
-        if (cancelled) return;
-        if (mr.ok) {
+
+        const loadMessages = async (threadId: string) => {
+          const mr = await fetch(`/api/chat/threads/${threadId}/messages`, {
+            credentials: "include",
+          });
+          if (cancelled || !mr.ok) return;
           const mp = (await mr.json()) as {
             messages?: { id: string; role: string; contentJson: unknown }[];
           };
-          msgMap[focusId] = (mp.messages ?? [])
+          msgMap[threadId] = (mp.messages ?? [])
             .map(apiRowToChatMessage)
             .filter((m): m is ChatMessage => m != null);
+        };
+
+        // Prefetch recent threads so in-flight streams can resume without switching focus.
+        const prefetchIds = new Set<string>();
+        for (const s of sessList.slice(0, 5)) {
+          prefetchIds.add(s.id);
         }
-        const streaming = collectStreamingTurns(sessList, msgMap);
-        if (streaming.length > 0) {
-          const latest = streaming.reduce((a, b) =>
-            a.startedAt >= b.startedAt ? a : b,
-          );
-          focusId = latest.threadId;
-          if (focusId !== sessList[0]!.id && msgMap[focusId]?.length === 0) {
-            const mr2 = await fetch(`/api/chat/threads/${focusId}/messages`, {
-              credentials: "include",
-            });
-            if (!cancelled && mr2.ok) {
-              const mp2 = (await mr2.json()) as {
-                messages?: { id: string; role: string; contentJson: unknown }[];
-              };
-              msgMap[focusId] = (mp2.messages ?? [])
-                .map(apiRowToChatMessage)
-                .filter((m): m is ChatMessage => m != null);
-            }
-          }
+        for (const threadId of prefetchIds) {
+          await loadMessages(threadId);
         }
-        messagesLoadedForThreadRef.current = new Set([focusId]);
-        setSessions(sortChatSessions(sessList));
-        setActiveId(focusId);
+        let streaming = collectStreamingTurns(sessList, msgMap);
+        for (const t of streaming) {
+          if ((msgMap[t.threadId]?.length ?? 0) > 0) continue;
+          await loadMessages(t.threadId);
+        }
+        streaming = collectStreamingTurns(sessList, msgMap);
+        for (const t of streaming) {
+          messagesLoadedForThreadRef.current.add(t.threadId);
+        }
+
+        messagesLoadedForThreadRef.current.add(newId);
+        setSessions(sessionsWithNew);
+        setActiveId(newId);
         setMessagesBySession(msgMap);
         setHydrated(true);
       } catch {
@@ -750,9 +755,6 @@ export function useKorakuChat() {
       if (streamingSidsRef.current.has(p.threadId)) continue;
 
       detachResumeStartedRef.current.add(p.turnId);
-      if (activeIdRef.current !== p.threadId) {
-        setActiveId(p.threadId);
-      }
 
       void (async () => {
         let streamMarked = false;
