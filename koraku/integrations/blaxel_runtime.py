@@ -99,7 +99,7 @@ def cloud_blaxel_block_reason(settings: Settings) -> str | None:
         ie = blaxel_import_error_message() or "unknown import error"
         return (
             "Sandbox mode needs the `blaxel` package in the Python that runs this API. "
-            "If you use a venv, start Koraku with that interpreter (e.g. `.venv/bin/python main.py`) "
+            "If you use a venv, start Koraku with that interpreter (e.g. `./scripts/run-api.sh`) "
             "or run `pip install blaxel` for the same `python` your server uses. "
             f"Import error: {ie}"
         )
@@ -198,7 +198,7 @@ async def _ensure_user_blaxel_vm(
     """Create or resume the per-user Blaxel VM (shared by web chat and iMessage)."""
     if _SandboxInstance is None:
         raise RuntimeError(
-            "blaxel package is not installed. Add `blaxel` to the environment (see requirements.txt)."
+            'blaxel package is not installed. Install with: pip install "koraku[blaxel]".'
         )
     if not blaxel_credentials_configured(settings):
         raise RuntimeError("Set BL_WORKSPACE and BL_API_KEY for Blaxel sandboxes.")
@@ -289,7 +289,7 @@ async def ensure_session_workspace(
     channel: str | None = None,
 ) -> tuple[Any, str]:
     """Attach VM + mkdir for the correct per-thread folder (web or iMessage)."""
-    from koraku.integrations.supabase_external import resolve_thread_channel_sync
+    from koraku_cloud.integrations.supabase_external import resolve_thread_channel_sync
 
     scope_uid = (user_id or effective_cloud_user_id()).strip() or effective_cloud_user_id()
     sid = (session_id or "").strip()

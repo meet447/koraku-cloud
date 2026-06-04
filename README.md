@@ -21,6 +21,7 @@ API keys.
 |-----|---------|
 | [docs/SELF_HOST.md](docs/SELF_HOST.md) | Install (Docker / manual), env, production checklist |
 | [docs/SDK.md](docs/SDK.md) | Embed Koraku in Python or TypeScript |
+| [docs/PACKAGING.md](docs/PACKAGING.md) | SDK vs Cloud packages, layout, PyPI |
 | [docs/DATA_LIFECYCLE.md](docs/DATA_LIFECYCLE.md) | What is stored where (privacy / ops) |
 | [docs/SENDBLUE.md](docs/SENDBLUE.md) | iMessage / SMS via SendBlue |
 
@@ -29,8 +30,8 @@ API keys.
 ## Embed Koraku (SDK)
 
 ```bash
-pip install -e .              # in-process agent
-pip install -e ".[all]"       # API + integrations
+./scripts/install-monorepo.sh   # one .venv: SDK + koraku_cloud (this repo)
+./scripts/run-api.sh            # Cloud API (uvicorn)
 ```
 
 ```python
@@ -41,7 +42,7 @@ async for event in agent.stream("Summarize this repo"):
     print(event)
 ```
 
-For web apps, run `koraku-server` and use `@koraku/client` from `packages/koraku-client/`. See **[docs/SDK.md](docs/SDK.md)**.
+For web apps, run the API with `./scripts/run-api.sh` (uvicorn) and use `@koraku/client` from `packages/koraku-client/`. See **[docs/SDK.md](docs/SDK.md)**.
 
 ---
 
@@ -105,11 +106,12 @@ The web app uses **route handlers** under `web/src/app/koraku-api/` (shared logi
 ```bash
 git clone https://github.com/meet447/koraku-cloud.git
 cd koraku-cloud
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
 cp .env.example .env
-python main.py   # http://127.0.0.1:8000
+./scripts/install-monorepo.sh
+./scripts/run-api.sh            # http://127.0.0.1:8000
 ```
+
+Use **only** `koraku-cloud/.venv`. Remove stray envs: `./scripts/cleanup-extra-venvs.sh`
 
 ### Web
 
@@ -152,17 +154,12 @@ Add tools in `koraku/tools/registry.py` — see [Extending the agent](#extending
 
 ```
 koraku-cloud/
-├── main.py                  # Uvicorn entry
-├── koraku/                  # Python package
-│   ├── api/                 # HTTP routers
-│   ├── agent/               # ReAct loop
-│   ├── automations/         # Scheduler + Supabase store
-│   ├── integrations/        # Composio, Blaxel, Supabase, SendBlue
-│   └── core/                # Config, auth, Redis, startup checks
+├── koraku/                  # SDK: agent, tools, server_sdk, chat API
+├── koraku_cloud/            # Cloud: Supabase, automations, product routes
+├── web/                     # Next.js + BFF (/koraku-api/*)
 ├── packages/koraku-client/  # TypeScript SSE client
-├── web/                     # Next.js app + Supabase migrations
-│   └── src/lib/             # BFF proxies, Redis thread cache
-├── docs/                    # SELF_HOST, SDK, DATA_LIFECYCLE, SENDBLUE
+├── docs/
+├── scripts/
 └── tests/
 ```
 

@@ -10,6 +10,11 @@ from contextlib import contextmanager
 _agent_workspace_root: ContextVar[str | None] = ContextVar("koraku_agent_workspace_root", default=None)
 
 
+def get_active_agent_workspace() -> str | None:
+    """Active workspace root for the current agent turn, if bound."""
+    return _agent_workspace_root.get()
+
+
 @contextmanager
 def agent_workspace_scope(root: str) -> Iterator[None]:
     """Bind ``root`` as the active workspace for the duration of the context."""

@@ -41,12 +41,12 @@ NEXT_PUBLIC_SENDBLUE_FROM_NUMBER=+1…
 KORAKU_BACKEND_URL=http://127.0.0.1:8000
 ```
 
-Restart **`python main.py`** and **`npm run dev`** after changing env.
+Restart **`./scripts/run-api.sh`** and **`npm run dev`** after changing env.
 
 **Local API reload:** If you see typing but no reply, disable hot reload so webhook work is not killed mid-turn:
 
 ```bash
-UVICORN_RELOAD=false python main.py
+UVICORN_RELOAD=false ./scripts/run-api.sh
 ```
 
 ## 2. Verify your phone in SendBlue

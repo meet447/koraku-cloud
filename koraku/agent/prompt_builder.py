@@ -14,7 +14,8 @@ from koraku.agent.prompt_sections import (
 )
 from koraku.core.config import settings
 from koraku.integrations import composio as composio_runtime
-from koraku.integrations.supermemory_client import fetch_learned_context_sync, supermemory_configured
+from koraku.integrations.supermemory_client import supermemory_configured
+from koraku.plugins.memory import prefetch_learned_memory_volatile as _prefetch_learned
 from koraku.tools.skills import load_skill_catalog
 
 log = logging.getLogger(__name__)
@@ -25,9 +26,9 @@ _USER_SPECIFIC_MARKERS = re.compile(
 )
 
 MEMORY_RECALL_STABLE = """
-## Memory (Personalization + Supermemory)
-- **Personalization** (app settings): user-edited persona, soul, and standing preferences — in **Context** when present.
-- **Learned memory** (Supermemory): durable facts across chats. **MemorySearch** is mandatory before any claim about the user's preferences, contacts, schedule, projects, or history — including negative claims ("I don't have X stored").
+## Memory (explicit + learned)
+- **Explicit preferences** (Memory.md / Personalization): user-edited persona and standing rules — in **Context** when present.
+- **Learned memory** (local file or Supermemory when configured): durable facts across chats. **MemorySearch** is mandatory before any claim about the user's preferences, contacts, schedule, projects, or history — including negative claims ("I don't have X stored").
 - Prefetched snippets in **Volatile** are a head start, not exhaustive — search again when specifics matter.
 - **MemorySave** when the user asks to remember something durable — not one-off task output or secrets.
 """
@@ -42,39 +43,11 @@ def user_message_needs_memory_recall(user_input: str) -> bool:
     return len(text.split()) >= 6
 
 
-async def prefetch_learned_memory_volatile(user_input: str) -> str:
-    """Query Supermemory for this turn (volatile tier)."""
+async def prefetch_learned_memory_volatile(user_input: str, *, workspace: str) -> str:
+    """Query the active learned-memory plugin for this turn (volatile tier)."""
     if not bool(settings.chat_prefetch_learned_memory):
         return ""
-    if not supermemory_configured():
-        return ""
-    q = (user_input or "").strip()
-    if not q:
-        return ""
-    try:
-        from koraku.core.tenant import effective_tenant_org_id
-        from koraku.integrations.cloud_user import effective_auth_user_sub
-
-        uid = effective_auth_user_sub()
-    except RuntimeError:
-        return ""
-    timeout = max(0.5, float(settings.chat_learned_memory_timeout_seconds))
-    try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(
-                fetch_learned_context_sync,
-                uid,
-                org_id=effective_tenant_org_id(),
-                query=q[:800],
-            ),
-            timeout=timeout,
-        )
-    except asyncio.TimeoutError:
-        log.info("learned memory prefetch timed out after %.1fs", timeout)
-        return ""
-    except Exception as e:
-        log.warning("learned memory prefetch failed: %s", e)
-        return ""
+    return await _prefetch_learned(user_input, workspace=workspace)
 
 
 def build_stable_tier(*, display_name: str | None) -> str:

@@ -63,7 +63,7 @@ export async function* streamChat(
       session_id: options.sessionId ?? "",
       model: options.model ?? "",
       provider: options.provider ?? "",
-      execution_target: options.executionTarget ?? "cloud",
+      execution_target: options.executionTarget ?? "local",
     }),
     signal: options.signal,
   });

@@ -1,7 +1,7 @@
 import pytest
 from croniter import CroniterBadCronError
 
-from koraku.automations.validation import validate_cron_expression, validate_timezone_iana
+from koraku_cloud.automations.validation import validate_cron_expression, validate_timezone_iana
 
 
 def test_validate_cron_expression_valid():

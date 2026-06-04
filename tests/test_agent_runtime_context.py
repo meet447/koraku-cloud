@@ -34,9 +34,15 @@ def test_resolve_agent_workspace_from_context() -> None:
     assert resolve_agent_workspace(None, ctx) == os.path.abspath("/tmp/ws")
 
 
-def test_resolve_execution_target_is_always_cloud() -> None:
-    assert resolve_execution_target(AgentRunContext()) == "cloud"
-    assert resolve_execution_target(None) == "cloud"
+def test_resolve_execution_target_from_context() -> None:
+    assert resolve_execution_target(AgentRunContext()) == "local"
+    assert resolve_execution_target(AgentRunContext(execution_target="server")) == "server"
+    assert resolve_execution_target(AgentRunContext(execution_target="cloud")) == "cloud"
+
+
+def test_tools_for_local_includes_bash() -> None:
+    local_names = {t.name for t in tools_for_execution_target("local")}
+    assert bash_tool.name in local_names
 
 
 def test_tools_for_cloud_sandbox() -> None:
@@ -46,10 +52,11 @@ def test_tools_for_cloud_sandbox() -> None:
     assert bash_tool.name in cloud_with_blaxel
 
 
-def test_stream_chat_body_defaults_to_cloud_only() -> None:
-    from koraku.api.chat_routes import StreamChatBody
+def test_stream_chat_body_execution_target_optional() -> None:
+    from koraku.api.chat_routes import StreamChatBody, normalize_stream_execution_target
 
-    assert StreamChatBody(msg="hello").model_dump().get("execution_target") is None
+    assert StreamChatBody(msg="hello").model_dump().get("execution_target") == ""
+    assert normalize_stream_execution_target("") in ("local", "server", "cloud")
 
 
 def test_stream_chat_body_accepts_client_history() -> None:
@@ -71,7 +78,7 @@ def test_stream_cloud_blaxel_blocked_still_completes_conversational_turn(monkeyp
     from fastapi.testclient import TestClient
 
     import koraku.api.chat_routes as chat_routes
-    from koraku.server import app
+    from koraku.server_sdk import app
 
     monkeypatch.setattr(chat_routes.settings, "require_auth_for_chat", False, raising=False)
     monkeypatch.setattr(chat_routes, "cloud_blaxel_block_reason", lambda _s: "blocked-for-test")

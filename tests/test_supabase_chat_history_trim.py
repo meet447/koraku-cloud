@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from koraku.core.models import SessionState
-from koraku.integrations.supabase_chat_history import (
+from koraku_cloud.integrations.supabase_chat_history import (
     client_history_rows_to_agent_messages,
     db_message_rows_to_agent_messages,
     hydrate_session_messages_from_db,
@@ -99,7 +99,7 @@ async def test_hydrate_skips_db_when_session_is_warm(monkeypatch) -> None:
         raise AssertionError("DB fetch should be skipped for warm sessions")
 
     monkeypatch.setattr(
-        "koraku.integrations.supabase_chat_history.fetch_thread_messages_sync",
+        "koraku_cloud.integrations.supabase_chat_history.fetch_thread_messages_sync",
         fail_fetch,
     )
     report = await hydrate_session_messages_from_db(

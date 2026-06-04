@@ -4,13 +4,14 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from koraku.agent import Agent
 from koraku.agent.runtime_context import AgentRunContext, ExecutionTarget
-from koraku.core.config import Settings, configure, use_settings
+from koraku.core.config import Settings, configure_sdk, use_settings
 from koraku.core.models import SessionState
+from koraku.core.sdk_settings import SdkSettings
 from koraku.tools.tool_def import Tool
 
 __all__ = ["Koraku", "KorakuConfig"]
@@ -18,7 +19,7 @@ __all__ = ["Koraku", "KorakuConfig"]
 
 @dataclass
 class KorakuConfig:
-    """Embeddable configuration for in-process Koraku agents."""
+    """Embeddable configuration for in-process Koraku agents (SDK / local-first)."""
 
     llm_provider: str = "fireworks"
     fireworks_api_key: str = ""
@@ -30,16 +31,17 @@ class KorakuConfig:
     max_tokens: int = 4096
     temperature: float = 0.5
     workspace: str | None = None
-    execution_target: ExecutionTarget = "cloud"
+    execution_target: ExecutionTarget = "local"
+    memory_backend: str = "filesystem"
     composio_api_key: str = ""
     composio_subagent_mode: bool = True
-    require_auth_for_chat: bool = False
     enable_bash: bool = True
     enable_web_search: bool = True
     enable_file_ops: bool = True
+    extra_tools: tuple[Tool, ...] = field(default_factory=tuple)
 
-    def to_settings(self) -> Settings:
-        return Settings(
+    def to_sdk_settings(self) -> SdkSettings:
+        return SdkSettings(
             llm_provider=self.llm_provider,
             fireworks_api_key=self.fireworks_api_key,
             fireworks_model=self.fireworks_model,
@@ -49,13 +51,20 @@ class KorakuConfig:
             max_steps=self.max_steps,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
+            default_execution_target=self.execution_target,
+            memory_backend=self.memory_backend,
             composio_api_key=self.composio_api_key,
             composio_subagent_mode=self.composio_subagent_mode,
-            require_auth_for_chat=self.require_auth_for_chat,
             enable_bash=self.enable_bash,
             enable_web_search=self.enable_web_search,
             enable_file_ops=self.enable_file_ops,
         )
+
+    def to_settings(self) -> Settings:
+        """Merged settings view (SDK layer only unless Cloud was bootstrapped)."""
+        from koraku.core.config import Settings as MergedSettings
+
+        return MergedSettings(self.to_sdk_settings())
 
 
 class Koraku:
@@ -72,17 +81,24 @@ class Koraku:
 
     def __init__(
         self,
-        config: KorakuConfig | Settings | None = None,
+        config: KorakuConfig | SdkSettings | Settings | None = None,
         *,
         tools: list[Tool] | None = None,
     ) -> None:
-        if isinstance(config, Settings):
+        from koraku.core.config import Settings as MergedSettings
+
+        if isinstance(config, SdkSettings):
+            self._settings: Settings = MergedSettings(config)
+        elif isinstance(config, Settings):
             self._settings = config
         elif config is not None:
             self._settings = config.to_settings()
         else:
-            self._settings = Settings()
-        self._tools = tuple(tools or ())
+            self._settings = MergedSettings(SdkSettings())
+        extra = tuple(tools or ()) + (
+            config.extra_tools if isinstance(config, KorakuConfig) else ()
+        )
+        self._tools = extra
         self._workspace = config.workspace if isinstance(config, KorakuConfig) else None
 
     @property
@@ -90,8 +106,8 @@ class Koraku:
         return self._settings
 
     def configure_process(self) -> None:
-        """Apply this instance's settings as the process-wide default."""
-        configure(self._settings)
+        """Apply this instance's SDK settings as the process-wide default."""
+        configure_sdk(self._settings.sdk)
 
     def _agent(self) -> Agent:
         return Agent()
@@ -112,7 +128,7 @@ class Koraku:
         sid = session_id or str(uuid.uuid4())
         state = session or SessionState(session_id=sid)
         ws = workspace or self._workspace
-        target: ExecutionTarget = execution_target or "cloud"
+        target: ExecutionTarget = execution_target or self._settings.default_execution_target  # type: ignore[assignment]
         run_context = AgentRunContext(
             workspace_root=ws,
             execution_target=target,

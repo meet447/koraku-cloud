@@ -10,6 +10,10 @@ from koraku.core.config import settings
 
 async def _lazy_cloud_ensure() -> str | None:
     """Provision Blaxel on first file/shell tool when chat deferred upfront VM setup."""
+    from koraku.agent.runtime_context import get_active_execution_target
+
+    if get_active_execution_target() != "cloud":
+        return None
     if not bool(getattr(settings, "blaxel_cloud_sandbox_enabled", False)):
         return None
     if get_active_blaxel_sandbox() is not None:

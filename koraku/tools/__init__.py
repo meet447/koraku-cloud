@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from koraku.tools.registry import (
-    AVAILABLE_TOOLS,
+    available_tools,
     bash_tool,
     edit_tool,
     get_tool,
@@ -21,6 +21,7 @@ from koraku.tools.tool_def import Tool
 __all__ = [
     "Tool",
     "AVAILABLE_TOOLS",
+    "available_tools",
     "tools_for_execution_target",
     "get_tool",
     "get_tool_schemas",
@@ -34,3 +35,9 @@ __all__ = [
     "web_search_tool",
     "web_fetch_tool",
 ]
+
+
+def __getattr__(name: str):
+    if name == "AVAILABLE_TOOLS":
+        return available_tools()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from koraku.integrations import supabase_personalization as sp
+from koraku_cloud.integrations import supabase_personalization as sp
 
 
 def test_fetch_personalization_uses_cache(monkeypatch) -> None:
@@ -11,6 +11,8 @@ def test_fetch_personalization_uses_cache(monkeypatch) -> None:
 
     monkeypatch.setattr(sp, "_valid_uuid", lambda _uid: True)
     monkeypatch.setattr(sp, "supabase_personalization_configured", lambda: True)
+    monkeypatch.setattr(sp.settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(sp.settings, "supabase_service_role_key", "test-service-role")
     monkeypatch.setattr(sp.settings, "personalization_cache_ttl_seconds", 300.0)
 
     class FakeResp:
@@ -46,6 +48,8 @@ def test_upsert_invalidates_personalization_cache(monkeypatch) -> None:
     )
     monkeypatch.setattr(sp, "_valid_uuid", lambda _uid: True)
     monkeypatch.setattr(sp, "supabase_personalization_configured", lambda: True)
+    monkeypatch.setattr(sp.settings, "supabase_url", "https://example.supabase.co")
+    monkeypatch.setattr(sp.settings, "supabase_service_role_key", "test-service-role")
     monkeypatch.setattr(sp, "ensure_personal_org_sync", lambda _uid: oid)
 
     class FakeResp:

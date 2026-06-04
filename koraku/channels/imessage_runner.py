@@ -28,8 +28,8 @@ from koraku.integrations.cloud_user import reset_cloud_user_id, set_cloud_user_i
 from koraku.integrations.blaxel_lazy import clear_lazy_blaxel_session, set_lazy_blaxel_session
 from koraku.integrations import sendblue_client
 from koraku.integrations.sendblue_client import send_message
-from koraku.integrations.supabase_chat_history import hydrate_session_messages_from_db
-from koraku.integrations.supabase_external import append_thread_message_sync
+from koraku_cloud.integrations.supabase_chat_history import hydrate_session_messages_from_db
+from koraku_cloud.integrations.supabase_external import append_thread_message_sync
 from koraku.integrations.supermemory_client import extract_last_assistant_text
 from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
 from koraku.agent.runtime_context import AgentRunContext

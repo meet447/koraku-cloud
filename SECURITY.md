@@ -27,7 +27,7 @@ fix is out, unless you ask us not to.
 
 In scope:
 
-- The Python API in `koraku/` and `main.py`
+- The Python API in `koraku/` and `koraku_cloud/` (uvicorn)
 - The Next.js app in `web/`
 - Default deployment configuration (`.env.example`, CORS defaults,
   rate-limit defaults, auth checks)

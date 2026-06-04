@@ -47,7 +47,7 @@ def test_imports():
     from koraku.tools import AVAILABLE_TOOLS, get_tool, get_tool_schemas
     from koraku.llm import UnifiedLLMClient
     from koraku.agent import Agent
-    from koraku.server import app
+    from koraku_cloud.app import app
 
     assert app is not None
     assert UnifiedLLMClient is not None
@@ -61,19 +61,26 @@ def test_imports():
 
 
 async def _run_tool_smoke_async():
+    from koraku.agent.runtime_context import bind_execution_target, reset_execution_target
     from koraku.tools import bash_tool, glob_tool, grep_tool, read_tool
+    from koraku.workspace.agent_workspace import agent_workspace_scope
 
-    result = await bash_tool.run(command="echo 'hello from agent'")
-    assert "hello from agent" in result, f"Bash failed: {result}"
+    tok = bind_execution_target("local")
+    try:
+        with agent_workspace_scope("."):
+            result = await bash_tool.run(command="echo 'hello from agent'")
+            assert "hello from agent" in result, f"Bash failed: {result}"
 
-    result = await glob_tool.run(pattern="*.py")
-    assert "main.py" in result, f"Glob failed: {result}"
+            result = await glob_tool.run(pattern="*.md")
+            assert "README.md" in result, f"Glob failed: {result}"
 
-    result = await grep_tool.run(pattern="class Agent", include="*.py")
-    assert "koraku/agent/run.py" in result, f"Grep failed: {result}"
+            result = await grep_tool.run(pattern="class Agent", include="*.py")
+            assert "koraku/agent/run.py" in result, f"Grep failed: {result}"
 
-    result = await read_tool.run(file_path="main.py")
-    assert "koraku.cli" in result, f"Read failed: {result}"
+            result = await read_tool.run(file_path="README.md")
+            assert "Koraku" in result, f"Read failed: {result}"
+    finally:
+        reset_execution_target(tok)
 
 
 def test_tools():
@@ -82,7 +89,7 @@ def test_tools():
 
 def test_server_routes(monkeypatch):
     from fastapi.testclient import TestClient
-    from koraku.server import app
+    from koraku_cloud.app import app
     import koraku.api.chat_routes as chat_routes
 
     monkeypatch.setattr(chat_routes.settings, "require_auth_for_chat", False, raising=False)
@@ -102,7 +109,7 @@ def test_server_routes(monkeypatch):
     resp = client.post("/stream", json={})
     assert resp.status_code == 422
 
-    from koraku.server import MODE as server_mode
+    from koraku.server_sdk import _MODE as server_mode
 
     if server_mode == "unconfigured":
         resp = client.post("/stream", json={"msg": "hi"})
@@ -112,29 +119,3 @@ def test_server_routes(monkeypatch):
         assert "koraku.started" in resp.text or "data:" in resp.text
 
 
-def main():
-    """Run all checks sequentially (same as ``pytest tests/test_structure.py``)."""
-    import sys
-
-    print("=" * 50)
-    print("Koraku Agent - Structure Validation")
-    print("=" * 50)
-
-    test_tool_result_policy()
-    test_openai_native_tool_call_merge()
-    test_imports()
-    test_tools()
-    test_server_routes()
-
-    print("\n" + "=" * 50)
-    print("All tests passed!")
-    print("=" * 50)
-    print("\nTo run the API server:")
-    print("  export ANTHROPIC_API_KEY=your-key")
-    print("  python main.py")
-    print("\nAPI: http://127.0.0.1:8000  |  Browser UI: cd web && npm run dev")
-    print(f"\nPython: {sys.executable}")
-
-
-if __name__ == "__main__":
-    main()

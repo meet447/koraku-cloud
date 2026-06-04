@@ -26,14 +26,12 @@ def test_build_system_prompt_daily_driver_contract() -> None:
         composio_section="",
     )
 
-    assert "personal daily-driver agent" in s
+    assert "buddy-style second brain" in s
     assert "## Task modes" in s
-    assert "## Memory (Personalization + Supermemory)" in s
+    assert "## Memory (explicit + learned)" in s
     assert "**MemorySearch**" in s
-    assert "## Cloud workspace (Blaxel)" in s
-    assert "## External actions and verification" in s
-    assert "verify the intended recipient" in s
-    assert "Only create an automation when recurrence" in s
+    assert "**MemorySave**" in s
+    assert "## Core behavior" in s
 
 
 def test_working_memory_context_is_bounded_and_recent() -> None:

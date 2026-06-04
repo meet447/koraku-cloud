@@ -8,7 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from koraku.tools.registry import AVAILABLE_TOOLS
+from koraku.tools.registry import available_tools
 
 
 def _now_ms() -> int:
@@ -43,7 +43,7 @@ def build_system_init_inner(
     model: str,
     koraku: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    tools = [t.to_anthropic_schema() for t in AVAILABLE_TOOLS]
+    tools = [t.to_anthropic_schema() for t in available_tools()]
     body: dict[str, Any] = {
         "type": "system",
         "subtype": "init",
