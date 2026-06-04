@@ -1,101 +1,64 @@
-# Contributing to Koraku
+# Contributing to Koraku Cloud
 
-Thanks for your interest in making Koraku better. Koraku is a personal AI
-buddy / second brain — issues, bug reports, ideas, and pull requests are all
-welcome.
+Thanks for helping improve Koraku. This repository is the **product monorepo** (web UI, `koraku_cloud`, Supabase). The open-source SDK is developed here under `koraku/` and synced to [meet447/Koraku](https://github.com/meet447/Koraku).
 
 ## Code of Conduct
 
-This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By
-participating you agree to uphold it. Report unacceptable behavior to
-**meet.sonawane2015@gmail.com**.
+[Contributor Covenant](CODE_OF_CONDUCT.md) — report issues to **meet.sonawane2015@gmail.com**.
 
-## Ways to contribute
+## Where to contribute
 
-- **Bug reports** — open an issue with steps to reproduce, expected vs. actual
-  behavior, and your environment (OS, Python version, LLM provider).
-- **Feature ideas** — open an issue first to discuss scope before writing code,
-  especially for anything that touches the agent loop, tool registry, or
-  storage schema.
-- **Documentation** — README, `docs/`, and inline help strings are all fair
-  game.
-- **Tools and integrations** — adding a new tool to `koraku/tools/` or a new
-  Composio toolkit binding is one of the easiest ways to start.
-- **Web UI** — Next.js work lives in `web/`.
+| Change | Repo |
+|--------|------|
+| Agent core, tools, `Koraku` API, `@koraku/client` | PR here **and** export to Koraku (see below) or PR on [Koraku](https://github.com/meet447/Koraku) |
+| Automations UI, Supabase schema, `koraku_cloud` routes | **koraku-cloud** only |
+| Next.js app | `web/` in this repo |
 
 ## Development setup
 
 ```bash
-# Python backend
-python3 -m venv venv
-source venv/bin/activate
+git clone https://github.com/meet447/koraku-cloud.git
+cd koraku-cloud
 ./scripts/install-monorepo.sh
-cp .env.example .env   # fill in at least one LLM provider key
-
-# Run the API
+cp .env.example .env
 ./scripts/run-api.sh
 ```
 
 ```bash
-# Next.js web app (separate terminal)
-cd web
-npm install
-npm run dev
+cd web && npm install && npm run dev
 ```
 
-For full configuration (Supabase auth, Composio, Blaxel, production checklist),
-see [`README.md`](README.md), [`docs/SELF_HOST.md`](docs/SELF_HOST.md), and
-[`.env.example`](.env.example).
+See [README.md](README.md), [docs/SELF_HOST.md](docs/SELF_HOST.md), and [`.env.example`](.env.example).
 
-## Running tests
+## Sync SDK to the open-source repo
 
 ```bash
-# Structure + smoke (no API key needed)
-pytest tests/test_structure.py -q
-
-# Full suite
-pytest -q
+git clone https://github.com/meet447/Koraku.git ../Koraku
+./scripts/export-sdk-oss-repo.sh ../Koraku
+cd ../Koraku && pytest -q
 ```
 
-Add tests under `tests/` mirroring the `koraku/` package layout. Tests that hit
-external services (Supabase, Composio, LLM providers) should be guarded by an
-env var check or marked so they can be skipped in CI by default.
+## Tests
 
-## Pull request checklist
+```bash
+pytest -q
+./scripts/verify-sdk-wheel.sh
+python3 scripts/check_cloud_imports.py
+```
 
-Before opening a PR:
+Cloud-only tests live under `tests/automations/` and similar; they are excluded from the Koraku export.
 
-1. **Run `pytest -q`** — keep the suite green.
-2. **Run the app locally** for any change that touches the chat loop, tools,
-   or the web UI. Don't ship UI changes you haven't actually clicked through.
-3. **Write a focused commit message.** One sentence describing the *why*,
-   plus details if the change is non-obvious. Don't add co-author trailers
-   you didn't agree on with the human author.
-4. **Update docs.** If you add an env var, document it in `.env.example`. If
-   you change a public API or SSE event shape, update the README.
-5. **One logical change per PR.** Refactors and unrelated cleanups belong in
-   their own PR.
+## Pull requests
 
-## Coding conventions
+1. Run `pytest -q` (and wheel check if you changed packaging).
+2. Document new env vars in `.env.example`.
+3. One logical change per PR.
+4. No secrets in code; no `Co-authored-by` trailers unless agreed with the author.
 
-- **Python:** type hints on public functions, `from __future__ import
-  annotations` at the top of new modules, async-first for IO. Keep modules
-  small and cohesive — `koraku/` is laid out by domain (`agent/`, `tools/`,
-  `integrations/`, ...).
-- **TypeScript / Next.js:** strict mode, server components by default, client
-  components only when you need state or browser APIs. Tailwind for styling.
-- **No secrets in code.** Anything sensitive goes through `.env` /
-  `web/.env.local`. Server-only keys (Supabase service role, LLM provider keys)
-  must never appear with a `NEXT_PUBLIC_` prefix.
-- **Be careful with the agent loop.** It is the hot path. New tools should
-  fail closed (return an error string the model can read), not raise.
+## Security
 
-## Filing security issues
-
-Please do **not** file security vulnerabilities as public issues. See
-[`SECURITY.md`](SECURITY.md) for the private disclosure process.
+See [SECURITY.md](SECURITY.md) — do not file vulnerabilities as public issues.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the
-[MIT License](LICENSE) that covers the project.
+Contributions are licensed under the project [MIT License](LICENSE).

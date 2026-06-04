@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+- Docs and README: Koraku Cloud vs open-source [meet447/Koraku](https://github.com/meet447/Koraku) SDK repo
+- `koraku_cloud.cloud_settings` re-exports `koraku.inert_cloud_settings` (single schema)
+- Removed stale `KORAKU_PROFILE` references; use `KORAKU_SERVER_APP`
+
 ### Added
 - Org-scoped automations and personalization (`user_id` + `org_id` composite PK)
 - Shared BFF proxy (`koraku-backend-proxy`, `koraku-api-routes`) for `/koraku-api/*`

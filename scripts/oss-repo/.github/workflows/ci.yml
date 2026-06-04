@@ -19,8 +19,6 @@ jobs:
         run: pip install -e ".[dev,server,all]"
 
       - name: Pytest
-        env:
-          KORAKU_PROFILE: sdk
         run: python3 -m pytest -q
 
   sdk-wheel:

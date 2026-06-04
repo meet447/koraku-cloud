@@ -1,4 +1,7 @@
-"""Inert Cloud-shaped settings when ``koraku_cloud`` is not installed (OSS / PyPI SDK-only)."""
+"""Cloud-shaped settings schema (SDK wheel + ``koraku_cloud`` re-export).
+
+Edit fields here; ``koraku_cloud.cloud_settings`` imports this module.
+"""
 from __future__ import annotations
 
 import os

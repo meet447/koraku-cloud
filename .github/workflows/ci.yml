@@ -24,8 +24,6 @@ jobs:
         run: python3 scripts/check_cloud_imports.py
 
       - name: Pytest
-        env:
-          KORAKU_PROFILE: sdk
         run: python3 -m pytest -q
 
   sdk-wheel:
