@@ -71,7 +71,7 @@ def build_stable_tier(*, display_name: str | None) -> str:
 ## Task modes
 - **Quick task:** answer directly when the request is simple. No TodoWrite ceremony.
 - **Integration task:** connected apps → **ComposioRun** once with a focused `goal`.
-- **Research task:** WebSearch + WebFetch on canonical URLs; cite uncertainty when unverified.
+- **Research task:** WebSearch + WebFetch on canonical URLs (fetch is fast via Exa; cite uncertainty when unverified).
 - **Memory task:** **MemorySearch** before user-specific claims; **MemorySave** for durable facts they ask to remember.
 - **Automation task:** recurrence → create/update an automation, not only explain the workflow.
 {MEMORY_RECALL_STABLE}

@@ -2,7 +2,7 @@
 
 Web tools are presented generically to the LLM:
 - WebSearch: discovers content (internally uses Exa)
-- WebFetch: fetches/scrapes pages (internally uses Firecrawl)
+- WebFetch: reads pages (Exa Contents first, Firecrawl fallback for hard URLs)
 
 The LLM doesn't need to know about Exa or Firecrawl — it just searches and fetches.
 """
@@ -19,6 +19,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 
 from koraku.core.config import settings
+from koraku.tools.policy import tool_stdout_indicates_error
 from koraku.tools.tool_def import Tool
 from koraku.workspace.paths import workspace_dir
 
@@ -418,6 +419,11 @@ todo_write_tool = Tool(
 # WEB TOOLS (abstracted — LLM sees generic names)
 # ========================================================================
 
+_EXA_FETCH_TIMEOUT_SECONDS = 25.0
+_FIRECRAWL_FETCH_TIMEOUT_SECONDS = 45.0
+_WEB_FETCH_MAX_CHARS = 8_000
+
+
 async def _web_search(
     query: str,
     num_results: int = 5,
@@ -505,7 +511,79 @@ web_search_tool = Tool(
 )
 
 
-async def _web_page(
+async def _exa_fetch_page(
+    url: str,
+    *,
+    max_chars: int = _WEB_FETCH_MAX_CHARS,
+    extract_prompt: str | None = None,
+) -> tuple[bool, str]:
+    """Fetch page text via Exa Contents. Returns (ok, body_or_error_detail)."""
+    if not settings.exa_api_key:
+        return False, "Exa API key not configured"
+
+    page_url = (url or "").strip()
+    if not page_url:
+        return False, "empty URL"
+
+    headers = {
+        "Authorization": f"Bearer {settings.exa_api_key}",
+        "Content-Type": "application/json",
+    }
+    ep = (extract_prompt or "").strip()
+    payload: dict[str, Any] = {"urls": [page_url]}
+    if ep:
+        payload["highlights"] = {"query": ep, "maxCharacters": max_chars}
+    else:
+        payload["text"] = {"maxCharacters": max_chars}
+
+    async with httpx.AsyncClient(timeout=_EXA_FETCH_TIMEOUT_SECONDS) as client:
+        try:
+            resp = await client.post("https://api.exa.ai/contents", headers=headers, json=payload)
+            resp.raise_for_status()
+        except Exception as e:
+            return False, f"Exa request failed: {e}"
+
+    data = resp.json()
+    if not isinstance(data, dict):
+        return False, "Exa returned invalid JSON"
+
+    if data.get("error"):
+        return False, f"Exa API error: {data.get('error')}"
+
+    results = data.get("results")
+    if not isinstance(results, list) or not results:
+        return False, "Exa returned no results for this URL"
+
+    row = results[0] if isinstance(results[0], dict) else {}
+    status = str(row.get("status") or "success").lower()
+    if status == "error":
+        err = row.get("error")
+        if isinstance(err, dict):
+            detail = str(err.get("message") or err.get("tag") or "unknown error")
+        else:
+            detail = str(err or "unknown error")
+        return False, f"Exa could not read page: {detail}"
+
+    text = (row.get("text") or "").strip()
+    if not text:
+        highlights = row.get("highlights")
+        if isinstance(highlights, list):
+            text = "\n".join(str(h).strip() for h in highlights if str(h).strip())
+        elif isinstance(highlights, str):
+            text = highlights.strip()
+
+    if not text:
+        return False, "Exa returned no readable text for this URL"
+
+    title = str(row.get("title") or "").strip()
+    parts = [f"URL: {page_url}", "(source: Exa Contents)"]
+    if title:
+        parts.append(f"Title: {title}")
+    parts.append(f"\n--- Content ---\n{text[:max_chars]}")
+    return True, "\n".join(parts)
+
+
+async def _firecrawl_fetch_page(
     url: str,
     only_main_content: bool = True,
     include_html: bool = False,
@@ -513,8 +591,12 @@ async def _web_page(
 ) -> str:
     """Fetch and scrape a web page using Firecrawl."""
     if not settings.firecrawl_api_key:
-        return "Error: Web page fetching is not available (Firecrawl API key not configured)."
-    
+        return "Error: Firecrawl API key not configured."
+
+    page_url = (url or "").strip()
+    if not page_url:
+        return "Error: URL is required."
+
     # v2 scrape: LLM extraction uses formats[{type:json,prompt}], not v1 top-level "extract".
     api_url = "https://api.firecrawl.dev/v2/scrape"
     headers = {"Authorization": f"Bearer {settings.firecrawl_api_key}", "Content-Type": "application/json"}
@@ -527,12 +609,12 @@ async def _web_page(
         formats.append({"type": "json", "prompt": ep})
 
     payload: dict[str, Any] = {
-        "url": url,
+        "url": page_url,
         "onlyMainContent": only_main_content,
         "formats": formats,
     }
-    
-    async with httpx.AsyncClient(timeout=60.0) as client:
+
+    async with httpx.AsyncClient(timeout=_FIRECRAWL_FETCH_TIMEOUT_SECONDS) as client:
         try:
             resp = await client.post(api_url, headers=headers, json=payload)
             resp.raise_for_status()
@@ -544,7 +626,7 @@ async def _web_page(
         return f"Error: Fetch failed: {data.get('error', 'Unknown error')}"
 
     result = data.get("data", {})
-    parts = [f"URL: {url}"]
+    parts = [f"URL: {page_url}", "(source: Firecrawl)"]
 
     extracted = result.get("json") or result.get("extract")
     if extracted:
@@ -565,7 +647,7 @@ async def _web_page(
             alt = img.get("alt", "")
             if src:
                 if src.startswith("/"):
-                    src = urljoin(url, src)
+                    src = urljoin(page_url, src)
                 images.append({"url": src, "alt": alt})
         
         if images:
@@ -596,9 +678,61 @@ async def _web_page(
     return body
 
 
+async def _web_page(
+    url: str,
+    only_main_content: bool = True,
+    include_html: bool = False,
+    extract_prompt: str | None = None,
+) -> str:
+    """Fetch a URL: Exa Contents first (fast), Firecrawl when Exa fails or for raw HTML."""
+    page_url = (url or "").strip()
+    if not page_url:
+        return "Error: URL is required."
+
+    if not settings.exa_api_key and not settings.firecrawl_api_key:
+        return (
+            "Error: Web page fetching is not available "
+            "(set EXA_API_KEY and/or FIRECRAWL_API_KEY)."
+        )
+
+    exa_note = ""
+    if settings.exa_api_key and not include_html:
+        ok, exa_body = await _exa_fetch_page(
+            page_url,
+            extract_prompt=extract_prompt,
+        )
+        if ok:
+            return exa_body
+        exa_note = exa_body
+
+    if not settings.firecrawl_api_key:
+        if exa_note:
+            return f"Error: {exa_note}"
+        return "Error: Web page fetching requires FIRECRAWL_API_KEY for this request (include_html=true)."
+
+    fc_body = await _firecrawl_fetch_page(
+        page_url,
+        only_main_content=only_main_content,
+        include_html=include_html,
+        extract_prompt=extract_prompt,
+    )
+    if tool_stdout_indicates_error(fc_body, tool_name="WebFetch"):
+        if exa_note:
+            return f"{fc_body}\n(Exa attempt: {exa_note})"
+        return fc_body
+
+    if exa_note:
+        return f"{fc_body.rstrip()}\n(Firecrawl fallback — Exa: {exa_note})"
+    return fc_body
+
+
 web_fetch_tool = Tool(
     name="WebFetch",
-    description="Fetch and read any web page. Handles JavaScript-heavy sites. Use to read content, extract data, or find image URLs.",
+    description=(
+        "Fetch and read a web page (Exa first, Firecrawl fallback). "
+        "Use after WebSearch when you need full article text. "
+        "Set include_html=true only when you need image URLs from raw HTML."
+    ),
     input_schema={
         "type": "object",
         "properties": {
@@ -612,6 +746,10 @@ web_fetch_tool = Tool(
     handler=_web_page,
     categories=["web"],
 )
+
+
+def web_fetch_available() -> bool:
+    return bool(settings.exa_api_key or settings.firecrawl_api_key)
 
 # ========================================================================
 # TOOL REGISTRY + ROUTER
@@ -637,7 +775,7 @@ def _build_available_tools() -> list[Tool]:
     for t in tools:
         if t.name == "WebSearch" and not settings.exa_api_key:
             continue
-        if t.name == "WebFetch" and not settings.firecrawl_api_key:
+        if t.name == "WebFetch" and not web_fetch_available():
             continue
         out.append(t)
     return out

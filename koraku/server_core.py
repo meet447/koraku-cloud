@@ -119,9 +119,9 @@ def make_lifespan(
                 settings.research_max_steps,
             )
             if settings.exa_api_key:
-                log.info("ExaSearch enabled")
+                log.info("Exa web search + fetch (primary) enabled")
             if settings.firecrawl_api_key:
-                log.info("Firecrawl enabled")
+                log.info("Firecrawl web fetch fallback enabled")
             if settings.blaxel_cloud_sandbox_enabled:
                 import sys
 

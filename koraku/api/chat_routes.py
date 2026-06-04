@@ -92,6 +92,21 @@ class StreamClientHistoryMessage(BaseModel):
     text: str = Field(..., max_length=20_000)
 
 
+def client_history_rows_for_hydration(
+    rows: list[StreamClientHistoryMessage] | list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Normalize client history for hydration (Pydantic models or plain dicts)."""
+    out: list[dict[str, Any]] = []
+    for row in rows or []:
+        if isinstance(row, dict):
+            out.append(row)
+        elif isinstance(row, BaseModel):
+            out.append(row.model_dump())
+        else:
+            out.append({"role": getattr(row, "role", "user"), "text": getattr(row, "text", "")})
+    return out
+
+
 class StreamChatBody(BaseModel):
     """JSON body for ``POST /stream`` (SSE response)."""
 
@@ -176,7 +191,7 @@ async def _stream_agent_sse(
     server_mode: str,
     auth_sub: str | None = None,
     auth_org_id: str | None = None,
-    client_history: list[StreamClientHistoryMessage] | None = None,
+    client_history: list[StreamClientHistoryMessage] | list[dict[str, Any]] | None = None,
     request: Request | None = None,
     cancel_event: asyncio.Event | None = None,
     stream_run_id: str | None = None,
@@ -242,7 +257,7 @@ async def _stream_agent_sse(
             incoming_user_text=msg.strip(),
             auth_sub=auth_sub,
             auth_org_id=auth_org_id,
-            client_history=[p.model_dump() for p in (client_history or [])],
+            client_history=client_history_rows_for_hydration(client_history),
         )
     )
 
@@ -475,7 +490,7 @@ async def stream_endpoint_post(body: StreamChatBody, request: Request):
                 server_mode=server_mode,
                 auth_sub=auth_sub,
                 auth_org_id=auth_org_id,
-                client_history=body.client_history,
+                client_history=list(body.client_history),
                 request=request,
                 execution_target=exec_target,
             ):

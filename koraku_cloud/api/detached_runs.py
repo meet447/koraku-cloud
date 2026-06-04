@@ -94,7 +94,7 @@ async def _run_worker(
             server_mode=server_mode,
             auth_sub=auth_sub,
             auth_org_id=auth_org_id,
-            client_history=[p.model_dump() for p in body.client_history],
+            client_history=list(body.client_history),
             stream_run_id=run_id,
             execution_target=exec_target,
         ):

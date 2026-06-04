@@ -10,6 +10,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
+from koraku.api.chat_routes import client_history_rows_for_hydration
 from koraku_cloud.api import detached_runs
 from koraku.core import detached_run_store
 from koraku_cloud.app import app
@@ -68,7 +69,9 @@ def test_detached_run_worker_forwards_client_history(monkeypatch: pytest.MonkeyP
     )
     assert resp.status_code == 200
     time.sleep(0.05)
-    assert captured.get("client_history") == history
+    assert client_history_rows_for_hydration(
+        captured.get("client_history")  # type: ignore[arg-type]
+    ) == history
 
 
 def test_runs_post_returns_run_id() -> None:
