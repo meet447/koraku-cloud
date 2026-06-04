@@ -4,7 +4,20 @@ from koraku_cloud.automations.imessage_notify import (
     IMESSAGE_NOT_LINKED,
     assert_notify_via_imessage_allowed,
     format_automation_imessage_body,
+    sanitize_summary_for_imessage_delivery,
 )
+
+
+def test_sanitize_summary_drops_imessage_limitation_paragraph():
+    raw = (
+        "No OLX emails in the last 30 minutes.\n\n"
+        "iMessage limitation: I don't have an active iMessage toolkit.\n\n"
+        "What I did: Checked Gmail."
+    )
+    out = sanitize_summary_for_imessage_delivery(raw)
+    assert "No OLX emails" in out
+    assert "What I did" in out
+    assert "iMessage limitation" not in out
 
 
 def test_format_automation_imessage_body_success():

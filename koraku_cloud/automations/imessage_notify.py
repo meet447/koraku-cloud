@@ -46,6 +46,38 @@ def imessage_delivery_status_sync(user_id: str) -> dict[str, bool]:
     }
 
 
+def sanitize_summary_for_imessage_delivery(text: str) -> str:
+    """Remove agent meta-commentary about sending iMessage when delivery is already handled."""
+    raw = (text or "").strip()
+    if not raw:
+        return raw
+    drop_markers = (
+        "imessage limitation",
+        "don't have an active imessage",
+        "do not have an active imessage",
+        "don't have an active i message",
+        "channelsend",
+        "enable an imessage",
+        "enable imessage",
+        "can't send the",
+        "cannot send the",
+        "copy/send manually",
+        "phone integration toolkit",
+        "sms connection in koraku",
+        "imessage/sms connection",
+    )
+    paragraphs = [p.strip() for p in raw.split("\n\n") if p.strip()]
+    kept: list[str] = []
+    for p in paragraphs:
+        low = p.lower()
+        if any(m in low for m in drop_markers):
+            continue
+        if low.startswith("- enable an imessage") or low.startswith("- i can draft"):
+            continue
+        kept.append(p)
+    return "\n\n".join(kept) if kept else raw
+
+
 def format_automation_imessage_body(
     *,
     title: str,
@@ -55,7 +87,9 @@ def format_automation_imessage_body(
 ) -> str:
     name = (title or "Automation").strip() or "Automation"
     if status == "success":
-        body = (result_summary or "").strip() or "Run finished successfully (no summary text)."
+        body = sanitize_summary_for_imessage_delivery(
+            (result_summary or "").strip() or "Run finished successfully (no summary text)."
+        )
         return f"[Koraku] {name}\n\n{body}"
     err = (error or "Run failed.").strip()
     return f"[Koraku] {name}\n\nAutomation run failed.\n\n{err}"
