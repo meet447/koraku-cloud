@@ -4,10 +4,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 VENV="$ROOT/.venv"
-UVICORN="$VENV/bin/uvicorn"
+PYTHON="$VENV/bin/python3"
 
-if [[ ! -x "$UVICORN" ]]; then
-  echo "Missing $UVICORN — run: ./scripts/install-monorepo.sh" >&2
+if [[ ! -x "$PYTHON" ]]; then
+  echo "Missing $PYTHON — run: ./scripts/install-monorepo.sh" >&2
+  exit 1
+fi
+if ! "$PYTHON" -c "import uvicorn" 2>/dev/null; then
+  echo "uvicorn not installed in $VENV — run: ./scripts/install-monorepo.sh" >&2
   exit 1
 fi
 
@@ -26,15 +30,15 @@ fi
 RELOAD="${UVICORN_RELOAD:-true}"
 WORKERS="${WEB_CONCURRENCY:-${UVICORN_WORKERS:-1}}"
 
-echo "Python: $VENV/bin/python3"
+echo "Python: $PYTHON"
 echo "App:    $APP"
 echo "Listen: http://$HOST:$PORT"
 
 ARGS=( "$APP" --host "$HOST" --port "$PORT" )
 if [[ "$WORKERS" -gt 1 ]]; then
-  exec "$UVICORN" "${ARGS[@]}" --workers "$WORKERS"
+  exec "$PYTHON" -m uvicorn "${ARGS[@]}" --workers "$WORKERS"
 fi
 if [[ "$RELOAD" == "1" || "$RELOAD" == "true" || "$RELOAD" == "yes" ]]; then
-  exec "$UVICORN" "${ARGS[@]}" --reload
+  exec "$PYTHON" -m uvicorn "${ARGS[@]}" --reload
 fi
-exec "$UVICORN" "${ARGS[@]}"
+exec "$PYTHON" -m uvicorn "${ARGS[@]}"
