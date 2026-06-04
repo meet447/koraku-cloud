@@ -3,11 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
-from koraku.automations import scheduler as automation_scheduler
-from koraku.automations.supabase_store import supabase_automations_configured
-from koraku.integrations.supabase_chat_history import supabase_chat_history_configured
-from koraku.integrations.supermemory_client import supermemory_configured
-from koraku.integrations.supabase_personalization import supabase_personalization_configured
+from koraku.profiles import is_cloud_profile
 from koraku.integrations import composio as composio_runtime
 from koraku.integrations.blaxel_runtime import cloud_blaxel_block_reason
 from koraku.core import redis_client
@@ -61,11 +57,12 @@ async def health_detail(
         raise HTTPException(status_code=401, detail="Health detail requires a valid token")
 
     mode = getattr(request.app.state, "server_mode", "unconfigured")
-    return {
+    detail: dict[str, object] = {
         "status": "ok",
         "agent": settings.agent_name,
         "version": settings.version,
         "mode": mode,
+        "runtime": "cloud" if is_cloud_profile() else "sdk",
         "composio_configured": composio_runtime.is_configured(),
         "llm_configured": any_llm_configured(),
         "llm_provider": settings.llm_provider,
@@ -86,13 +83,27 @@ async def health_detail(
         "active_chat_sessions": active_session_count(),
         "blaxel_cloud_sandbox_enabled": settings.blaxel_cloud_sandbox_enabled,
         "cloud_chat_sandbox_block_reason": cloud_blaxel_block_reason(settings),
-        "automation_scheduler_running": automation_scheduler.is_running(),
-        "automation_scheduler_leader": automation_scheduler.is_automation_scheduler_leader(),
-        "automation_scheduler_enabled": settings.automation_scheduler_enabled,
-        "automation_max_steps": settings.automation_max_steps,
-        "automation_run_timeout_seconds": settings.automation_run_timeout_seconds,
-        "automations_supabase_configured": supabase_automations_configured(),
-        "chat_history_supabase_configured": supabase_chat_history_configured(),
-        "personalization_supabase_configured": supabase_personalization_configured(),
-        "supermemory_configured": supermemory_configured(),
     }
+    if is_cloud_profile():
+        from koraku_cloud.automations import scheduler as automation_scheduler
+        from koraku_cloud.automations.supabase_store import supabase_automations_configured
+        from koraku_cloud.integrations.supabase_chat_history import supabase_chat_history_configured
+        from koraku_cloud.integrations.supabase_personalization import (
+            supabase_personalization_configured,
+        )
+        from koraku.integrations.supermemory_client import supermemory_configured
+
+        detail.update(
+            {
+                "automation_scheduler_running": automation_scheduler.is_running(),
+                "automation_scheduler_leader": automation_scheduler.is_automation_scheduler_leader(),
+                "automation_scheduler_enabled": settings.automation_scheduler_enabled,
+                "automation_max_steps": settings.automation_max_steps,
+                "automation_run_timeout_seconds": settings.automation_run_timeout_seconds,
+                "automations_supabase_configured": supabase_automations_configured(),
+                "chat_history_supabase_configured": supabase_chat_history_configured(),
+                "personalization_supabase_configured": supabase_personalization_configured(),
+                "supermemory_configured": supermemory_configured(),
+            }
+        )
+    return detail

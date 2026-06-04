@@ -38,16 +38,20 @@ def test_format_binary_response_includes_hints() -> None:
 
 
 def test_read_tool_local_pdf_returns_guidance(monkeypatch) -> None:
+    from koraku.agent.runtime_context import bind_execution_target, reset_execution_target
     from koraku.core.config import settings
     from koraku.tools.registry import read_tool
 
     monkeypatch.setattr(settings, "host_file_tools_restrict_to_workspace", False)
+    monkeypatch.setattr(settings, "blaxel_cloud_sandbox_enabled", False)
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as f:
         f.write(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
         path = f.name
+    tok = bind_execution_target("local")
     try:
         out = asyncio.run(read_tool.run(file_path=path))
         assert "Binary file" in out
         assert path in out or os.path.basename(path) in out
     finally:
+        reset_execution_target(tok)
         os.unlink(path)

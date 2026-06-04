@@ -45,13 +45,14 @@ def test_koraku_config_to_settings() -> None:
         llm_provider="anthropic",
         anthropic_api_key="test-key",
         max_steps=7,
-        require_auth_for_chat=False,
+        execution_target="local",
     )
     settings = cfg.to_settings()
     assert settings.llm_provider == "anthropic"
     assert settings.anthropic_api_key == "test-key"
     assert settings.max_steps == 7
-    assert settings.require_auth_for_chat is False
+    assert settings.default_execution_target == "local"
+    assert settings.memory_backend == "filesystem"
 
 
 def test_configure_and_use_settings_are_isolated() -> None:
@@ -71,7 +72,7 @@ def test_configure_and_use_settings_are_isolated() -> None:
 
 
 def test_koraku_accepts_settings_instance() -> None:
-    agent = Koraku(Settings(llm_provider="fireworks", require_auth_for_chat=False))
+    agent = Koraku(Settings(llm_provider="fireworks"))
     assert agent.settings.llm_provider == "fireworks"
 
 
@@ -86,7 +87,7 @@ async def test_koraku_stream_with_custom_tool(monkeypatch: pytest.MonkeyPatch) -
 
     async def fake_run(self, user_input, session, emit, **kwargs):  # type: ignore[no-untyped-def]
         run_context = kwargs.get("run_context")
-        tools = tools_for_execution_target("server")
+        tools = tools_for_execution_target("local")
         if run_context is not None and run_context.extra_tools:
             tools = tools + list(run_context.extra_tools)
         captured.extend(t.name for t in tools)
@@ -104,7 +105,7 @@ async def test_koraku_stream_with_custom_tool(monkeypatch: pytest.MonkeyPatch) -
         },
         handler=_echo_handler,
     )
-    agent = Koraku(KorakuConfig(require_auth_for_chat=False), tools=[echo])
+    agent = Koraku(KorakuConfig(), tools=[echo])
 
     events = [event async for event in agent.stream("hi", session=SessionState(session_id="s1"))]
     assert captured
@@ -121,7 +122,7 @@ def test_koraku_run_collects_session(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(agent_run.Agent, "run", fake_run)
 
-    agent = Koraku(KorakuConfig(require_auth_for_chat=False))
+    agent = Koraku(KorakuConfig())
 
     async def _run() -> SessionState:
         return await agent.run("hello")

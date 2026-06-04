@@ -20,7 +20,7 @@ fi
 
 if ! curl -sf "${API_URL}/health" >/dev/null; then
   echo "Koraku API is not reachable at ${API_URL}/health"
-  echo "Start it first: python main.py   (or koraku-server)"
+  echo "Start it first: ./scripts/run-api.sh"
   exit 1
 fi
 

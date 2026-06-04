@@ -8,9 +8,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml README.md LICENSE ./
 COPY koraku ./koraku
-COPY main.py ./
+COPY koraku_cloud ./koraku_cloud
 
-RUN pip install --no-cache-dir -e ".[all]"
+RUN pip install --no-cache-dir -e ".[all]" \
+    && pip install --no-cache-dir -e ./koraku_cloud
+
+ENV KORAKU_SERVER_APP=cloud
 
 ENV HOST=0.0.0.0
 ENV PORT=8000
@@ -22,4 +25,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD curl -fsS http://127.0.0.1:8000/health || exit 1
 
-CMD ["koraku-server"]
+CMD ["uvicorn", "koraku_cloud.app:app", "--host", "0.0.0.0", "--port", "8000"]

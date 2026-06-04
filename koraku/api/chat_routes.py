@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from koraku.agent import _step_budget, get_or_create_chat_session
-from koraku.agent.runtime_context import AgentRunContext
+from koraku.agent.runtime_context import AgentRunContext, ExecutionTarget
 from koraku.agent.unconfigured import run_unconfigured
 from koraku.core.config import settings
 from koraku.core.rate_limit import RateLimit, enforce_rate_limit, rate_limit_key
@@ -39,16 +39,12 @@ from koraku.integrations.cloud_user import (
     reset_cloud_user_id,
     set_cloud_user_id,
 )
-from koraku.integrations.supabase_chat_history import hydrate_session_messages_from_db
-from koraku.integrations.supabase_personalization import (
-    fetch_personalization_sync,
-    supabase_personalization_configured,
+from koraku.api.chat_hydration import (
+    after_turn_memory_ingest,
+    fetch_account_personalization,
+    hydrate_session_for_turn,
 )
-from koraku.integrations.supermemory_client import (
-    extract_last_assistant_text,
-    ingest_chat_turn_sync,
-    supermemory_configured,
-)
+from koraku.profiles import is_cloud_profile
 from koraku.llm.catalog import resolve_provider_and_model, ui_chat_models
 from koraku.streaming import KorakuStreamState, map_koraku_stream_events
 from koraku.tools.registry import tools_for_execution_target
@@ -58,6 +54,13 @@ if TYPE_CHECKING:
     from koraku.agent import Agent
 
 router = APIRouter(tags=["chat"])
+
+
+def normalize_stream_execution_target(value: str | None) -> ExecutionTarget:
+    raw = (value or settings.default_execution_target or "local").strip().lower()
+    if raw in ("local", "server", "cloud"):
+        return raw  # type: ignore[return-value]
+    return "local"
 
 
 class StreamImagePart(BaseModel):
@@ -96,6 +99,8 @@ class StreamChatBody(BaseModel):
     client_history: list[StreamClientHistoryMessage] = Field(default_factory=list, max_length=40)
     # Client turn UUID; when set on ``POST /runs`` it becomes the detached ``run_id`` (idempotent resume).
     turn_id: str = Field(default="", max_length=64)
+    # ``local`` | ``server`` | ``cloud`` — defaults to ``DEFAULT_EXECUTION_TARGET`` / profile.
+    execution_target: str = Field(default="", max_length=16)
 
     @model_validator(mode="after")
     def msg_or_images(self) -> "StreamChatBody":
@@ -169,13 +174,15 @@ async def _stream_agent_sse(
     request: Request | None = None,
     cancel_event: asyncio.Event | None = None,
     stream_run_id: str | None = None,
+    execution_target: ExecutionTarget | None = None,
 ) -> AsyncIterator[str]:
     session = get_or_create_chat_session(
         session_id, owner_sub=auth_sub, owner_org_id=auth_org_id
     )
     eff_provider, resolved_model = resolve_provider_and_model(provider, model)
     budget = msg.strip() or ("[images]" if images else "")
-    blaxel_lazy = cloud_blaxel_block_reason(settings) is None
+    exec_target = execution_target or normalize_stream_execution_target(None)
+    blaxel_lazy = exec_target == "cloud" and cloud_blaxel_block_reason(settings) is None
 
     stream_state = KorakuStreamState()
     if stream_run_id and str(stream_run_id).strip():
@@ -217,12 +224,12 @@ async def _stream_agent_sse(
     await asyncio.sleep(0)
 
     personalization_task: asyncio.Task | None = None
-    if auth_sub and supabase_personalization_configured():
+    if auth_sub:
         personalization_task = asyncio.create_task(
-            asyncio.to_thread(fetch_personalization_sync, auth_sub, org_id=auth_org_id)
+            fetch_account_personalization(auth_sub, auth_org_id)
         )
     hydration_task = asyncio.create_task(
-        hydrate_session_messages_from_db(
+        hydrate_session_for_turn(
             session,
             incoming_user_text=msg.strip(),
             auth_sub=auth_sub,
@@ -241,7 +248,7 @@ async def _stream_agent_sse(
     idx += 1
     if isinstance(hydration, BaseException):
         log.warning("chat history hydration failed: %s", hydration)
-        from koraku.integrations.supabase_chat_history import ChatHistoryHydration
+        from koraku.core.chat_history import ChatHistoryHydration
 
         hydration = ChatHistoryHydration(
             session_id=session.session_id,
@@ -272,12 +279,16 @@ async def _stream_agent_sse(
         "server_mode": server_mode,
         "mode": mode_hint,
         "max_steps": max_steps_hint,
-        "execution_target": "cloud",
+        "execution_target": exec_target,
         "blaxel_sandbox": blaxel_on,
         "blaxel_lazy": blaxel_lazy,
-        "blaxel_cached": user_sandbox_is_cached(effective_cloud_user_id()) if blaxel_lazy else False,
+        "blaxel_cached": (
+            user_sandbox_is_cached(effective_cloud_user_id())
+            if blaxel_lazy and is_cloud_profile() and auth_sub
+            else False
+        ),
         "tool_names": [
-            t.name for t in tools_for_execution_target("cloud", blaxel_sandbox_active=blaxel_on)
+            t.name for t in tools_for_execution_target(exec_target, blaxel_sandbox_active=blaxel_on)
         ],
         "provider": stream_state.eff_provider,
         "model": stream_state.resolved_model,
@@ -285,7 +296,7 @@ async def _stream_agent_sse(
         "client_locale": loc,
     }
     init_cwd = workspace_dir()
-    if blaxel_lazy:
+    if blaxel_lazy and is_cloud_profile() and auth_sub:
         init_cwd = session_workspace_root_posix(
             effective_cloud_user_id(),
             session.session_id,
@@ -314,7 +325,9 @@ async def _stream_agent_sse(
             set_lazy_blaxel_session(session.session_id) if blaxel_lazy else (None, None)
         )
         warm_task: asyncio.Task[None] | None = None
-        if blaxel_lazy and user_sandbox_is_cached(effective_cloud_user_id()):
+        if blaxel_lazy and is_cloud_profile() and auth_sub and user_sandbox_is_cached(
+            effective_cloud_user_id()
+        ):
             warm_task = asyncio.create_task(warm_blaxel_session_background())
         try:
             img_payload = [{"media_type": p.media_type, "data": p.data} for p in images]
@@ -330,7 +343,7 @@ async def _stream_agent_sse(
                     client_timezone=tz,
                     client_locale=loc,
                     image_parts=img_payload,
-                    run_context=AgentRunContext(),
+                    run_context=AgentRunContext(execution_target=exec_target),
                     cloud_sandbox=None,
                     account_personalization=account_p,
                     run_id=stream_state.run_id,
@@ -346,18 +359,13 @@ async def _stream_agent_sse(
                 warm_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await warm_task
-            if auth_sub and supermemory_configured():
-                assistant_text = extract_last_assistant_text(session)
-                if msg.strip() or assistant_text:
-                    await asyncio.to_thread(
-                        ingest_chat_turn_sync,
-                        auth_sub,
-                        user_text=msg.strip(),
-                        assistant_text=assistant_text,
-                        org_id=auth_org_id,
-                        session_id=session.session_id,
-                        run_id=stream_state.run_id,
-                    )
+            await after_turn_memory_ingest(
+                auth_sub=auth_sub,
+                auth_org_id=auth_org_id,
+                msg=msg,
+                session=session,
+                run_id=stream_state.run_id,
+            )
             clear_lazy_blaxel_session(lazy_tok, lazy_root_tok)
             try:
                 queue.put_nowait(None)
@@ -426,6 +434,7 @@ async def stream_endpoint_post(body: StreamChatBody, request: Request):
             if auth_sub:
                 composio_token = composio_runtime.set_composio_request_user(auth_sub)
                 cloud_token = set_cloud_user_id(auth_sub)
+            exec_target = normalize_stream_execution_target(body.execution_target or None)
             async for chunk in _stream_agent_sse(
                 body.msg.strip(),
                 images=body.images,
@@ -440,6 +449,7 @@ async def stream_endpoint_post(body: StreamChatBody, request: Request):
                 auth_org_id=auth_org_id,
                 client_history=body.client_history,
                 request=request,
+                execution_target=exec_target,
             ):
                 yield chunk
         finally:

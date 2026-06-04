@@ -29,11 +29,11 @@ participating you agree to uphold it. Report unacceptable behavior to
 # Python backend
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+./scripts/install-monorepo.sh
 cp .env.example .env   # fill in at least one LLM provider key
 
 # Run the API
-python main.py
+./scripts/run-api.sh
 ```
 
 ```bash

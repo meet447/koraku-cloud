@@ -1,0 +1,591 @@
+"""Koraku automations persistence via Supabase PostgREST (service role from the Python API)."""
+from __future__ import annotations
+
+import json
+import logging
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Literal
+
+from koraku_cloud.integrations import supabase_rest
+
+log = logging.getLogger(__name__)
+
+_UTC = timezone.utc
+_TABLE = "koraku_automation"
+_RUN_TABLE = "koraku_automation_run"
+
+TriggerMode = Literal["scheduled", "event"]
+AutomationStatus = Literal["active", "paused"]
+RunStatus = Literal["success", "failed", "skipped", "running"]
+
+# Re-exported for supabase_tenant and legacy imports.
+_require_config = supabase_rest.require_config
+_headers = lambda: supabase_rest.headers(prefer_representation=True)
+_rest_url = supabase_rest.rest_url
+
+
+def _iso(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_UTC)
+    return dt.astimezone(_UTC).isoformat()
+
+
+def supabase_automations_configured() -> bool:
+    return supabase_rest.supabase_rest_configured()
+
+
+def _client():
+    return supabase_rest.get_http_client()
+
+
+def _row_to_automation(o: dict[str, Any]) -> dict[str, Any]:
+    tk = o.get("toolkits") or []
+    if not isinstance(tk, list):
+        tk = []
+    return {
+        "id": o["id"],
+        "user_id": str(o["user_id"]),
+        "org_id": str(o.get("org_id") or ""),
+        "title": o["title"],
+        "headline": (o.get("headline") or o["title"] or ""),
+        "natural_language_spec": o["natural_language_spec"],
+        "trigger_mode": o["trigger_mode"],
+        "status": o["status"],
+        "timezone": o.get("timezone"),
+        "cron_expression": o.get("cron_expression"),
+        "event_display": o.get("event_display"),
+        "toolkits": [str(x).strip().upper() for x in tk if str(x).strip()],
+        "created_at": o.get("created_at"),
+        "updated_at": o.get("updated_at"),
+        "last_run_at": o.get("last_run_at"),
+        "next_run_at": o.get("next_run_at"),
+        "schedule_preset": o.get("schedule_preset"),
+        "consecutive_failures": int(o.get("consecutive_failures") or 0),
+        "max_failures_before_pause": int(o.get("max_failures_before_pause") or 3),
+        "current_run_id": o.get("current_run_id"),
+        "last_success_fingerprint": o.get("last_success_fingerprint"),
+        "has_event_webhook": bool(o.get("event_webhook_token_hash")),
+        "event_source": (o.get("event_source") or "generic"),
+        "composio_trigger_slug": o.get("composio_trigger_slug"),
+        "composio_trigger_id": o.get("composio_trigger_id"),
+    }
+
+
+def _automation_scope(user_id: str, org_id: str, *, automation_id: str | None = None) -> str:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    parts = [f"user_id=eq.{uid}", f"org_id=eq.{oid}"]
+    if automation_id:
+        parts.insert(0, f"id=eq.{(automation_id or '').strip()}")
+    return "&".join(parts)
+
+
+def list_automations(user_id: str, org_id: str) -> list[dict[str, Any]]:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    q = f"/{_TABLE}?{_automation_scope(uid, oid)}&order=updated_at.desc"
+    r = _client().get(_rest_url(q), headers=_headers())
+    r.raise_for_status()
+    rows = r.json()
+    if not isinstance(rows, list):
+        return []
+    return [_row_to_automation(x) for x in rows if isinstance(x, dict)]
+
+
+def list_scheduled_active_all_users() -> list[dict[str, Any]]:
+    """Rows for APScheduler (service role); each dict includes ``user_id`` and ``org_id``."""
+    q = (
+        f"/{_TABLE}?trigger_mode=eq.scheduled&status=eq.active"
+        "&select=id,user_id,org_id,title,headline,natural_language_spec,trigger_mode,status,"
+        "timezone,cron_expression,event_display,toolkits,schedule_preset,"
+        "consecutive_failures,max_failures_before_pause,current_run_id,last_success_fingerprint,"
+        "event_webhook_token_hash,created_at,updated_at,last_run_at,next_run_at"
+    )
+    r = _client().get(_rest_url(q), headers=_headers())
+    r.raise_for_status()
+    rows = r.json()
+    if not isinstance(rows, list):
+        return []
+    return [_row_to_automation(x) for x in rows if isinstance(x, dict)]
+
+
+def get_automation(
+    user_id: str,
+    automation_id: str,
+    *,
+    org_id: str | None = None,
+) -> dict[str, Any] | None:
+    uid = (user_id or "").strip()
+    aid = (automation_id or "").strip()
+    oid = (org_id or "").strip()
+    if oid:
+        q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}&limit=1"
+    else:
+        q = f"/{_TABLE}?id=eq.{aid}&user_id=eq.{uid}&limit=1"
+    r = _client().get(_rest_url(q), headers=_headers())
+    r.raise_for_status()
+    rows = r.json()
+    if not isinstance(rows, list) or not rows:
+        return None
+    row = rows[0]
+    return _row_to_automation(row) if isinstance(row, dict) else None
+
+
+def insert_automation(
+    user_id: str,
+    org_id: str,
+    *,
+    title: str,
+    headline: str,
+    natural_language_spec: str,
+    trigger_mode: TriggerMode,
+    status: AutomationStatus,
+    timezone: str | None,
+    cron_expression: str | None,
+    event_display: str | None,
+    toolkits: list[str],
+    schedule_preset: dict[str, Any] | None = None,
+    event_webhook_token_hash: str | None = None,
+    event_source: str = "generic",
+    composio_trigger_slug: str | None = None,
+    composio_trigger_id: str | None = None,
+) -> dict[str, Any]:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    if not oid:
+        raise ValueError("org_id is required to create an automation")
+    aid = str(uuid.uuid4())
+    now = _iso(datetime.now(_UTC))
+    body = {
+        "id": aid,
+        "user_id": uid,
+        "org_id": oid,
+        "title": title.strip(),
+        "headline": (headline.strip() or title.strip()),
+        "natural_language_spec": natural_language_spec.strip(),
+        "trigger_mode": trigger_mode,
+        "status": status,
+        "timezone": timezone,
+        "cron_expression": cron_expression,
+        "event_display": event_display,
+        "toolkits": [t.strip().upper() for t in toolkits if t.strip()],
+        "consecutive_failures": 0,
+        "max_failures_before_pause": 3,
+        "created_at": now,
+        "updated_at": now,
+    }
+    if schedule_preset is not None:
+        body["schedule_preset"] = schedule_preset
+    if event_webhook_token_hash:
+        body["event_webhook_token_hash"] = event_webhook_token_hash
+    if trigger_mode == "event":
+        body["event_source"] = (event_source or "generic").strip().lower()
+        if composio_trigger_slug:
+            body["composio_trigger_slug"] = composio_trigger_slug.strip().upper()
+        if composio_trigger_id:
+            body["composio_trigger_id"] = composio_trigger_id.strip()
+    r = _client().post(_rest_url(f"/{_TABLE}"), headers=_headers(), content=json.dumps(body))
+    if r.status_code >= 400:
+        log.error("insert_automation failed: %s %s", r.status_code, r.text)
+    r.raise_for_status()
+    rows = r.json()
+    if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+        return _row_to_automation(rows[0])
+    row = get_automation(uid, aid, org_id=oid)
+    assert row is not None
+    return row
+
+
+def update_automation(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    title: str | None = None,
+    headline: str | None = None,
+    natural_language_spec: str | None = None,
+    status: AutomationStatus | None = None,
+    timezone: str | None = None,
+    cron_expression: str | None = None,
+    event_display: str | None = None,
+    toolkits: list[str] | None = None,
+    schedule_preset: dict[str, Any] | None = None,
+    consecutive_failures: int | None = None,
+    composio_trigger_id: str | None = None,
+    composio_trigger_slug: str | None = None,
+    event_source: str | None = None,
+) -> dict[str, Any] | None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    patch: dict[str, Any] = {"updated_at": _iso(datetime.now(_UTC))}
+    if title is not None:
+        patch["title"] = title.strip()
+    if headline is not None:
+        patch["headline"] = headline.strip()
+    if natural_language_spec is not None:
+        patch["natural_language_spec"] = natural_language_spec.strip()
+    if status is not None:
+        patch["status"] = status
+    if timezone is not None:
+        patch["timezone"] = timezone
+    if cron_expression is not None:
+        patch["cron_expression"] = cron_expression
+    if event_display is not None:
+        patch["event_display"] = event_display
+    if toolkits is not None:
+        patch["toolkits"] = [t.strip().upper() for t in toolkits if t.strip()]
+    if schedule_preset is not None:
+        patch["schedule_preset"] = schedule_preset
+    if consecutive_failures is not None:
+        patch["consecutive_failures"] = int(consecutive_failures)
+    if composio_trigger_id is not None:
+        patch["composio_trigger_id"] = composio_trigger_id
+    if composio_trigger_slug is not None:
+        patch["composio_trigger_slug"] = composio_trigger_slug
+    if event_source is not None:
+        patch["event_source"] = event_source
+    if len(patch) <= 1:
+        return get_automation(uid, aid, org_id=oid)
+    q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
+    if r.status_code == 404 or r.status_code == 406:
+        return None
+    r.raise_for_status()
+    rows = r.json()
+    if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+        return _row_to_automation(rows[0])
+    return get_automation(uid, aid, org_id=oid)
+
+
+def delete_automation(user_id: str, org_id: str, automation_id: str) -> bool:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    r = _client().delete(_rest_url(q), headers=_headers())
+    if r.status_code == 404:
+        return False
+    r.raise_for_status()
+    return True
+
+
+def set_automation_run_times(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    last_run_at: datetime | None = None,
+    next_run_at: datetime | None = None,
+) -> None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    patch: dict[str, Any] = {"updated_at": _iso(datetime.now(_UTC))}
+    if last_run_at is not None:
+        patch["last_run_at"] = _iso(last_run_at)
+    if next_run_at is not None:
+        patch["next_run_at"] = _iso(next_run_at)
+    if len(patch) <= 1:
+        return
+    q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
+    r.raise_for_status()
+
+
+def list_automations_by_composio_trigger_id(trigger_id: str) -> list[dict[str, Any]]:
+    tid = (trigger_id or "").strip()
+    if not tid:
+        return []
+    q = (
+        f"/{_TABLE}?composio_trigger_id=eq.{tid}"
+        "&trigger_mode=eq.event&status=eq.active&event_source=eq.composio"
+    )
+    r = _client().get(_rest_url(q), headers=_headers())
+    r.raise_for_status()
+    rows = r.json()
+    if not isinstance(rows, list):
+        return []
+    return [_row_to_automation(x) for x in rows if isinstance(x, dict)]
+
+
+def get_automation_for_event(automation_id: str) -> dict[str, Any] | None:
+    aid = (automation_id or "").strip()
+    q = f"/{_TABLE}?id=eq.{aid}&trigger_mode=eq.event&limit=1"
+    r = _client().get(_rest_url(q), headers=_headers())
+    r.raise_for_status()
+    rows = r.json()
+    if not isinstance(rows, list) or not rows:
+        return None
+    row = rows[0]
+    return _row_to_automation(row) if isinstance(row, dict) else None
+
+
+def get_event_webhook_hash(automation_id: str) -> str | None:
+    aid = (automation_id or "").strip()
+    q = f"/{_TABLE}?id=eq.{aid}&select=event_webhook_token_hash&limit=1"
+    r = _client().get(_rest_url(q), headers=_headers())
+    if r.status_code != 200:
+        return None
+    rows = r.json()
+    if not rows:
+        return None
+    h = rows[0].get("event_webhook_token_hash")
+    return str(h) if h else None
+
+
+def has_running_run(user_id: str, org_id: str, automation_id: str) -> bool:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    q = (
+        f"/{_RUN_TABLE}?automation_id=eq.{aid}&user_id=eq.{uid}&org_id=eq.{oid}"
+        "&status=eq.running&limit=1&select=id"
+    )
+    r = _client().get(_rest_url(q), headers=_headers())
+    if r.status_code != 200:
+        return False
+    rows = r.json()
+    return bool(isinstance(rows, list) and rows)
+
+
+def set_current_run_id(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    run_id: str | None,
+) -> None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    patch: dict[str, Any] = {
+        "updated_at": _iso(datetime.now(_UTC)),
+        "current_run_id": run_id,
+    }
+    q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
+    r.raise_for_status()
+
+
+def record_automation_after_run(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    status: str,
+    result_fingerprint: str | None = None,
+) -> None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    patch: dict[str, Any] = {
+        "updated_at": _iso(datetime.now(_UTC)),
+        "current_run_id": None,
+    }
+    if status == "success":
+        patch["consecutive_failures"] = 0
+        if result_fingerprint:
+            patch["last_success_fingerprint"] = result_fingerprint
+    elif status == "failed":
+        row = get_automation(uid, aid, org_id=oid)
+        prev = int((row or {}).get("consecutive_failures") or 0)
+        patch["consecutive_failures"] = prev + 1
+    q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
+    r.raise_for_status()
+
+
+def insert_run_start(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    trigger_summary: str,
+) -> str:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    rid = str(uuid.uuid4())
+    now = _iso(datetime.now(_UTC))
+    body = {
+        "id": rid,
+        "automation_id": aid,
+        "user_id": uid,
+        "org_id": oid,
+        "status": "running",
+        "trigger_summary": trigger_summary[:8000],
+        "started_at": now,
+    }
+    r = _client().post(_rest_url(f"/{_RUN_TABLE}"), headers=_headers(), content=json.dumps(body))
+    r.raise_for_status()
+    return rid
+
+
+def insert_run_skipped(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    trigger_summary: str,
+    reason: str,
+) -> str:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    rid = str(uuid.uuid4())
+    now = _iso(datetime.now(_UTC))
+    body = {
+        "id": rid,
+        "automation_id": aid,
+        "user_id": uid,
+        "org_id": oid,
+        "status": "skipped",
+        "trigger_summary": trigger_summary[:8000],
+        "error": reason[:8000],
+        "started_at": now,
+        "finished_at": now,
+        "duration_ms": 0,
+    }
+    r = _client().post(_rest_url(f"/{_RUN_TABLE}"), headers=_headers(), content=json.dumps(body))
+    r.raise_for_status()
+    return rid
+
+
+def patch_run_progress(
+    user_id: str,
+    org_id: str,
+    run_id: str,
+    *,
+    progress_phase: str | None,
+    progress_detail: str | None,
+) -> None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    rid = (run_id or "").strip()
+    patch: dict[str, Any] = {}
+    if progress_phase is not None:
+        patch["progress_phase"] = progress_phase[:120]
+    if progress_detail is not None:
+        patch["progress_detail"] = progress_detail[:500]
+    if not patch:
+        return
+    q = f"/{_RUN_TABLE}?id=eq.{rid}&user_id=eq.{uid}&org_id=eq.{oid}"
+    r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
+    r.raise_for_status()
+
+
+def get_run(user_id: str, org_id: str, run_id: str) -> dict[str, Any] | None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    rid = (run_id or "").strip()
+    q = (
+        f"/{_RUN_TABLE}?id=eq.{rid}&user_id=eq.{uid}&org_id=eq.{oid}&limit=1"
+        "&select=id,automation_id,status,trigger_summary,result_summary,error,"
+        "started_at,finished_at,duration_ms,progress_phase,progress_detail,outcome_label"
+    )
+    r = _client().get(_rest_url(q), headers=_headers())
+    if r.status_code != 200:
+        return None
+    rows = r.json()
+    if not isinstance(rows, list) or not rows:
+        return None
+    raw = rows[0]
+    if not isinstance(raw, dict):
+        return None
+    return {
+        "id": raw["id"],
+        "automation_id": raw["automation_id"],
+        "status": raw["status"],
+        "trigger_summary": raw.get("trigger_summary") or "",
+        "result_summary": raw.get("result_summary"),
+        "error": raw.get("error"),
+        "started_at": raw.get("started_at"),
+        "finished_at": raw.get("finished_at"),
+        "duration_ms": raw.get("duration_ms"),
+        "progress_phase": raw.get("progress_phase"),
+        "progress_detail": raw.get("progress_detail"),
+        "outcome_label": raw.get("outcome_label"),
+    }
+
+
+def finish_run(
+    user_id: str,
+    org_id: str,
+    run_id: str,
+    *,
+    status: RunStatus,
+    result_summary: str | None,
+    error: str | None,
+    started_at: datetime,
+    finished_at: datetime,
+    result_fingerprint: str | None = None,
+    outcome_label: str | None = None,
+) -> None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    rid = (run_id or "").strip()
+    duration_ms = int((finished_at - started_at).total_seconds() * 1000)
+    patch = {
+        "status": status,
+        "result_summary": (result_summary or "")[:12000] or None,
+        "error": (error or "")[:8000] or None,
+        "finished_at": _iso(finished_at),
+        "duration_ms": duration_ms,
+        "progress_phase": None,
+        "progress_detail": None,
+    }
+    if result_fingerprint:
+        patch["result_fingerprint"] = result_fingerprint
+    if outcome_label:
+        patch["outcome_label"] = outcome_label
+    q = f"/{_RUN_TABLE}?id=eq.{rid}&user_id=eq.{uid}&org_id=eq.{oid}"
+    r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
+    r.raise_for_status()
+
+
+def list_runs(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    lim = max(1, min(int(limit), 200))
+    q = (
+        f"/{_RUN_TABLE}?automation_id=eq.{aid}&user_id=eq.{uid}&org_id=eq.{oid}"
+        f"&order=started_at.desc&limit={lim}"
+        "&select=id,automation_id,status,trigger_summary,result_summary,error,"
+        "started_at,finished_at,duration_ms,progress_phase,progress_detail,outcome_label"
+    )
+    r = _client().get(_rest_url(q), headers=_headers())
+    r.raise_for_status()
+    rows = r.json()
+    if not isinstance(rows, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for raw in rows:
+        if not isinstance(raw, dict):
+            continue
+        out.append(
+            {
+                "id": raw["id"],
+                "automation_id": raw["automation_id"],
+                "status": raw["status"],
+                "trigger_summary": raw.get("trigger_summary") or "",
+                "result_summary": raw.get("result_summary"),
+                "error": raw.get("error"),
+                "started_at": raw.get("started_at"),
+                "finished_at": raw.get("finished_at"),
+                "duration_ms": raw.get("duration_ms"),
+                "progress_phase": raw.get("progress_phase"),
+                "progress_detail": raw.get("progress_detail"),
+                "outcome_label": raw.get("outcome_label"),
+            }
+        )
+    return out

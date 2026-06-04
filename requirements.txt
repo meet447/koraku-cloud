@@ -1,2 +1,0 @@
-# Koraku Python agent + API — equivalent to: pip install -e ".[all]"
--e ".[all]"

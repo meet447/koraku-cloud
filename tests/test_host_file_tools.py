@@ -4,7 +4,17 @@ from __future__ import annotations
 
 import pytest
 
+from koraku.agent.runtime_context import bind_execution_target, reset_execution_target
+from koraku.core.config import settings
 from koraku.tools.registry import _read, _write, _path_is_under
+
+
+@pytest.fixture(autouse=True)
+def _local_file_tools() -> None:
+    settings.blaxel_cloud_sandbox_enabled = False
+    tok = bind_execution_target("local")
+    yield
+    reset_execution_target(tok)
 
 
 @pytest.mark.asyncio

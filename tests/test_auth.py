@@ -47,7 +47,13 @@ def test_build_auth_verifier_from_settings() -> None:
 
 
 def test_verify_request_auth_respects_configure() -> None:
-    configure(Settings(auth_backend="api_key", koraku_api_key="embed-key"))
+    configure(
+        Settings.model_construct(
+            auth_backend="api_key",
+            koraku_api_key="embed-key",
+            require_auth_for_chat=False,
+        )
+    )
     reset_auth_verifier()
     assert verify_request_auth("Bearer embed-key").ok
     assert not verify_request_auth("Bearer nope").ok

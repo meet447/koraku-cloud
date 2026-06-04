@@ -14,7 +14,7 @@ async def main() -> None:
         fireworks_api_key=os.environ.get("FIREWORKS_API_KEY", ""),
         anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
         require_auth_for_chat=False,
-        execution_target="server",
+        execution_target="local",
     )
     agent = Koraku(config)
 

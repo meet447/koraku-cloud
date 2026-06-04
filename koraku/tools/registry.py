@@ -40,6 +40,10 @@ def _path_is_under(path: str, root: str) -> bool:
 
 def _cloud_file_tool_host_blocked() -> str | None:
     """Cloud mode must not read/write the API host filesystem when Blaxel is not active."""
+    from koraku.agent.runtime_context import get_active_execution_target
+
+    if get_active_execution_target() != "cloud":
+        return None
     if not settings.blaxel_cloud_sandbox_enabled:
         return None
     from koraku.agent.blaxel_scope import get_active_blaxel_sandbox
@@ -612,42 +616,66 @@ web_fetch_tool = Tool(
 # TOOL REGISTRY + ROUTER
 # ========================================================================
 
-_ALL_TOOLS: list[Tool] = [
+_BASE_TOOLS: list[Tool] = [
     read_tool, write_tool, edit_tool, bash_tool, glob_tool, grep_tool, todo_write_tool,
     web_search_tool, web_fetch_tool,
 ]
 
-from koraku.automations.agent_tools import build_automation_tools  # noqa: E402
-from koraku.integrations.supermemory_client import supermemory_configured
-from koraku.tools.memory_tools import memory_save_tool, memory_search_tool  # noqa: E402
+from koraku.plugins.memory import memory_agent_tools  # noqa: E402
+from koraku.profiles import is_cloud_profile  # noqa: E402
 
-_ALL_TOOLS.extend(build_automation_tools())
-if supermemory_configured():
-    _ALL_TOOLS.extend([memory_search_tool, memory_save_tool])
+_AVAILABLE_TOOLS_CACHE: list[Tool] | None = None
 
-# Filter by API key availability
-AVAILABLE_TOOLS: list[Tool] = []
-for t in _ALL_TOOLS:
-    if t.name == "WebSearch" and not settings.exa_api_key:
-        continue
-    if t.name == "WebFetch" and not settings.firecrawl_api_key:
-        continue
-    AVAILABLE_TOOLS.append(t)
+
+def _build_available_tools() -> list[Tool]:
+    """Assemble tool list (lazy — avoids importing ``koraku_cloud`` during ``koraku`` init)."""
+    tools: list[Tool] = list(_BASE_TOOLS)
+    tools.extend(memory_agent_tools())
+    if is_cloud_profile():
+        from koraku_cloud.automations.agent_tools import build_automation_tools
+
+        tools.extend(build_automation_tools())
+        if settings.sendblue_api_key and settings.sendblue_api_secret and settings.sendblue_from_number:
+            from koraku_cloud.tools.imessage_send_tool import IMESSAGE_SEND_TOOL
+
+            tools.append(IMESSAGE_SEND_TOOL)
+    out: list[Tool] = []
+    for t in tools:
+        if t.name == "WebSearch" and not settings.exa_api_key:
+            continue
+        if t.name == "WebFetch" and not settings.firecrawl_api_key:
+            continue
+        out.append(t)
+    return out
+
+
+def available_tools() -> list[Tool]:
+    global _AVAILABLE_TOOLS_CACHE
+    if _AVAILABLE_TOOLS_CACHE is None:
+        _AVAILABLE_TOOLS_CACHE = _build_available_tools()
+    return _AVAILABLE_TOOLS_CACHE
+
+
+def __getattr__(name: str) -> list[Tool]:
+    if name == "AVAILABLE_TOOLS":
+        return available_tools()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # Shell and arbitrary process execution are disabled for cloud runs.
 _CLOUD_EXCLUDED_TOOL_NAMES: frozenset[str] = frozenset({"Bash"})
 
 
 def tools_for_execution_target(target: str, *, blaxel_sandbox_active: bool = False) -> list[Tool]:
-    """Subset of ``AVAILABLE_TOOLS`` for the given execution surface.
+    """Subset of available tools for the given execution surface.
 
     Cloud without Blaxel drops Bash (no host shell). Cloud with an active Blaxel sandbox
     exposes Bash again — commands run inside the VM, not on the Koraku API host.
     """
+    tools = available_tools()
     if target == "cloud" and not blaxel_sandbox_active:
-        return [t for t in AVAILABLE_TOOLS if t.name not in _CLOUD_EXCLUDED_TOOL_NAMES]
+        return [t for t in tools if t.name not in _CLOUD_EXCLUDED_TOOL_NAMES]
     # ``server`` (in-process backend) and ``local`` (linked desktop; full tools on device).
-    return list(AVAILABLE_TOOLS)
+    return list(tools)
 
 
 def get_tool(name: str) -> Tool | None:
@@ -657,11 +685,11 @@ def get_tool(name: str) -> Tool | None:
     if ct is not None:
         return ct
     resolved = "WebFetch" if name == "WebPage" else name
-    for t in AVAILABLE_TOOLS:
+    for t in available_tools():
         if t.name == resolved:
             return t
     return None
 
 
 def get_tool_schemas() -> list[dict[str, Any]]:
-    return [t.to_anthropic_schema() for t in AVAILABLE_TOOLS]
+    return [t.to_anthropic_schema() for t in available_tools()]

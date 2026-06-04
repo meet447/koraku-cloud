@@ -20,6 +20,8 @@ from koraku.tools.runtime import set_active_session
 from koraku.tools.policy import tool_stdout_indicates_error
 from koraku.agent.runtime_context import (
     AgentRunContext,
+    bind_execution_target,
+    reset_execution_target,
     resolve_agent_workspace,
     resolve_execution_target,
 )
@@ -405,7 +407,12 @@ class Agent:
 
         ws = resolve_agent_workspace(workspace, run_context)
         execution_target = resolve_execution_target(run_context)
-        blaxel_lazy = lazy_blaxel_session_active() and cloud_blaxel_block_reason(settings) is None
+        exec_tok = bind_execution_target(execution_target)
+        blaxel_lazy = (
+            execution_target == "cloud"
+            and lazy_blaxel_session_active()
+            and cloud_blaxel_block_reason(settings) is None
+        )
         blaxel_active = cloud_sandbox is not None or blaxel_lazy
         env_note: str | None = None
         session_root: str | None = None
@@ -438,126 +445,144 @@ class Agent:
                 f"- **Blaxel sandbox** (lazy attach): **Read**, **Write**, **Edit**, **Bash**, **Glob**, and **Grep** "
                 f"use this chat's folder `{session_root}`. The VM connects on the first file/shell tool call."
             )
-        elif cloud_blaxel_block_reason(settings):
+        elif execution_target == "cloud" and cloud_blaxel_block_reason(settings):
             env_note = cloud_blaxel_block_reason(settings)
-        with (
-            agent_workspace_scope(ws),
-            blaxel_sandbox_scope(cloud_sandbox),
-            blaxel_session_workspace_scope(session_root),
+        imessage_budget_tok = None
+        if (
+            settings.sendblue_api_key
+            and settings.sendblue_api_secret
+            and settings.sendblue_from_number
         ):
-            composio_runtime.configure_workspace_cache(ws)
-            eff_provider = resolve_provider_id(provider)
-            effective_model = resolve_effective_model(model, provider_id=eff_provider)
-            imgs = list(image_parts or [])
-            budget_text = user_input.strip() or ("[images]" if imgs else "")
-            mode, turn_limits = resolve_turn_limits(budget_text, max_steps_override)
+            from koraku_cloud.tools.imessage_send_tool import reset_imessage_send_budget
 
-            mode_event = {
-                "type": "agent.mode",
-                "data": {
-                    "mode": mode,
-                    "max_steps": turn_limits.max_rounds,
-                    "wall_seconds": turn_limits.wall_seconds,
-                    "task_class": turn_limits.task_class,
-                    "dispatcher_mode": dispatcher_mode_active(),
-                    "model": effective_model,
-                    "provider": eff_provider,
-                    "session_id": session.session_id,
-                    "run_id": run_id or "",
-                    "execution_target": execution_target,
-                    "blaxel_sandbox": blaxel_active,
-                },
-            }
-            emit(mode_event)
-            yield mode_event
+            imessage_budget_tok = reset_imessage_send_budget()
+        try:
+            with (
+                agent_workspace_scope(ws),
+                blaxel_sandbox_scope(cloud_sandbox),
+                blaxel_session_workspace_scope(session_root),
+            ):
+                composio_runtime.configure_workspace_cache(ws)
+                eff_provider = resolve_provider_id(provider)
+                effective_model = resolve_effective_model(model, provider_id=eff_provider)
+                imgs = list(image_parts or [])
+                budget_text = user_input.strip() or ("[images]" if imgs else "")
+                mode, turn_limits = resolve_turn_limits(budget_text, max_steps_override)
 
-            active_tools = await self._setup_active_tools(
-                composio_registry_token,
-                emit,
-                execution_target=execution_target,
-                blaxel_sandbox_active=blaxel_active,
-                run_context=run_context,
-                task_class=turn_limits.task_class,
-            )
-            tool_names = [t.name for t in active_tools]
-            tools_event = {"type": "agent.tools", "data": {"tools": tool_names, "count": len(tool_names)}}
-            emit(tools_event)
-            yield tools_event
+                mode_event = {
+                    "type": "agent.mode",
+                    "data": {
+                        "mode": mode,
+                        "max_steps": turn_limits.max_rounds,
+                        "wall_seconds": turn_limits.wall_seconds,
+                        "task_class": turn_limits.task_class,
+                        "dispatcher_mode": dispatcher_mode_active(),
+                        "model": effective_model,
+                        "provider": eff_provider,
+                        "session_id": session.session_id,
+                        "run_id": run_id or "",
+                        "execution_target": execution_target,
+                        "blaxel_sandbox": blaxel_active,
+                    },
+                }
+                emit(mode_event)
+                yield mode_event
 
-            delegate_tok: Any = None
-            if composio_runtime.is_configured() and bool(settings.composio_subagent_mode):
-                delegate_tok = set_composio_delegate_context(
-                    ComposioDelegateContext(
-                        agent=self,
-                        emit=emit,
-                        session=session,
-                        workspace=ws,
-                        model=model,
-                        provider=provider,
+                active_tools = await self._setup_active_tools(
+                    composio_registry_token,
+                    emit,
+                    execution_target=execution_target,
+                    blaxel_sandbox_active=blaxel_active,
+                    run_context=run_context,
+                    task_class=turn_limits.task_class,
+                )
+                tool_names = [t.name for t in active_tools]
+                tools_event = {"type": "agent.tools", "data": {"tools": tool_names, "count": len(tool_names)}}
+                emit(tools_event)
+                yield tools_event
+
+                delegate_tok: Any = None
+                if composio_runtime.is_configured() and bool(settings.composio_subagent_mode):
+                    delegate_tok = set_composio_delegate_context(
+                        ComposioDelegateContext(
+                            agent=self,
+                            emit=emit,
+                            session=session,
+                            workspace=ws,
+                            model=model,
+                            provider=provider,
+                            client_timezone=client_timezone,
+                            client_locale=client_locale,
+                            execution_target=execution_target,
+                            blaxel_sandbox_active=blaxel_active,
+                            run_context=run_context,
+                            cloud_sandbox=cloud_sandbox,
+                            account_personalization=account_personalization,
+                            run_id=run_id,
+                            cancel_event=cancel_event,
+                        )
+                    )
+                try:
+                    user_turn = build_user_message_blocks(user_input, imgs)
+                    session.add_message("user", user_turn)
+                    session.step_count = 0
+                    if composio_runtime.is_configured():
+                        if bool(settings.composio_subagent_mode):
+                            composio_sec = await asyncio.to_thread(
+                                composio_runtime.composio_dispatcher_prompt_section
+                            )
+                        else:
+                            composio_sec = await asyncio.to_thread(
+                                composio_runtime.composio_system_prompt_section
+                            )
+                    else:
+                        composio_sec = None
+                    learned_prefetch = await prefetch_learned_memory_volatile(user_input, workspace=ws)
+                    system_prompt = build_system_prompt(
+                        ws,
                         client_timezone=client_timezone,
                         client_locale=client_locale,
-                        execution_target=execution_target,
-                        blaxel_sandbox_active=blaxel_active,
-                        run_context=run_context,
-                        cloud_sandbox=cloud_sandbox,
+                        execution_environment_note=env_note,
+                        cloud_tool_root=session_root if blaxel_active else None,
                         account_personalization=account_personalization,
-                        run_id=run_id,
-                        cancel_event=cancel_event,
+                        composio_section=composio_sec,
+                        learned_memory_prefetch=learned_prefetch,
                     )
+                    dispatch_appendix = dispatcher_system_appendix(turn_limits.task_class)
+                    if dispatch_appendix:
+                        system_prompt = f"{system_prompt.rstrip()}\n\n{dispatch_appendix.lstrip()}"
+                    ctx_appendix = (
+                        (run_context.system_appendix or "").strip() if run_context else ""
+                    )
+                    if ctx_appendix:
+                        system_prompt = f"{system_prompt.rstrip()}\n\n{ctx_appendix}"
+                    working_memory: list[dict[str, Any]] = []
+                    async for ev in self._iterate_react_steps(
+                        session=session,
+                        emit=emit,
+                        active_tools=active_tools,
+                        system_prompt=system_prompt,
+                        working_memory=working_memory,
+                        effective_model=effective_model,
+                        eff_provider=eff_provider,
+                        mode=mode,
+                        limits=turn_limits,
+                        cancel_event=cancel_event,
+                        run_id=run_id,
+                        context_manager=self.context_manager,
+                    ):
+                        yield ev
+                finally:
+                    if delegate_tok is not None:
+                        reset_composio_delegate_context(delegate_tok)
+        finally:
+            if imessage_budget_tok is not None:
+                from koraku_cloud.tools.imessage_send_tool import (
+                    restore_imessage_send_budget,
                 )
-            try:
-                user_turn = build_user_message_blocks(user_input, imgs)
-                session.add_message("user", user_turn)
-                session.step_count = 0
-                if composio_runtime.is_configured():
-                    if bool(settings.composio_subagent_mode):
-                        composio_sec = await asyncio.to_thread(
-                            composio_runtime.composio_dispatcher_prompt_section
-                        )
-                    else:
-                        composio_sec = await asyncio.to_thread(
-                            composio_runtime.composio_system_prompt_section
-                        )
-                else:
-                    composio_sec = None
-                learned_prefetch = await prefetch_learned_memory_volatile(user_input)
-                system_prompt = build_system_prompt(
-                    ws,
-                    client_timezone=client_timezone,
-                    client_locale=client_locale,
-                    execution_environment_note=env_note,
-                    cloud_tool_root=session_root if blaxel_active else None,
-                    account_personalization=account_personalization,
-                    composio_section=composio_sec,
-                    learned_memory_prefetch=learned_prefetch,
-                )
-                dispatch_appendix = dispatcher_system_appendix(turn_limits.task_class)
-                if dispatch_appendix:
-                    system_prompt = f"{system_prompt.rstrip()}\n\n{dispatch_appendix.lstrip()}"
-                ctx_appendix = (
-                    (run_context.system_appendix or "").strip() if run_context else ""
-                )
-                if ctx_appendix:
-                    system_prompt = f"{system_prompt.rstrip()}\n\n{ctx_appendix}"
-                working_memory: list[dict[str, Any]] = []
-                async for ev in self._iterate_react_steps(
-                    session=session,
-                    emit=emit,
-                    active_tools=active_tools,
-                    system_prompt=system_prompt,
-                    working_memory=working_memory,
-                    effective_model=effective_model,
-                    eff_provider=eff_provider,
-                    mode=mode,
-                    limits=turn_limits,
-                    cancel_event=cancel_event,
-                    run_id=run_id,
-                    context_manager=self.context_manager,
-                ):
-                    yield ev
-            finally:
-                if delegate_tok is not None:
-                    reset_composio_delegate_context(delegate_tok)
+
+                restore_imessage_send_budget(imessage_budget_tok)
+            reset_execution_target(exec_tok)
 
     async def _synthesize_final_reply(
         self,

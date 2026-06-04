@@ -8,7 +8,7 @@ from fastapi import HTTPException, Request
 from koraku.core.auth import AuthResult, auth_error_detail, verify_request_auth
 from koraku.core.config import settings
 from koraku.core.tenant import TenantContext
-from koraku.integrations.supabase_tenant import parse_org_header, resolve_org_id_sync
+from koraku.profiles import is_cloud_profile
 
 
 @dataclass(frozen=True)
@@ -29,16 +29,35 @@ class ResolvedRequestAuth:
         return self.auth.ok
 
     def require_chat_access(self) -> None:
-        if settings.require_auth_for_chat and not self.auth_ok:
+        if not settings.require_auth_for_chat:
+            return
+        if (settings.auth_backend or "").strip().lower() == "none":
+            return
+        if not self.auth_ok or self.auth.reason == "ok_anonymous":
             raise HTTPException(
                 status_code=401,
                 detail=auth_error_detail(self.auth.reason),
             )
-        if self.auth_ok and not self.tenant.org_id:
-            raise HTTPException(
-                status_code=403,
-                detail="Organization context is required. Sign in again or contact support.",
-            )
+        if self.auth.reason != "ok":
+            return
+        if not self.tenant.org_id:
+            if is_cloud_profile() and (settings.auth_backend or "").strip().lower() == "supabase":
+                raise HTTPException(
+                    status_code=403,
+                    detail="Organization context is required. Sign in again or contact support.",
+                )
+
+
+def _resolve_org_for_sub(request: Request, sub: str) -> tuple[str | None, str | None]:
+    """Resolve org id via Supabase tenant store (cloud + supabase auth only)."""
+    if not is_cloud_profile():
+        return None, None
+    if (settings.auth_backend or "").strip().lower() != "supabase":
+        return None, None
+    from koraku_cloud.integrations.supabase_tenant import parse_org_header, resolve_org_id_sync
+
+    requested = parse_org_header(request.headers)
+    return resolve_org_id_sync(sub, requested)
 
 
 def resolve_request_auth(request: Request) -> ResolvedRequestAuth:
@@ -46,9 +65,8 @@ def resolve_request_auth(request: Request) -> ResolvedRequestAuth:
     auth = verify_request_auth(auth_header)
     org_id: str | None = None
     if auth.sub:
-        requested = parse_org_header(request.headers)
-        org_id, reason = resolve_org_id_sync(auth.sub, requested)
-        if not org_id:
+        org_id, reason = _resolve_org_for_sub(request, auth.sub)
+        if not org_id and reason is not None:
             if reason == "org_forbidden":
                 raise HTTPException(status_code=403, detail="You do not have access to this organization.")
             raise HTTPException(

@@ -57,7 +57,7 @@ def test_effective_auth_user_sub_ignores_org_storage_scope() -> None:
 
 
 def test_automation_agent_tools_uid_uses_auth_sub() -> None:
-    from koraku.automations import agent_tools
+    from koraku_cloud.automations import agent_tools
 
     t = set_cloud_user_id("user-uuid")
     org_t = set_tenant_org_id("org-uuid")

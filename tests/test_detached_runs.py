@@ -10,9 +10,9 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from koraku.api import detached_runs
+from koraku_cloud.api import detached_runs
 from koraku.core import detached_run_store
-from koraku.server import app
+from koraku_cloud.app import app
 
 
 @pytest.fixture(autouse=True)
@@ -21,17 +21,23 @@ def _detached_runs_test_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(detached_run_store, "_DETACHED_GC_SEC", 0.05, raising=False)
     monkeypatch.setattr(detached_run_store.settings, "detached_run_store_backend", "memory", raising=False)
     detached_run_store.reset_detached_run_store()
-    monkeypatch.setattr("koraku.api.detached_runs.settings.require_auth_for_chat", False, raising=False)
 
     async def _fake_stream(*_a: object, **_kw: object):
         yield 'data: {"type": "koraku.started", "data": {"chatSessionId": "1234567890123456789012345678"}}\n\n'
         yield "event: done\n\n"
 
-    monkeypatch.setattr("koraku.api.detached_runs._stream_agent_sse", _fake_stream, raising=False)
+    monkeypatch.setattr("koraku_cloud.api.detached_runs._stream_agent_sse", _fake_stream, raising=False)
 
 
-def test_runs_post_requires_auth_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("koraku.api.detached_runs.settings.require_auth_for_chat", True, raising=False)
+def test_runs_post_requires_auth_by_default() -> None:
+    from koraku.core.config import Settings, configure
+
+    configure(
+        Settings.model_construct(
+            auth_backend="supabase",
+            require_auth_for_chat=True,
+        )
+    )
     client = TestClient(app)
     resp = client.post("/runs", json={"msg": "hello"})
     assert resp.status_code == 401

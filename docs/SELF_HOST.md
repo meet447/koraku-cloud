@@ -66,7 +66,7 @@ The chat composer offers:
 python3 -m venv venv && source venv/bin/activate
 pip install -e ".[all]"
 cp .env.example .env   # edit LLM keys
-python main.py        # :8000
+./scripts/run-api.sh    # :8000 (uvicorn)
 
 # Web (second terminal) — Node 22 LTS recommended (see `.nvmrc`)
 cd packages/koraku-client && npm install && npm run build
