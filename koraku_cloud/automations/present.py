@@ -15,6 +15,8 @@ def automation_status_line(row: dict[str, Any]) -> str:
     if row.get("current_run_id"):
         return "Running"
     if row.get("trigger_mode") == "event":
+        if row.get("event_source") == "composio":
+            return "Waiting for app event"
         return "Waiting for event"
     if row.get("trigger_mode") == "scheduled":
         return "Scheduled"

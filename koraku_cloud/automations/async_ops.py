@@ -28,6 +28,12 @@ async def get_automation_for_event(automation_id: str) -> dict[str, Any] | None:
     return await asyncio.to_thread(supabase_store.get_automation_for_event, automation_id)
 
 
+async def list_automations_by_composio_trigger_id(trigger_id: str) -> list[dict[str, Any]]:
+    return await asyncio.to_thread(
+        supabase_store.list_automations_by_composio_trigger_id, trigger_id
+    )
+
+
 async def get_event_webhook_hash(automation_id: str) -> str | None:
     return await asyncio.to_thread(supabase_store.get_event_webhook_hash, automation_id)
 
@@ -53,6 +59,9 @@ async def insert_automation(
     toolkits: list[str],
     schedule_preset: dict[str, Any] | None = None,
     event_webhook_token_hash: str | None = None,
+    event_source: str = "generic",
+    composio_trigger_slug: str | None = None,
+    composio_trigger_id: str | None = None,
 ) -> dict[str, Any]:
     def _go() -> dict[str, Any]:
         return supabase_store.insert_automation(
@@ -69,6 +78,9 @@ async def insert_automation(
             toolkits=toolkits,
             schedule_preset=schedule_preset,
             event_webhook_token_hash=event_webhook_token_hash,
+            event_source=event_source,
+            composio_trigger_slug=composio_trigger_slug,
+            composio_trigger_id=composio_trigger_id,
         )
 
     return await asyncio.to_thread(_go)
@@ -89,6 +101,9 @@ async def update_automation(
     toolkits: list[str] | None = None,
     schedule_preset: dict[str, Any] | None = None,
     consecutive_failures: int | None = None,
+    composio_trigger_id: str | None = None,
+    composio_trigger_slug: str | None = None,
+    event_source: str | None = None,
 ) -> dict[str, Any] | None:
     def _go() -> dict[str, Any] | None:
         return supabase_store.update_automation(
@@ -105,6 +120,9 @@ async def update_automation(
             toolkits=toolkits,
             schedule_preset=schedule_preset,
             consecutive_failures=consecutive_failures,
+            composio_trigger_id=composio_trigger_id,
+            composio_trigger_slug=composio_trigger_slug,
+            event_source=event_source,
         )
 
     return await asyncio.to_thread(_go)

@@ -35,6 +35,16 @@ type Automation = {
   last_run_at?: string | null;
   current_run_id?: string | null;
   consecutive_failures?: number;
+  event_source?: "generic" | "composio";
+  composio_trigger_slug?: string | null;
+};
+
+type ComposioTriggerOption = {
+  slug: string;
+  label: string;
+  toolkit: string;
+  polling?: boolean;
+  description?: string;
 };
 
 type RunRow = {
@@ -133,6 +143,9 @@ function groupRuns(runs: RunRow[]): { label: string; runs: RunRow[] }[] {
 
 function triggerSubtitle(a: Automation): string {
   if (a.trigger_mode === "event") {
+    if (a.event_source === "composio") {
+      return a.event_display || a.composio_trigger_slug || "App event";
+    }
     return a.event_display || "Webhook event";
   }
   const label = a.schedule_label || a.cron_expression || "—";
@@ -177,6 +190,10 @@ export default function AutomationsPage() {
   const [formCron, setFormCron] = useState("0 9 * * *");
   const [formToolkits, setFormToolkits] = useState("");
   const [formTriggerMode, setFormTriggerMode] = useState<"scheduled" | "event">("scheduled");
+  const [formEventSource, setFormEventSource] = useState<"generic" | "composio">("composio");
+  const [composioTriggerSlug, setComposioTriggerSlug] = useState("");
+  const [composioTriggerOptions, setComposioTriggerOptions] = useState<ComposioTriggerOption[]>([]);
+  const [composioTriggersLoading, setComposioTriggersLoading] = useState(false);
   const [webhookReveal, setWebhookReveal] = useState<{
     id: string;
     url: string;
@@ -210,6 +227,38 @@ export default function AutomationsPage() {
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  useEffect(() => {
+    if (!showCreate || formTriggerMode !== "event" || formEventSource !== "composio") {
+      return;
+    }
+    let cancelled = false;
+    setComposioTriggersLoading(true);
+    void (async () => {
+      try {
+        const data = await korakuFetchJson<{ items: ComposioTriggerOption[]; configured: boolean }>(
+          "/koraku-api/api/composio/trigger-types",
+        );
+        if (cancelled) return;
+        const items = data.items ?? [];
+        setComposioTriggerOptions(items);
+        if (items.length > 0 && !composioTriggerSlug) {
+          setComposioTriggerSlug(items[0].slug);
+        }
+      } catch {
+        if (!cancelled) {
+          setComposioTriggerOptions([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setComposioTriggersLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showCreate, formTriggerMode, formEventSource]);
 
   useEffect(() => {
     try {
@@ -341,7 +390,15 @@ export default function AutomationsPage() {
           cron: formCron,
         });
       } else {
-        body.event_display = "Webhook";
+        body.event_source = formEventSource;
+        if (formEventSource === "composio") {
+          if (!composioTriggerSlug) {
+            throw new Error("Select an app event trigger.");
+          }
+          body.composio_trigger_slug = composioTriggerSlug;
+        } else {
+          body.event_display = "Webhook";
+        }
       }
       const created = await korakuFetchJson<
         Automation & { webhook_url?: string; webhook_token?: string }
@@ -554,12 +611,63 @@ export default function AutomationsPage() {
               </select>
             </label>
             {formTriggerMode === "event" ? (
-              <p className="mt-2 max-w-2xl text-xs font-medium leading-relaxed text-neutral-600">
-                After you save, Koraku shows a one-time webhook URL and secret token. POST JSON to that URL
-                from Zapier, your app, or any integration. Set{" "}
-                <code className="rounded bg-neutral-100 px-1 font-mono text-[11px]">KORAKU_PUBLIC_API_URL</code>{" "}
-                on the API so the URL matches your public host.
-              </p>
+              <>
+                <label className="mt-3 block max-w-xs text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Event type
+                  <select
+                    value={formEventSource}
+                    onChange={(e) =>
+                      setFormEventSource(e.target.value as "generic" | "composio")
+                    }
+                    className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-neutral-200"
+                  >
+                    <option value="composio">Connected app (Composio)</option>
+                    <option value="generic">Custom webhook URL</option>
+                  </select>
+                </label>
+                {formEventSource === "composio" ? (
+                  <div className="mt-3 max-w-xl">
+                    {composioTriggersLoading ? (
+                      <p className="text-xs font-medium text-neutral-500">Loading triggers…</p>
+                    ) : composioTriggerOptions.length === 0 ? (
+                      <p className="rounded-2xl bg-amber-50 px-4 py-3 text-xs font-medium text-amber-950 ring-1 ring-amber-200/80">
+                        Connect Gmail in{" "}
+                        <Link href={`${APP_BASE}/connections`} className="text-orange-700 underline">
+                          Connections
+                        </Link>{" "}
+                        to use app event triggers. The server also needs{" "}
+                        <code className="font-mono">COMPOSIO_API_KEY</code>.
+                      </p>
+                    ) : (
+                      <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                        When this happens
+                        <select
+                          value={composioTriggerSlug}
+                          onChange={(e) => setComposioTriggerSlug(e.target.value)}
+                          className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-neutral-200"
+                        >
+                          {composioTriggerOptions.map((opt) => (
+                            <option key={opt.slug} value={opt.slug}>
+                              {opt.label}
+                              {opt.polling ? " (may lag a few minutes)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    {composioTriggerOptions.find((o) => o.slug === composioTriggerSlug)?.description ? (
+                      <p className="mt-2 text-xs font-medium text-neutral-500">
+                        {composioTriggerOptions.find((o) => o.slug === composioTriggerSlug)?.description}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="mt-2 max-w-2xl text-xs font-medium leading-relaxed text-neutral-600">
+                    After you save, Koraku shows a one-time webhook URL and secret token. POST JSON to that
+                    URL from Zapier or your app.
+                  </p>
+                )}
+              </>
             ) : null}
             {formTriggerMode === "scheduled" ? (
             <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
@@ -671,7 +779,13 @@ export default function AutomationsPage() {
             ) : null}
             <div className="mt-4 flex gap-2">
               <KorakuButton
-                disabled={saving || !formSpec.trim()}
+                disabled={
+                  saving ||
+                  !formSpec.trim() ||
+                  (formTriggerMode === "event" &&
+                    formEventSource === "composio" &&
+                    !composioTriggerSlug)
+                }
                 onClick={requestCreate}
               >
                 {saving ? "Saving…" : "Save automation"}
@@ -817,9 +931,16 @@ export default function AutomationsPage() {
                           <code className="rounded bg-white/80 px-1">?token=…</code> on the URL.
                         </p>
                       </div>
-                    ) : selected.trigger_mode === "event" && webhookReveal?.id !== selected.id ? (
+                    ) : selected.trigger_mode === "event" &&
+                      selected.event_source !== "composio" &&
+                      webhookReveal?.id !== selected.id ? (
                       <p className="mt-2 text-xs font-medium text-neutral-500">
                         Webhook URL was issued at creation. Create a new event automation if you need a fresh token.
+                      </p>
+                    ) : selected.event_source === "composio" ? (
+                      <p className="mt-2 text-xs font-medium text-neutral-500">
+                        Runs when Composio delivers{" "}
+                        {selected.composio_trigger_slug || "the configured app event"}. Pause to stop listening.
                       </p>
                     ) : null}
                   </div>

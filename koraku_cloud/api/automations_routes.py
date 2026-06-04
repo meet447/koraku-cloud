@@ -21,10 +21,19 @@ from koraku_cloud.automations.validation import (
     validate_cron_expression,
     validate_timezone_iana,
 )
+from koraku_cloud.automations.composio_triggers import (
+    create_trigger_instance,
+    delete_trigger_instance,
+    set_trigger_enabled,
+    toolkit_for_trigger_slug,
+    trigger_display_label,
+    validate_composio_trigger_slug,
+)
 from koraku_cloud.automations.webhook_tokens import (
     generate_webhook_token,
     hash_webhook_token,
 )
+from koraku.integrations import composio as composio_runtime
 from dataclasses import dataclass
 from typing import Any
 
@@ -131,10 +140,15 @@ class AutomationCreate(BaseModel):
     cron_expression: str | None = None
     schedule_preset: SchedulePresetBody | None = None
     event_display: str | None = Field(default=None, max_length=200)
+    event_source: str = Field(default="generic", pattern="^(generic|composio)$")
+    composio_trigger_slug: str | None = Field(default=None, max_length=128)
     toolkits: list[str] = Field(default_factory=list, max_length=24)
 
     @model_validator(mode="after")
     def check_trigger_fields(self) -> "AutomationCreate":
+        if self.trigger_mode == "event" and self.event_source == "composio":
+            if not (self.composio_trigger_slug or "").strip():
+                raise ValueError("composio event automations require composio_trigger_slug")
         if self.trigger_mode == "scheduled":
             tz = (self.timezone or "").strip()
             if not tz:
@@ -254,26 +268,69 @@ async def automations_create(
         raise HTTPException(status_code=400, detail=str(e)) from e
     webhook_hash: str | None = None
     plain_token: str | None = None
+    event_source = "generic"
+    composio_slug: str | None = None
+    composio_tid: str | None = None
     if body.trigger_mode == "event":
-        plain_token = generate_webhook_token()
-        webhook_hash = hash_webhook_token(plain_token)
-    row = await async_ops.insert_automation(
-        auth.user_id,
-        auth.org_id,
-        title=body.title,
-        headline=body.headline,
-        natural_language_spec=body.natural_language_spec,
-        trigger_mode=body.trigger_mode,  # type: ignore[arg-type]
-        status=body.status,  # type: ignore[arg-type]
-        timezone=tz,
-        cron_expression=cron,
-        event_display=body.event_display or (
-            "Webhook" if body.trigger_mode == "event" else None
-        ),
-        toolkits=body.toolkits,
-        schedule_preset=preset_dict,
-        event_webhook_token_hash=webhook_hash,
-    )
+        event_source = (body.event_source or "generic").strip().lower()
+        if event_source == "composio":
+            if not composio_runtime.is_configured():
+                raise HTTPException(
+                    status_code=503,
+                    detail="Set COMPOSIO_API_KEY to use Composio triggers.",
+                )
+            try:
+                composio_slug = validate_composio_trigger_slug(
+                    body.composio_trigger_slug or ""
+                )
+                composio_tid = await asyncio.to_thread(
+                    create_trigger_instance,
+                    user_id=auth.user_id,
+                    trigger_slug=composio_slug,
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            except Exception as e:
+                raise HTTPException(
+                    status_code=502, detail=f"Composio trigger setup failed: {e!s}"
+                ) from e
+        else:
+            plain_token = generate_webhook_token()
+            webhook_hash = hash_webhook_token(plain_token)
+    event_label = body.event_display
+    if body.trigger_mode == "event" and not event_label:
+        if event_source == "composio" and composio_slug:
+            event_label = trigger_display_label(composio_slug)
+        else:
+            event_label = "Webhook"
+    toolkits = list(body.toolkits)
+    if composio_slug:
+        tk = toolkit_for_trigger_slug(composio_slug)
+        if tk and tk not in toolkits:
+            toolkits.append(tk)
+    try:
+        row = await async_ops.insert_automation(
+            auth.user_id,
+            auth.org_id,
+            title=body.title,
+            headline=body.headline,
+            natural_language_spec=body.natural_language_spec,
+            trigger_mode=body.trigger_mode,  # type: ignore[arg-type]
+            status=body.status,  # type: ignore[arg-type]
+            timezone=tz,
+            cron_expression=cron,
+            event_display=event_label,
+            toolkits=toolkits,
+            schedule_preset=preset_dict,
+            event_webhook_token_hash=webhook_hash,
+            event_source=event_source,
+            composio_trigger_slug=composio_slug,
+            composio_trigger_id=composio_tid,
+        )
+    except Exception:
+        if composio_tid:
+            await asyncio.to_thread(delete_trigger_instance, composio_tid)
+        raise
     await automation_scheduler.sync_scheduler_jobs_async()
     out = await enrich_automation_row(row)
     if plain_token:
@@ -320,6 +377,17 @@ async def automations_patch(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
     consecutive = 0 if patch.pop("reset_failure_count", None) else None
+    new_status = patch.get("status")
+    composio_tid = (existing.get("composio_trigger_id") or "").strip()
+    if (
+        composio_tid
+        and existing.get("event_source") == "composio"
+        and new_status in ("active", "paused")
+        and composio_runtime.is_configured()
+    ):
+        await asyncio.to_thread(
+            set_trigger_enabled, trigger_id=composio_tid, enabled=new_status == "active"
+        )
     row = await async_ops.update_automation(
         auth.user_id,
         auth.org_id,
@@ -344,6 +412,14 @@ async def automations_patch(
 async def automations_delete(
     automation_id: str, auth: AutomationsAuth = Depends(_automations_request_scope)
 ):
+    existing = await async_ops.get_automation(
+        auth.user_id, automation_id, org_id=auth.org_id
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Automation not found")
+    tid = (existing.get("composio_trigger_id") or "").strip()
+    if tid and existing.get("event_source") == "composio":
+        await asyncio.to_thread(delete_trigger_instance, tid)
     if not await async_ops.delete_automation(auth.user_id, auth.org_id, automation_id):
         raise HTTPException(status_code=404, detail="Automation not found")
     await automation_scheduler.sync_scheduler_jobs_async()

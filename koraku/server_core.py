@@ -1,6 +1,7 @@
 """Shared FastAPI wiring for SDK and Cloud server apps."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -142,6 +143,15 @@ def make_lifespan(
             automation_scheduler.configure_automation_scheduler(agent)
             if agent is not None:
                 automation_scheduler.start_automation_scheduler()
+        if enable_automation_scheduler:
+            try:
+                from koraku_cloud.integrations.composio_webhooks import (
+                    ensure_project_webhook_subscription,
+                )
+
+                await asyncio.to_thread(ensure_project_webhook_subscription)
+            except Exception:
+                log.exception("Composio webhook subscription setup failed")
         try:
             yield
         finally:

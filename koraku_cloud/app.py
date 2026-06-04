@@ -6,6 +6,7 @@ from koraku_cloud.bootstrap import bootstrap_cloud
 bootstrap_cloud()
 
 from koraku_cloud.api.automation_events_routes import router as automation_events_router
+from koraku_cloud.api.composio_trigger_events_routes import router as composio_trigger_events_router
 from koraku_cloud.api.automations_routes import router as automations_router
 from koraku_cloud.api.detached_runs import router as detached_runs_router
 from koraku_cloud.api.memory_routes import router as memory_router
@@ -30,6 +31,7 @@ def create_cloud_app():
     app.include_router(memory_router)
     app.include_router(automations_router)
     app.include_router(automation_events_router)
+    app.include_router(composio_trigger_events_router)
     app.include_router(workspace_router)
     app.include_router(sendblue_router)
     return app

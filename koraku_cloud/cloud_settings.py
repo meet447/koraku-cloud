@@ -211,6 +211,14 @@ class CloudSettings(BaseSettings):
         default="",
         validation_alias=AliasChoices("KORAKU_PUBLIC_API_URL", "koraku_public_api_url"),
     )
+    composio_webhook_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("COMPOSIO_WEBHOOK_SECRET", "composio_webhook_secret"),
+    )
+    composio_webhook_auto_setup: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("COMPOSIO_WEBHOOK_AUTO_SETUP", "composio_webhook_auto_setup"),
+    )
     chat_defer_blaxel_provision: bool = Field(
         default=True,
         validation_alias=AliasChoices("CHAT_DEFER_BLAXEL_PROVISION", "chat_defer_blaxel_provision"),

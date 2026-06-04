@@ -68,6 +68,9 @@ def _row_to_automation(o: dict[str, Any]) -> dict[str, Any]:
         "current_run_id": o.get("current_run_id"),
         "last_success_fingerprint": o.get("last_success_fingerprint"),
         "has_event_webhook": bool(o.get("event_webhook_token_hash")),
+        "event_source": (o.get("event_source") or "generic"),
+        "composio_trigger_slug": o.get("composio_trigger_slug"),
+        "composio_trigger_id": o.get("composio_trigger_id"),
     }
 
 
@@ -146,6 +149,9 @@ def insert_automation(
     toolkits: list[str],
     schedule_preset: dict[str, Any] | None = None,
     event_webhook_token_hash: str | None = None,
+    event_source: str = "generic",
+    composio_trigger_slug: str | None = None,
+    composio_trigger_id: str | None = None,
 ) -> dict[str, Any]:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
@@ -175,6 +181,12 @@ def insert_automation(
         body["schedule_preset"] = schedule_preset
     if event_webhook_token_hash:
         body["event_webhook_token_hash"] = event_webhook_token_hash
+    if trigger_mode == "event":
+        body["event_source"] = (event_source or "generic").strip().lower()
+        if composio_trigger_slug:
+            body["composio_trigger_slug"] = composio_trigger_slug.strip().upper()
+        if composio_trigger_id:
+            body["composio_trigger_id"] = composio_trigger_id.strip()
     r = _client().post(_rest_url(f"/{_TABLE}"), headers=_headers(), content=json.dumps(body))
     if r.status_code >= 400:
         log.error("insert_automation failed: %s %s", r.status_code, r.text)
@@ -202,6 +214,9 @@ def update_automation(
     toolkits: list[str] | None = None,
     schedule_preset: dict[str, Any] | None = None,
     consecutive_failures: int | None = None,
+    composio_trigger_id: str | None = None,
+    composio_trigger_slug: str | None = None,
+    event_source: str | None = None,
 ) -> dict[str, Any] | None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
@@ -227,6 +242,12 @@ def update_automation(
         patch["schedule_preset"] = schedule_preset
     if consecutive_failures is not None:
         patch["consecutive_failures"] = int(consecutive_failures)
+    if composio_trigger_id is not None:
+        patch["composio_trigger_id"] = composio_trigger_id
+    if composio_trigger_slug is not None:
+        patch["composio_trigger_slug"] = composio_trigger_slug
+    if event_source is not None:
+        patch["event_source"] = event_source
     if len(patch) <= 1:
         return get_automation(uid, aid, org_id=oid)
     q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
@@ -273,6 +294,22 @@ def set_automation_run_times(
     q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
     r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
     r.raise_for_status()
+
+
+def list_automations_by_composio_trigger_id(trigger_id: str) -> list[dict[str, Any]]:
+    tid = (trigger_id or "").strip()
+    if not tid:
+        return []
+    q = (
+        f"/{_TABLE}?composio_trigger_id=eq.{tid}"
+        "&trigger_mode=eq.event&status=eq.active&event_source=eq.composio"
+    )
+    r = _client().get(_rest_url(q), headers=_headers())
+    r.raise_for_status()
+    rows = r.json()
+    if not isinstance(rows, list):
+        return []
+    return [_row_to_automation(x) for x in rows if isinstance(x, dict)]
 
 
 def get_automation_for_event(automation_id: str) -> dict[str, Any] | None:

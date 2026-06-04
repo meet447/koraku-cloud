@@ -76,6 +76,18 @@ async def composio_toolkits_catalog(q: str = ""):
     return {"items": items, "configured": True}
 
 
+@router.get("/trigger-types", dependencies=[Depends(_composio_request_scope)])
+async def composio_trigger_types():
+    """Composio trigger slugs available for the signed-in user (connected toolkits only)."""
+    if not composio_runtime.is_configured():
+        return {"items": [], "configured": False}
+    from koraku_cloud.automations.composio_triggers import list_trigger_options_for_user
+
+    uid = composio_runtime.user_id()
+    items = await asyncio.to_thread(list_trigger_options_for_user, uid)
+    return {"items": items, "configured": True}
+
+
 @router.post("/connect", dependencies=[Depends(_composio_request_scope)])
 async def composio_connect(body: ComposioConnectBody):
     if not composio_runtime.is_configured():
