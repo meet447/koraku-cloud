@@ -113,6 +113,10 @@ async def test_cloud_file_tool_block_when_blaxel_required(monkeypatch: pytest.Mo
         _no_ensure,
     )
     monkeypatch.setattr(
+        "koraku.integrations.blaxel_lazy.cloud_blaxel_block_reason",
+        lambda _s: None,
+    )
+    monkeypatch.setattr(
         "koraku.integrations.blaxel_lazy.cloud_file_tools_use_blaxel",
         lambda: True,
     )
@@ -123,6 +127,31 @@ async def test_cloud_file_tool_block_when_blaxel_required(monkeypatch: pytest.Mo
         reset_execution_target(tok)
     assert msg is not None
     assert "Blaxel sandbox" in msg
+
+
+@pytest.mark.asyncio
+async def test_cloud_file_tool_block_even_when_blaxel_flag_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sandbox mode (execution_target=cloud) must never fall back to host disk."""
+    from koraku.agent.runtime_context import bind_execution_target, reset_execution_target
+    from koraku.integrations.blaxel_lazy import cloud_file_tool_block_reason
+
+    monkeypatch.setattr(
+        "koraku.integrations.blaxel_lazy.settings",
+        SimpleNamespace(blaxel_cloud_sandbox_enabled=False),
+    )
+    monkeypatch.setattr(
+        "koraku.integrations.blaxel_lazy.cloud_blaxel_block_reason",
+        lambda _s: "Sandbox mode uses a Blaxel VM only.",
+    )
+    tok = bind_execution_target("cloud")
+    try:
+        msg = await cloud_file_tool_block_reason(try_ensure=False)
+    finally:
+        reset_execution_target(tok)
+    assert msg is not None
+    assert "Blaxel" in msg
 
 
 def test_settings_post_init_exports_blaxel_to_os(monkeypatch: pytest.MonkeyPatch) -> None:

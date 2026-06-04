@@ -54,9 +54,19 @@ def test_tools_for_cloud_sandbox() -> None:
 
 def test_stream_chat_body_execution_target_optional() -> None:
     from koraku.api.chat_routes import StreamChatBody, normalize_stream_execution_target
+    from koraku.core.config import reset_cloud_binding
 
+    reset_cloud_binding()
     assert StreamChatBody(msg="hello").model_dump().get("execution_target") == ""
     assert normalize_stream_execution_target("") in ("local", "server", "cloud")
+    assert normalize_stream_execution_target("local") == "local"
+
+    from koraku_cloud.bootstrap import bootstrap_cloud
+
+    bootstrap_cloud()
+    assert normalize_stream_execution_target("local") == "cloud"
+    assert normalize_stream_execution_target("") == "cloud"
+    reset_cloud_binding()
 
 
 def test_stream_chat_body_accepts_client_history() -> None:

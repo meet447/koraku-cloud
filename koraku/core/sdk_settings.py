@@ -199,6 +199,47 @@ class SdkSettings(BaseSettings):
         ),
     )
 
+    artifact_subagent_mode: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("ARTIFACT_SUBAGENT_MODE", "artifact_subagent_mode"),
+    )
+    artifact_subagent_max_steps: int = Field(
+        default=16,
+        validation_alias=AliasChoices("ARTIFACT_SUBAGENT_MAX_STEPS", "artifact_subagent_max_steps"),
+    )
+    artifact_subagent_max_steps_simple: int = Field(
+        default=6,
+        validation_alias=AliasChoices(
+            "ARTIFACT_SUBAGENT_MAX_STEPS_SIMPLE",
+            "artifact_subagent_max_steps_simple",
+        ),
+    )
+    artifact_subagent_max_steps_compose: int = Field(
+        default=10,
+        validation_alias=AliasChoices(
+            "ARTIFACT_SUBAGENT_MAX_STEPS_COMPOSE",
+            "artifact_subagent_max_steps_compose",
+        ),
+    )
+    artifact_subagent_wall_seconds: float = Field(
+        default=150.0,
+        validation_alias=AliasChoices("ARTIFACT_SUBAGENT_WALL_SECONDS", "artifact_subagent_wall_seconds"),
+    )
+    artifact_subagent_wall_seconds_simple: float = Field(
+        default=90.0,
+        validation_alias=AliasChoices(
+            "ARTIFACT_SUBAGENT_WALL_SECONDS_SIMPLE",
+            "artifact_subagent_wall_seconds_simple",
+        ),
+    )
+    artifact_subagent_wall_seconds_compose: float = Field(
+        default=120.0,
+        validation_alias=AliasChoices(
+            "ARTIFACT_SUBAGENT_WALL_SECONDS_COMPOSE",
+            "artifact_subagent_wall_seconds_compose",
+        ),
+    )
+
     enable_bash: bool = True
     enable_web_search: bool = True
     enable_web_fetch: bool = True

@@ -32,6 +32,8 @@ _MAX_BLOB_FILE_BYTES = 12 * 1024 * 1024
 _BLOB_MEDIA = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     # Raster / vector images (workspace preview + download)
     ".png": "image/png",
     ".jpg": "image/jpeg",

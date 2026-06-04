@@ -64,18 +64,19 @@ _CLOUD_FILE_TOOL_BLOCK_MSG = (
 
 
 def cloud_file_tools_use_blaxel() -> bool:
-    """True when cloud execution uses Blaxel — host filesystem must not be used."""
+    """True when cloud execution must not touch the API host filesystem."""
     from koraku.agent.runtime_context import get_active_execution_target
 
-    if get_active_execution_target() != "cloud":
-        return False
-    return bool(settings.blaxel_cloud_sandbox_enabled)
+    return get_active_execution_target() == "cloud"
 
 
 async def cloud_file_tool_block_reason(*, try_ensure: bool = False) -> str | None:
     """Return an error message when cloud file/shell tools cannot run; else ``None``."""
     if not cloud_file_tools_use_blaxel():
         return None
+    config_block = cloud_blaxel_block_reason(settings)
+    if config_block:
+        return f"Error: {config_block}"
     if get_active_blaxel_sandbox() is not None:
         return None
     if try_ensure and await ensure_blaxel_for_file_tool():
@@ -121,17 +122,19 @@ async def ensure_blaxel_for_file_tool() -> bool:
         return False
     uid = effective_cloud_user_id()
     override = (_lazy_session_root.get() or "").strip() or None
-    session_root = resolve_blaxel_session_root(
-        sid,
-        settings,
-        user_id=uid,
-        override_root=override,
-    )
     async with _lock_for_user():
         if get_active_blaxel_sandbox() is not None:
             return True
         try:
-            sb = await ensure_chat_sandbox(sid, settings, user_id=uid)
+            from koraku.integrations.blaxel_runtime import ensure_session_workspace
+
+            sb, session_root = await ensure_session_workspace(
+                sid,
+                settings,
+                user_id=uid,
+            )
+            if override:
+                session_root = override
         except Exception as e:
             log.warning("lazy Blaxel ensure failed session=%s: %s", sid[:12], e)
             return False

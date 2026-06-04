@@ -34,6 +34,11 @@ from koraku.agent.composio_delegate_context import (
     set_composio_delegate_context,
 )
 from koraku.tools.composio_delegate_tool import COMPOSIO_RUN_TOOL
+from koraku.tools.artifact_delegate_tool import ARTIFACT_RUN_TOOLS
+from koraku.integrations.artifact_prompt import (
+    artifact_subagent_mode_active,
+    build_artifact_subagent_system_prompt,
+)
 from koraku.agent.blaxel_scope import blaxel_sandbox_scope, blaxel_session_workspace_scope
 from koraku.integrations.blaxel_runtime import resolve_blaxel_session_root
 from koraku.integrations.cloud_user import effective_cloud_user_id
@@ -54,6 +59,10 @@ from koraku.agent.budget import (
     composio_wall_seconds_for_goal,
     composio_worker_sop_appendix,
     classify_composio_goal,
+    classify_artifact_goal,
+    artifact_max_rounds_for_goal,
+    artifact_wall_seconds_for_goal,
+    tools_for_artifact_worker,
     resolve_turn_limits,
     tools_for_composio_worker,
     dispatcher_mode_active,
@@ -360,6 +369,12 @@ class Agent:
             task_class=task_class,
             composio_subagent_mode=composio_sub,
         )
+        if artifact_subagent_mode_active():
+            seen = {t.name for t in active_tools}
+            for t in ARTIFACT_RUN_TOOLS:
+                if t.name not in seen:
+                    active_tools.append(t)
+                    seen.add(t.name)
         if extra_tools:
             seen = {t.name for t in active_tools}
             for t in extra_tools:
@@ -552,7 +567,8 @@ class Agent:
                 yield tools_event
 
                 delegate_tok: Any = None
-                if composio_runtime.is_configured() and bool(settings.composio_subagent_mode):
+                needs_delegate = (composio_runtime.is_configured() and bool(settings.composio_subagent_mode)) or artifact_subagent_mode_active()
+                if needs_delegate:
                     delegate_tok = set_composio_delegate_context(
                         ComposioDelegateContext(
                             agent=self,
@@ -1083,6 +1099,135 @@ class Agent:
         out = _subagent_final_assistant_text(sub_session)
         if last_reason == "max_steps_reached":
             out += "\n\n(Integration worker stopped at max steps; retry with a narrower goal or higher max_steps.)"
+        return out
+
+    async def _execute_artifact_subagent(
+        self,
+        *,
+        artifact_type: str,
+        goal: str,
+        max_steps_override: int | None = None,
+    ) -> str:
+        from koraku.agent.composio_delegate_context import get_composio_delegate_context
+        from koraku.artifacts.sandbox_gate import require_sandbox_for_artifacts
+
+        ctx = get_composio_delegate_context()
+        if ctx is None:
+            return "Error: ArtifactRun invoked without active delegate context."
+        if not goal.strip():
+            return "Error: `goal` must be a non-empty string."
+
+        sandbox_err = await require_sandbox_for_artifacts()
+        if sandbox_err:
+            return sandbox_err
+
+        valid_types = {"document", "presentation", "spreadsheet", "pdf"}
+        atype = (artifact_type or "").strip().lower()
+        if atype not in valid_types:
+            return f"Error: unknown artifact_type {artifact_type!r}. Expected one of: {sorted(valid_types)}."
+
+        sub_session_id = f"{ctx.session.session_id}:artifact:{atype}"
+        sub_session = SessionState(session_id=sub_session_id)
+        sub_cm = ContextManager(
+            max_messages=24,
+            summarize_after=14,
+            max_tool_result_chars=self.context_manager.max_tool_result_chars,
+            compact_tool_rounds=self.context_manager.compact_tool_rounds,
+        )
+
+        base = [
+            t
+            for t in tools_for_execution_target(
+                ctx.execution_target,
+                blaxel_sandbox_active=ctx.blaxel_sandbox_active,
+            )
+            if t.name not in {"ComposioRun", "DocumentRun", "PresentationRun", "SpreadsheetRun", "PdfRun"}
+        ]
+        goal_class = classify_artifact_goal(goal)
+        active_sub = tools_for_artifact_worker(base, artifact_type=atype, goal=goal)
+        if not active_sub:
+            return "Error: No tools available for artifact worker in sandbox mode."
+
+        eff_provider = resolve_provider_id(ctx.provider)
+        effective_model = resolve_effective_model(ctx.model, provider_id=eff_provider)
+        max_sub = artifact_max_rounds_for_goal(goal, override=max_steps_override)
+        sub_limits = TurnLimits(
+            task_class=goal_class,
+            max_rounds=max_sub,
+            wall_seconds=artifact_wall_seconds_for_goal(goal),
+            started_monotonic=time.monotonic(),
+        )
+
+        session_root: str | None = None
+        if ctx.cloud_sandbox is not None or ctx.blaxel_sandbox_active:
+            try:
+                override = (
+                    (ctx.run_context.blaxel_session_root or "").strip()
+                    if ctx.run_context
+                    else None
+                ) or None
+                session_root = resolve_blaxel_session_root(
+                    ctx.session.session_id,
+                    settings,
+                    override_root=override,
+                )
+            except Exception:
+                session_root = None
+        env_note: str | None = None
+        if (ctx.cloud_sandbox is not None or ctx.blaxel_sandbox_active) and session_root:
+            env_note = (
+                f"- **Blaxel sandbox** (this chat): **Read**, **Write**, **Edit**, **Bash**, "
+                f"**Glob**, **Grep** under `{session_root}`."
+            )
+
+        system_prompt = build_artifact_subagent_system_prompt(
+            ctx.workspace,
+            atype,
+            client_timezone=ctx.client_timezone,
+            client_locale=ctx.client_locale,
+            execution_environment_note=env_note,
+            cloud_tool_root=session_root if (ctx.cloud_sandbox is not None or ctx.blaxel_sandbox_active) else None,
+            goal_class=goal_class,
+        )
+        sub_session.add_message("user", goal.strip())
+        sub_session.step_count = 0
+
+        def nested_emit(ev: dict[str, Any]) -> None:
+            ctx.emit(
+                {
+                    **ev,
+                    "subagent": {"artifact": True, "type": atype},
+                }
+            )
+
+        nested_emit({"type": "agent.subagent", "data": {"phase": "artifact_start", "artifact_type": atype}})
+        last_reason: str | None = None
+        try:
+            async for ev in self._iterate_react_steps(
+                session=sub_session,
+                emit=nested_emit,
+                active_tools=active_sub,
+                system_prompt=system_prompt,
+                working_memory=[],
+                effective_model=effective_model,
+                eff_provider=eff_provider,
+                mode="artifact_sub",
+                limits=sub_limits,
+                cancel_event=ctx.cancel_event,
+                run_id=ctx.run_id,
+                context_manager=sub_cm,
+            ):
+                if ev.get("type") == "agent.completed":
+                    d = ev.get("data")
+                    if isinstance(d, dict):
+                        last_reason = str(d.get("reason") or "") or last_reason
+        finally:
+            pass
+
+        nested_emit({"type": "agent.subagent", "data": {"phase": "artifact_end", "artifact_type": atype}})
+        out = _subagent_final_assistant_text(sub_session)
+        if last_reason == "max_steps_reached":
+            out += "\n\n(Artifact worker stopped at max steps; retry with a narrower goal or higher max_steps.)"
         return out
 
     def _update_memory(self, memory: list[dict[str, Any]], tool_results: list[dict[str, Any]]) -> None:

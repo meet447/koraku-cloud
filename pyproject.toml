@@ -45,9 +45,15 @@ server = [
 composio = ["composio>=0.11.0"]
 blaxel = ["blaxel>=0.2.40"]
 supermemory = ["supermemory>=3.0.0"]
+artifacts = [
+    "python-docx>=1.1.0",
+    "python-pptx>=1.0.0",
+    "openpyxl>=3.1.0",
+    "pypdf>=4.0.0",
+]
 # Marker: Cloud product code ships from this monorepo (`koraku_cloud/`), not PyPI.
 cloud = []
-all = ["koraku[server,composio,blaxel,supermemory]"]
+all = ["koraku[server,composio,blaxel,supermemory,artifacts]"]
 dev = ["pytest>=8.0", "pytest-mock>=3.14", "pytest-asyncio>=0.23"]
 
 [project.urls]

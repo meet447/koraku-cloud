@@ -11,6 +11,7 @@ import glob as pyglob
 import json
 import os
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -28,8 +29,18 @@ from koraku.workspace.paths import workspace_dir
 # CORE FILE TOOLS (always available)
 # ========================================================================
 
-def _workspace_realpath() -> str:
+def _effective_workspace_root() -> str:
+    """Per-turn workspace from ``agent_workspace_scope``, else process cwd."""
+    from koraku.workspace.agent_workspace import get_active_agent_workspace
+
+    active = get_active_agent_workspace()
+    if active:
+        return os.path.realpath(active)
     return os.path.realpath(workspace_dir())
+
+
+def _workspace_realpath() -> str:
+    return _effective_workspace_root()
 
 
 def _path_is_under(path: str, root: str) -> bool:
@@ -48,10 +59,16 @@ async def _host_file_tool_block() -> str | None:
 
 def _resolve_host_path(path: str, *, parent_for_new_file: bool = False) -> tuple[str | None, str | None]:
     """Resolve a host file-tool path and enforce the workspace boundary when enabled."""
-    fpath = os.path.abspath(os.path.expanduser(path))
+    raw = (path or "").strip()
+    if not raw:
+        return None, "Error: path is required"
+    root = _effective_workspace_root()
+    if os.path.isabs(raw):
+        fpath = os.path.abspath(os.path.expanduser(raw))
+    else:
+        fpath = os.path.abspath(os.path.join(root, raw))
     if not settings.host_file_tools_restrict_to_workspace:
         return fpath, None
-    root = _workspace_realpath()
     check_path = os.path.dirname(fpath) if parent_for_new_file else fpath
     if not _path_is_under(check_path, root):
         return None, f"Error: Path must stay under workspace: {root}"
@@ -145,7 +162,11 @@ async def _write(file_path: str, content: str) -> str:
 
 write_tool = Tool(
     name="Write",
-    description="Write content to a file. Creates parent dirs if needed.",
+    description=(
+        "Write content to a file. Creates parent dirs if needed. "
+        "Use workspace-relative paths only (e.g. outputs/presentations/deck.pptx) — "
+        "never absolute host paths like /Users/.../koraku-cloud."
+    ),
     input_schema={
         "type": "object",
         "properties": {
@@ -224,11 +245,14 @@ async def _bash(command: str, timeout: int = 30) -> str:
     for d in dangerous:
         if d in command:
             return f"Error: Blocked dangerous command: {command}"
+    env = os.environ.copy()
+    env["KORAKU_PYTHON"] = sys.executable
     proc = await asyncio.create_subprocess_shell(
         command,
-        cwd=workspace_dir(),
+        cwd=_effective_workspace_root(),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        env=env,
     )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)

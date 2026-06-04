@@ -43,6 +43,11 @@ def _sandbox_root_posix() -> str:
     return wd or "/tmp"
 
 
+def sandbox_abs_path(file_path: str) -> str:
+    """Map a workspace-relative path to an absolute path inside the active session folder."""
+    return _to_sandbox_path(file_path)
+
+
 def _to_sandbox_path(file_path: str) -> str:
     """Map Koraku workspace-relative paths to an absolute path inside the VM.
 

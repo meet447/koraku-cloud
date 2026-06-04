@@ -10,7 +10,7 @@ from typing import Any
 from koraku.core.config import settings
 from koraku.tools.tool_def import Tool
 
-# --- Turn task classes (drives wall-clock + round safety caps, not user-facing "modes") ---
+from koraku.tools.artifact_build_tools import ARTIFACT_BUILD_TOOLS, ARTIFACT_BUILD_TOOL_BY_TYPE
 
 _RESEARCH_MARKERS = (
     "research",
@@ -76,10 +76,15 @@ _COMPOSIO_FULL_MARKERS = (
     "bulk",
 )
 
+_ARTIFACT_DELEGATE_TOOL_NAMES = frozenset(
+    {"DocumentRun", "PresentationRun", "SpreadsheetRun", "PdfRun"}
+)
+
 _COMPOSIO_WORKER_STRIP_BASE_TOOLS = frozenset(
     {
         "TodoWrite",
         "ComposioRun",
+        *_ARTIFACT_DELEGATE_TOOL_NAMES,
         "WebSearch",
         "WebFetch",
         "Bash",
@@ -299,6 +304,106 @@ def dispatcher_system_appendix(task_class: str, *, composio_subagent_mode: bool 
     """No per-turn tool restrictions; the model chooses tools from the full set."""
     _ = (task_class, composio_subagent_mode)
     return ""
+
+
+_ARTIFACT_SIMPLE_MARKERS = (
+    "one page",
+    "1 page",
+    "short memo",
+    "brief",
+    "simple",
+    "quick",
+    "single slide",
+    "merge",
+    "extract text",
+)
+
+_ARTIFACT_COMPOSE_MARKERS = (
+    "deck",
+    "slides",
+    "report",
+    "proposal",
+    "sections",
+    "table",
+    "chart",
+    "multi-sheet",
+    "template",
+)
+
+
+def classify_artifact_goal(goal: str) -> str:
+    """``artifact_simple`` | ``artifact_compose`` | ``artifact_full``."""
+    g = (goal or "").lower()
+    if any(m in g for m in _ARTIFACT_COMPOSE_MARKERS) and len(g.split()) > 40:
+        return "artifact_full"
+    if any(m in g for m in _ARTIFACT_COMPOSE_MARKERS):
+        return "artifact_compose"
+    if any(m in g for m in _ARTIFACT_SIMPLE_MARKERS) or len(g.split()) <= 30:
+        return "artifact_simple"
+    return "artifact_compose"
+
+
+def artifact_max_rounds_for_goal(goal: str, *, override: int | None = None) -> int:
+    if override is not None:
+        return max(1, min(int(override), int(settings.research_max_steps)))
+    kind = classify_artifact_goal(goal)
+    if kind == "artifact_simple":
+        return max(2, int(settings.artifact_subagent_max_steps_simple))
+    if kind == "artifact_compose":
+        return max(3, int(settings.artifact_subagent_max_steps_compose))
+    return max(4, min(int(settings.artifact_subagent_max_steps), int(settings.research_max_steps)))
+
+
+def artifact_wall_seconds_for_goal(goal: str) -> float:
+    kind = classify_artifact_goal(goal)
+    if kind == "artifact_simple":
+        return float(settings.artifact_subagent_wall_seconds_simple)
+    if kind == "artifact_compose":
+        return float(settings.artifact_subagent_wall_seconds_compose)
+    return float(settings.artifact_subagent_wall_seconds)
+
+
+_ARTIFACT_BUILD_TOOL_NAMES = frozenset(t.name for t in ARTIFACT_BUILD_TOOLS)
+
+
+def tools_for_artifact_worker(
+    base_tools: list[Tool],
+    *,
+    artifact_type: str,
+    goal: str,
+) -> list[Tool]:
+    """Narrow tool surface for artifact workers."""
+    kind = classify_artifact_goal(goal)
+    allowed = {"Write", "Edit", "Glob", "Grep"}
+    build_tool = ARTIFACT_BUILD_TOOL_BY_TYPE.get(artifact_type)
+    if build_tool is not None:
+        allowed.add(build_tool.name)
+    if artifact_type == "presentation":
+        allowed.update({"BuildPresentation"})
+    elif artifact_type == "document":
+        allowed.update({"BuildDocument"})
+    elif artifact_type == "spreadsheet":
+        allowed.update({"BuildSpreadsheet"})
+    elif artifact_type == "pdf":
+        allowed.update({"MergePdf", "Read"})
+
+    if kind == "artifact_full" and artifact_type == "document":
+        allowed.update({"Read", "WebSearch", "WebFetch"})
+    elif artifact_type in ("spreadsheet", "pdf"):
+        allowed.add("Read")
+
+    build_by_name = {t.name: t for t in ARTIFACT_BUILD_TOOLS}
+    out: list[Tool] = []
+    seen: set[str] = set()
+    for t in base_tools:
+        if t.name in allowed and t.name not in _ARTIFACT_DELEGATE_TOOL_NAMES and t.name != "ComposioRun":
+            out.append(t)
+            seen.add(t.name)
+    for name in allowed:
+        if name in build_by_name and name not in seen:
+            out.append(build_by_name[name])
+            seen.add(name)
+    return out
 
 
 def composio_worker_sop_appendix(goal_class: str) -> str:

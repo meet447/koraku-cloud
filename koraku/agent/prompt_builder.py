@@ -14,6 +14,7 @@ from koraku.agent.prompt_sections import (
 )
 from koraku.core.config import settings
 from koraku.integrations import composio as composio_runtime
+from koraku.integrations.artifact_prompt import artifact_dispatcher_prompt_section
 from koraku.integrations.supermemory_client import supermemory_configured
 from koraku.plugins.memory import prefetch_learned_memory_volatile as _prefetch_learned
 from koraku.tools.skills import load_skill_catalog
@@ -71,6 +72,10 @@ def build_stable_tier(*, display_name: str | None) -> str:
 ## Task modes
 - **Quick task:** answer directly when the request is simple. No TodoWrite ceremony.
 - **Integration task:** connected apps → **ComposioRun** once with a focused `goal`.
+- **Document task:** deliverable .docx → **DocumentRun** with sections, tone, and output path.
+- **Presentation task:** slide deck → **PresentationRun** with slide outline and output path.
+- **Spreadsheet task:** .xlsx tracker or model → **SpreadsheetRun** with columns/rows and output path.
+- **PDF task:** merge/extract PDFs → **PdfRun** with input/output paths.
 - **Research task:** WebSearch + WebFetch on canonical URLs (fetch is fast via Exa; cite uncertainty when unverified).
 - **Memory task:** **MemorySearch** before user-specific claims; **MemorySave** for durable facts they ask to remember.
 - **Automation task:** recurrence → create/update an automation, not only explain the workflow.
@@ -122,6 +127,9 @@ def build_context_tier(
     )
     if comp.strip():
         parts.append(comp.strip())
+    artifact_sec = artifact_dispatcher_prompt_section()
+    if artifact_sec.strip():
+        parts.append(artifact_sec.strip())
     return "\n\n".join(p.strip() for p in parts if p.strip())
 
 

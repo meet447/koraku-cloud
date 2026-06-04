@@ -75,8 +75,8 @@ def warn_startup_profile() -> None:
         )
     if settings.default_execution_target == "cloud" and not settings.blaxel_cloud_sandbox_enabled:
         log.warning(
-            "Cloud execution is enabled but BLAXEL_CLOUD_SANDBOX_ENABLED is false — "
-            "file/shell tools on cloud runs need Blaxel or use execution_target=local."
+            "Cloud execution requires Blaxel (BLAXEL_CLOUD_SANDBOX_ENABLED=true, BL_WORKSPACE, BL_API_KEY). "
+            "File and shell tools are sandbox-only — host disk is not used."
         )
 
 
