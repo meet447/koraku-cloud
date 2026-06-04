@@ -6,8 +6,8 @@ from datetime import datetime, timezone as tz
 from croniter import croniter
 from zoneinfo import ZoneInfo
 
-EVENT_TRIGGER_UNAVAILABLE = (
-    "Event triggers are not available yet. Use trigger_mode 'scheduled' with timezone and cron_expression."
+EVENT_TRIGGER_HINT = (
+    "Event automations run when your webhook URL is called (see webhook_url after create)."
 )
 
 

@@ -10,7 +10,16 @@ from typing import TYPE_CHECKING, Any, Callable
 from koraku.integrations.blaxel_lazy import clear_lazy_blaxel_session, set_lazy_blaxel_session
 from koraku.agent.runtime_context import AgentRunContext
 from koraku_cloud.automations import async_ops
+from koraku_cloud.automations.fingerprint import (
+    outcome_label as compute_outcome_label,
+    summary_fingerprint,
+)
+from koraku_cloud.automations.progress import (
+    progress_from_event,
+    should_throttle_progress_patch,
+)
 from koraku_cloud.automations.run_context import prepare_automation_agent_context, reset_automation_tenant
+from koraku_cloud.automations.skip_rules import evaluate_skip
 from koraku.core.config import settings
 from koraku.core.models import SessionState, utcnow
 from koraku.integrations import composio as composio_runtime
@@ -143,7 +152,17 @@ async def _finalize_automation_run(
     res: str | None,
     started: Any,
     finished: Any,
+    *,
+    auto: dict[str, Any] | None = None,
 ) -> None:
+    fp = summary_fingerprint(res or "") if status == "success" else ""
+    olabel = None
+    if auto and status == "success":
+        olabel = compute_outcome_label(
+            status=status,
+            fingerprint=fp,
+            last_success_fingerprint=str(auto.get("last_success_fingerprint") or "") or None,
+        )
     await async_ops.finish_run(
         user_id,
         org_id,
@@ -153,6 +172,15 @@ async def _finalize_automation_run(
         error=err,
         started_at=started,
         finished_at=finished,
+        result_fingerprint=fp or None,
+        outcome_label=olabel,
+    )
+    await async_ops.record_automation_after_run(
+        user_id,
+        org_id,
+        automation_id,
+        status=status,
+        result_fingerprint=fp or None,
     )
     await async_ops.set_automation_run_times(
         user_id, org_id, automation_id, last_run_at=finished
@@ -181,6 +209,9 @@ async def _handle_missing_agent(
         started_at=started,
         finished_at=utcnow(),
     )
+    await async_ops.record_automation_after_run(
+        user_id, org_id, automation_id, status="failed"
+    )
     await async_ops.set_automation_run_times(
         user_id, org_id, automation_id, last_run_at=utcnow()
     )
@@ -193,6 +224,7 @@ def build_automation_user_message(
     natural_language_spec: str,
     trigger_summary: str,
     toolkits: list[str] | None = None,
+    last_success_fingerprint: str | None = None,
 ) -> str:
     tk = _normalize_toolkits(toolkits or [])
     toolkit_line = ""
@@ -212,15 +244,80 @@ def build_automation_user_message(
             "short plain-text message (their phone must be linked in External). Do not claim "
             "you lack iMessage or SMS tools when IMessageSend is available.\n"
         )
+    diff_line = ""
+    if last_success_fingerprint:
+        diff_line = (
+            "\n**Prior successful run on file:** Compare your outcome to the last successful "
+            "run. If nothing material changed, say so briefly; if something changed, lead with "
+            "what is new.\n"
+        )
     return (
         "You are executing a saved Koraku automation (automated run).\n\n"
         f"**Automation title:** {title}\n\n"
         f"**What the user wants:**\n{natural_language_spec.strip()}\n\n"
         f"**Trigger context:**\n{trigger_summary.strip()}\n"
-        f"{toolkit_line}{imessage_line}\n"
+        f"{toolkit_line}{imessage_line}{diff_line}\n"
         "Follow the instructions completely. Prefer concrete actions (tools) when needed. "
         "End with a short summary of what you did."
     )
+
+
+async def queue_automation_run(
+    user_id: str,
+    automation_id: str,
+    *,
+    org_id: str | None = None,
+    agent: Agent | None,
+    trigger_summary: str,
+) -> dict[str, Any]:
+    """Start a run in the background; returns immediately with ``run_id`` (status running or skipped)."""
+    oid = (org_id or "").strip()
+    auto = await async_ops.get_automation(user_id, automation_id, org_id=oid or None)
+    if auto is None:
+        return {"ok": False, "error": "automation_not_found"}
+    oid = oid or str(auto.get("org_id") or "").strip()
+    if not oid:
+        return {"ok": False, "error": "automation_missing_org"}
+
+    lock = _lock_for(automation_id)
+    running = await async_ops.has_running_run(user_id, oid, automation_id)
+    skip_reason = evaluate_skip(auto, has_running_run=running, lock_busy=lock.locked())
+    if skip_reason:
+        run_id = await async_ops.insert_run_skipped(
+            user_id,
+            oid,
+            automation_id,
+            trigger_summary=trigger_summary,
+            reason=skip_reason,
+        )
+        return {
+            "ok": True,
+            "status": "skipped",
+            "run_id": run_id,
+            "error": skip_reason,
+            "skipped": True,
+        }
+
+    run_id = await async_ops.insert_run_start(
+        user_id, oid, automation_id, trigger_summary=trigger_summary
+    )
+    await async_ops.set_current_run_id(user_id, oid, automation_id, run_id=run_id)
+
+    async def _bg() -> None:
+        try:
+            await execute_automation(
+                user_id,
+                automation_id,
+                org_id=oid,
+                agent=agent,
+                trigger_summary=trigger_summary,
+                run_id=run_id,
+            )
+        except Exception:
+            log.exception("background automation run failed automation_id=%s", automation_id)
+
+    asyncio.create_task(_bg(), name=f"automation-run-{automation_id[:8]}")
+    return {"ok": True, "status": "running", "run_id": run_id}
 
 
 async def execute_automation(
@@ -231,6 +328,7 @@ async def execute_automation(
     agent: Agent | None,
     trigger_summary: str,
     emit: Callable[[dict[str, Any]], None] | None = None,
+    run_id: str | None = None,
 ) -> dict[str, Any]:
     """Run one automation turn; persists a row in ``koraku_automation_run`` (Supabase)."""
     lock = _lock_for(automation_id)
@@ -255,9 +353,32 @@ async def execute_automation(
                 return {"ok": False, "error": "automation_missing_org"}
 
             started = utcnow()
-            run_id = await async_ops.insert_run_start(
-                user_id, oid, automation_id, trigger_summary=trigger_summary
-            )
+            if not run_id:
+                running = await async_ops.has_running_run(user_id, oid, automation_id)
+                skip_reason = evaluate_skip(
+                    auto, has_running_run=running, lock_busy=False
+                )
+                if skip_reason:
+                    rid = await async_ops.insert_run_skipped(
+                        user_id,
+                        oid,
+                        automation_id,
+                        trigger_summary=trigger_summary,
+                        reason=skip_reason,
+                    )
+                    return {
+                        "ok": True,
+                        "status": "skipped",
+                        "run_id": rid,
+                        "error": skip_reason,
+                        "skipped": True,
+                    }
+                run_id = await async_ops.insert_run_start(
+                    user_id, oid, automation_id, trigger_summary=trigger_summary
+                )
+                await async_ops.set_current_run_id(
+                    user_id, oid, automation_id, run_id=run_id
+                )
 
             if agent is None:
                 return await _handle_missing_agent(
@@ -270,6 +391,10 @@ async def execute_automation(
                 natural_language_spec=auto["natural_language_spec"],
                 trigger_summary=trigger_summary,
                 toolkits=auto.get("toolkits"),
+                last_success_fingerprint=str(
+                    auto.get("last_success_fingerprint") or ""
+                )
+                or None,
             )
 
             run_org_id, account_p, tenant_tok = await prepare_automation_agent_context(
@@ -286,7 +411,28 @@ async def execute_automation(
 
             lazy_tok, lazy_root_tok = set_lazy_blaxel_session(session.session_id)
 
+            progress_state = {"phase": "starting", "detail": "Starting automation…"}
+
+            async def _patch_progress() -> None:
+                if should_throttle_progress_patch(run_id):
+                    return
+                try:
+                    await async_ops.patch_run_progress(
+                        user_id,
+                        oid,
+                        run_id,
+                        progress_phase=progress_state.get("phase"),
+                        progress_detail=progress_state.get("detail"),
+                    )
+                except Exception:
+                    log.debug("patch_run_progress failed run_id=%s", run_id, exc_info=True)
+
             def _emit(ev: dict[str, Any]) -> None:
+                phase, detail = progress_from_event(ev)
+                if phase:
+                    progress_state["phase"] = phase
+                    progress_state["detail"] = detail or phase
+                    asyncio.create_task(_patch_progress())
                 if emit is not None:
                     emit(ev)
 
@@ -319,7 +465,16 @@ async def execute_automation(
                 res = summary or None
 
             await _finalize_automation_run(
-                user_id, oid, automation_id, run_id, status, err, res, started, finished
+                user_id,
+                oid,
+                automation_id,
+                run_id,
+                status,
+                err,
+                res,
+                started,
+                finished,
+                auto=auto,
             )
 
             elapsed_ms = int((time.perf_counter() - t0) * 1000)

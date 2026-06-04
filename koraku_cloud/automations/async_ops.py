@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from koraku_cloud.automations import supabase_store
-from koraku_cloud.automations.supabase_store import AutomationStatus, TriggerMode
+from koraku_cloud.automations.supabase_store import AutomationStatus, RunStatus, TriggerMode
 
 
 async def list_automations(user_id: str, org_id: str) -> list[dict[str, Any]]:
@@ -24,6 +24,20 @@ async def get_automation(
     )
 
 
+async def get_automation_for_event(automation_id: str) -> dict[str, Any] | None:
+    return await asyncio.to_thread(supabase_store.get_automation_for_event, automation_id)
+
+
+async def get_event_webhook_hash(automation_id: str) -> str | None:
+    return await asyncio.to_thread(supabase_store.get_event_webhook_hash, automation_id)
+
+
+async def has_running_run(user_id: str, org_id: str, automation_id: str) -> bool:
+    return await asyncio.to_thread(
+        supabase_store.has_running_run, user_id, org_id, automation_id
+    )
+
+
 async def insert_automation(
     user_id: str,
     org_id: str,
@@ -37,6 +51,8 @@ async def insert_automation(
     cron_expression: str | None,
     event_display: str | None,
     toolkits: list[str],
+    schedule_preset: dict[str, Any] | None = None,
+    event_webhook_token_hash: str | None = None,
 ) -> dict[str, Any]:
     def _go() -> dict[str, Any]:
         return supabase_store.insert_automation(
@@ -51,6 +67,8 @@ async def insert_automation(
             cron_expression=cron_expression,
             event_display=event_display,
             toolkits=toolkits,
+            schedule_preset=schedule_preset,
+            event_webhook_token_hash=event_webhook_token_hash,
         )
 
     return await asyncio.to_thread(_go)
@@ -69,6 +87,8 @@ async def update_automation(
     cron_expression: str | None = None,
     event_display: str | None = None,
     toolkits: list[str] | None = None,
+    schedule_preset: dict[str, Any] | None = None,
+    consecutive_failures: int | None = None,
 ) -> dict[str, Any] | None:
     def _go() -> dict[str, Any] | None:
         return supabase_store.update_automation(
@@ -83,6 +103,8 @@ async def update_automation(
             cron_expression=cron_expression,
             event_display=event_display,
             toolkits=toolkits,
+            schedule_preset=schedule_preset,
+            consecutive_failures=consecutive_failures,
         )
 
     return await asyncio.to_thread(_go)
@@ -98,6 +120,10 @@ async def list_runs(
     return await asyncio.to_thread(supabase_store.list_runs, user_id, org_id, automation_id, limit)
 
 
+async def get_run(user_id: str, org_id: str, run_id: str) -> dict[str, Any] | None:
+    return await asyncio.to_thread(supabase_store.get_run, user_id, org_id, run_id)
+
+
 async def insert_run_start(
     user_id: str, org_id: str, automation_id: str, *, trigger_summary: str
 ) -> str:
@@ -110,16 +136,88 @@ async def insert_run_start(
     )
 
 
+async def insert_run_skipped(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    trigger_summary: str,
+    reason: str,
+) -> str:
+    return await asyncio.to_thread(
+        supabase_store.insert_run_skipped,
+        user_id,
+        org_id,
+        automation_id,
+        trigger_summary=trigger_summary,
+        reason=reason,
+    )
+
+
+async def patch_run_progress(
+    user_id: str,
+    org_id: str,
+    run_id: str,
+    *,
+    progress_phase: str | None,
+    progress_detail: str | None,
+) -> None:
+    await asyncio.to_thread(
+        supabase_store.patch_run_progress,
+        user_id,
+        org_id,
+        run_id,
+        progress_phase=progress_phase,
+        progress_detail=progress_detail,
+    )
+
+
+async def set_current_run_id(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    run_id: str | None,
+) -> None:
+    await asyncio.to_thread(
+        supabase_store.set_current_run_id,
+        user_id,
+        org_id,
+        automation_id,
+        run_id=run_id,
+    )
+
+
+async def record_automation_after_run(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    status: str,
+    result_fingerprint: str | None = None,
+) -> None:
+    await asyncio.to_thread(
+        supabase_store.record_automation_after_run,
+        user_id,
+        org_id,
+        automation_id,
+        status=status,
+        result_fingerprint=result_fingerprint,
+    )
+
+
 async def finish_run(
     user_id: str,
     org_id: str,
     run_id: str,
     *,
-    status: Literal["success", "failed"],
+    status: RunStatus,
     result_summary: str | None,
     error: str | None,
     started_at: datetime,
     finished_at: datetime,
+    result_fingerprint: str | None = None,
+    outcome_label: str | None = None,
 ) -> None:
     await asyncio.to_thread(
         supabase_store.finish_run,
@@ -131,6 +229,8 @@ async def finish_run(
         error=error,
         started_at=started_at,
         finished_at=finished_at,
+        result_fingerprint=result_fingerprint,
+        outcome_label=outcome_label,
     )
 
 

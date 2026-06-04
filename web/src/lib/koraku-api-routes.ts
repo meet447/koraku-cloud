@@ -94,6 +94,13 @@ export const automations = createKorakuCatchAllProxy({
   maxDuration: 300,
 });
 
+/** POST inbound webhooks for event-triggered automations (token query param, no session). */
+export const automationEvents = createKorakuCatchAllProxy({
+  upstreamPath: "/api/automation-events",
+  methods: ["POST"] as const,
+  maxDuration: 300,
+});
+
 export const composio = createKorakuCatchAllProxy({
   upstreamPath: "/api/composio",
   methods: ["GET", "POST"] as const,

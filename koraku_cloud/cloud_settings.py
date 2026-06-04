@@ -207,6 +207,10 @@ class CloudSettings(BaseSettings):
         default="whisper-large-v3",
         validation_alias=AliasChoices("VOICE_TRANSCRIPTION_MODEL", "voice_transcription_model"),
     )
+    koraku_public_api_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("KORAKU_PUBLIC_API_URL", "koraku_public_api_url"),
+    )
     chat_defer_blaxel_provision: bool = Field(
         default=True,
         validation_alias=AliasChoices("CHAT_DEFER_BLAXEL_PROVISION", "chat_defer_blaxel_provision"),

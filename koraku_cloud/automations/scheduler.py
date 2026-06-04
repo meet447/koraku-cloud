@@ -92,7 +92,7 @@ def refresh_next_run_metadata(user_id: str, automation_id: str) -> None:
 
 async def _scheduled_tick(automation_id: str, user_id: str) -> None:
     from koraku_cloud.automations import async_ops
-    from koraku_cloud.automations.runner import execute_automation
+    from koraku_cloud.automations.runner import queue_automation_run
 
     row = await async_ops.get_automation(user_id, automation_id)
     if not row or row.get("status") != "active" or row.get("trigger_mode") != "scheduled":
@@ -100,7 +100,7 @@ async def _scheduled_tick(automation_id: str, user_id: str) -> None:
     summary = f"Scheduled run ({row.get('cron_expression') or 'cron'} in {row.get('timezone') or 'UTC'})."
     await asyncio.sleep(0)
     try:
-        await execute_automation(
+        await queue_automation_run(
             user_id,
             automation_id,
             org_id=str(row.get("org_id") or "") or None,

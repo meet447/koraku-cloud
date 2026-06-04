@@ -8,8 +8,8 @@ from typing import Any
 from koraku_cloud.automations import async_ops, scheduler
 from koraku_cloud.automations.present import enrich_automation_row, enrich_automation_rows
 from koraku_cloud.automations.supabase_store import supabase_automations_configured
+from koraku_cloud.automations.schedule import preset_to_cron
 from koraku_cloud.automations.validation import (
-    EVENT_TRIGGER_UNAVAILABLE,
     validate_cron_expression,
     validate_timezone_iana,
 )
@@ -79,7 +79,11 @@ async def _automations_create(**kwargs: Any) -> str:
         return f"Error: {e}"
     tm = trigger_mode.lower()
     if tm == "event":
-        return f"Error: {EVENT_TRIGGER_UNAVAILABLE}"
+        return (
+            "Error: Event automations must be created in the Koraku UI or API so a webhook "
+            "URL and token are issued. Use AutomationsCreate with trigger_mode 'scheduled' "
+            "for cron-based runs."
+        )
     if tm != "scheduled":
         return (
             f"Error: trigger_mode must be 'scheduled', got {trigger_mode!r}."

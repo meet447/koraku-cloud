@@ -17,6 +17,7 @@ _RUN_TABLE = "koraku_automation_run"
 
 TriggerMode = Literal["scheduled", "event"]
 AutomationStatus = Literal["active", "paused"]
+RunStatus = Literal["success", "failed", "skipped", "running"]
 
 # Re-exported for supabase_tenant and legacy imports.
 _require_config = supabase_rest.require_config
@@ -61,6 +62,12 @@ def _row_to_automation(o: dict[str, Any]) -> dict[str, Any]:
         "updated_at": o.get("updated_at"),
         "last_run_at": o.get("last_run_at"),
         "next_run_at": o.get("next_run_at"),
+        "schedule_preset": o.get("schedule_preset"),
+        "consecutive_failures": int(o.get("consecutive_failures") or 0),
+        "max_failures_before_pause": int(o.get("max_failures_before_pause") or 3),
+        "current_run_id": o.get("current_run_id"),
+        "last_success_fingerprint": o.get("last_success_fingerprint"),
+        "has_event_webhook": bool(o.get("event_webhook_token_hash")),
     }
 
 
@@ -90,7 +97,9 @@ def list_scheduled_active_all_users() -> list[dict[str, Any]]:
     q = (
         f"/{_TABLE}?trigger_mode=eq.scheduled&status=eq.active"
         "&select=id,user_id,org_id,title,headline,natural_language_spec,trigger_mode,status,"
-        "timezone,cron_expression,event_display,toolkits,created_at,updated_at,last_run_at,next_run_at"
+        "timezone,cron_expression,event_display,toolkits,schedule_preset,"
+        "consecutive_failures,max_failures_before_pause,current_run_id,last_success_fingerprint,"
+        "event_webhook_token_hash,created_at,updated_at,last_run_at,next_run_at"
     )
     r = _client().get(_rest_url(q), headers=_headers())
     r.raise_for_status()
@@ -135,6 +144,8 @@ def insert_automation(
     cron_expression: str | None,
     event_display: str | None,
     toolkits: list[str],
+    schedule_preset: dict[str, Any] | None = None,
+    event_webhook_token_hash: str | None = None,
 ) -> dict[str, Any]:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
@@ -155,9 +166,15 @@ def insert_automation(
         "cron_expression": cron_expression,
         "event_display": event_display,
         "toolkits": [t.strip().upper() for t in toolkits if t.strip()],
+        "consecutive_failures": 0,
+        "max_failures_before_pause": 3,
         "created_at": now,
         "updated_at": now,
     }
+    if schedule_preset is not None:
+        body["schedule_preset"] = schedule_preset
+    if event_webhook_token_hash:
+        body["event_webhook_token_hash"] = event_webhook_token_hash
     r = _client().post(_rest_url(f"/{_TABLE}"), headers=_headers(), content=json.dumps(body))
     if r.status_code >= 400:
         log.error("insert_automation failed: %s %s", r.status_code, r.text)
@@ -183,6 +200,8 @@ def update_automation(
     cron_expression: str | None = None,
     event_display: str | None = None,
     toolkits: list[str] | None = None,
+    schedule_preset: dict[str, Any] | None = None,
+    consecutive_failures: int | None = None,
 ) -> dict[str, Any] | None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
@@ -204,6 +223,10 @@ def update_automation(
         patch["event_display"] = event_display
     if toolkits is not None:
         patch["toolkits"] = [t.strip().upper() for t in toolkits if t.strip()]
+    if schedule_preset is not None:
+        patch["schedule_preset"] = schedule_preset
+    if consecutive_failures is not None:
+        patch["consecutive_failures"] = int(consecutive_failures)
     if len(patch) <= 1:
         return get_automation(uid, aid, org_id=oid)
     q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
@@ -252,6 +275,93 @@ def set_automation_run_times(
     r.raise_for_status()
 
 
+def get_automation_for_event(automation_id: str) -> dict[str, Any] | None:
+    aid = (automation_id or "").strip()
+    q = f"/{_TABLE}?id=eq.{aid}&trigger_mode=eq.event&limit=1"
+    r = _client().get(_rest_url(q), headers=_headers())
+    r.raise_for_status()
+    rows = r.json()
+    if not isinstance(rows, list) or not rows:
+        return None
+    row = rows[0]
+    return _row_to_automation(row) if isinstance(row, dict) else None
+
+
+def get_event_webhook_hash(automation_id: str) -> str | None:
+    aid = (automation_id or "").strip()
+    q = f"/{_TABLE}?id=eq.{aid}&select=event_webhook_token_hash&limit=1"
+    r = _client().get(_rest_url(q), headers=_headers())
+    if r.status_code != 200:
+        return None
+    rows = r.json()
+    if not rows:
+        return None
+    h = rows[0].get("event_webhook_token_hash")
+    return str(h) if h else None
+
+
+def has_running_run(user_id: str, org_id: str, automation_id: str) -> bool:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    q = (
+        f"/{_RUN_TABLE}?automation_id=eq.{aid}&user_id=eq.{uid}&org_id=eq.{oid}"
+        "&status=eq.running&limit=1&select=id"
+    )
+    r = _client().get(_rest_url(q), headers=_headers())
+    if r.status_code != 200:
+        return False
+    rows = r.json()
+    return bool(isinstance(rows, list) and rows)
+
+
+def set_current_run_id(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    run_id: str | None,
+) -> None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    patch: dict[str, Any] = {
+        "updated_at": _iso(datetime.now(_UTC)),
+        "current_run_id": run_id,
+    }
+    q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
+    r.raise_for_status()
+
+
+def record_automation_after_run(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    status: str,
+    result_fingerprint: str | None = None,
+) -> None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    patch: dict[str, Any] = {
+        "updated_at": _iso(datetime.now(_UTC)),
+        "current_run_id": None,
+    }
+    if status == "success":
+        patch["consecutive_failures"] = 0
+        if result_fingerprint:
+            patch["last_success_fingerprint"] = result_fingerprint
+    elif status == "failed":
+        row = get_automation(uid, aid, org_id=oid)
+        prev = int((row or {}).get("consecutive_failures") or 0)
+        patch["consecutive_failures"] = prev + 1
+    q = f"/{_TABLE}?{_automation_scope(uid, oid, automation_id=aid)}"
+    r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
+    r.raise_for_status()
+
+
 def insert_run_start(
     user_id: str,
     org_id: str,
@@ -278,16 +388,105 @@ def insert_run_start(
     return rid
 
 
+def insert_run_skipped(
+    user_id: str,
+    org_id: str,
+    automation_id: str,
+    *,
+    trigger_summary: str,
+    reason: str,
+) -> str:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    aid = (automation_id or "").strip()
+    rid = str(uuid.uuid4())
+    now = _iso(datetime.now(_UTC))
+    body = {
+        "id": rid,
+        "automation_id": aid,
+        "user_id": uid,
+        "org_id": oid,
+        "status": "skipped",
+        "trigger_summary": trigger_summary[:8000],
+        "error": reason[:8000],
+        "started_at": now,
+        "finished_at": now,
+        "duration_ms": 0,
+    }
+    r = _client().post(_rest_url(f"/{_RUN_TABLE}"), headers=_headers(), content=json.dumps(body))
+    r.raise_for_status()
+    return rid
+
+
+def patch_run_progress(
+    user_id: str,
+    org_id: str,
+    run_id: str,
+    *,
+    progress_phase: str | None,
+    progress_detail: str | None,
+) -> None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    rid = (run_id or "").strip()
+    patch: dict[str, Any] = {}
+    if progress_phase is not None:
+        patch["progress_phase"] = progress_phase[:120]
+    if progress_detail is not None:
+        patch["progress_detail"] = progress_detail[:500]
+    if not patch:
+        return
+    q = f"/{_RUN_TABLE}?id=eq.{rid}&user_id=eq.{uid}&org_id=eq.{oid}"
+    r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
+    r.raise_for_status()
+
+
+def get_run(user_id: str, org_id: str, run_id: str) -> dict[str, Any] | None:
+    uid = (user_id or "").strip()
+    oid = (org_id or "").strip()
+    rid = (run_id or "").strip()
+    q = (
+        f"/{_RUN_TABLE}?id=eq.{rid}&user_id=eq.{uid}&org_id=eq.{oid}&limit=1"
+        "&select=id,automation_id,status,trigger_summary,result_summary,error,"
+        "started_at,finished_at,duration_ms,progress_phase,progress_detail,outcome_label"
+    )
+    r = _client().get(_rest_url(q), headers=_headers())
+    if r.status_code != 200:
+        return None
+    rows = r.json()
+    if not isinstance(rows, list) or not rows:
+        return None
+    raw = rows[0]
+    if not isinstance(raw, dict):
+        return None
+    return {
+        "id": raw["id"],
+        "automation_id": raw["automation_id"],
+        "status": raw["status"],
+        "trigger_summary": raw.get("trigger_summary") or "",
+        "result_summary": raw.get("result_summary"),
+        "error": raw.get("error"),
+        "started_at": raw.get("started_at"),
+        "finished_at": raw.get("finished_at"),
+        "duration_ms": raw.get("duration_ms"),
+        "progress_phase": raw.get("progress_phase"),
+        "progress_detail": raw.get("progress_detail"),
+        "outcome_label": raw.get("outcome_label"),
+    }
+
+
 def finish_run(
     user_id: str,
     org_id: str,
     run_id: str,
     *,
-    status: Literal["success", "failed"],
+    status: RunStatus,
     result_summary: str | None,
     error: str | None,
     started_at: datetime,
     finished_at: datetime,
+    result_fingerprint: str | None = None,
+    outcome_label: str | None = None,
 ) -> None:
     uid = (user_id or "").strip()
     oid = (org_id or "").strip()
@@ -299,7 +498,13 @@ def finish_run(
         "error": (error or "")[:8000] or None,
         "finished_at": _iso(finished_at),
         "duration_ms": duration_ms,
+        "progress_phase": None,
+        "progress_detail": None,
     }
+    if result_fingerprint:
+        patch["result_fingerprint"] = result_fingerprint
+    if outcome_label:
+        patch["outcome_label"] = outcome_label
     q = f"/{_RUN_TABLE}?id=eq.{rid}&user_id=eq.{uid}&org_id=eq.{oid}"
     r = _client().patch(_rest_url(q), headers=_headers(), content=json.dumps(patch))
     r.raise_for_status()
@@ -318,7 +523,8 @@ def list_runs(
     q = (
         f"/{_RUN_TABLE}?automation_id=eq.{aid}&user_id=eq.{uid}&org_id=eq.{oid}"
         f"&order=started_at.desc&limit={lim}"
-        "&select=id,automation_id,status,trigger_summary,result_summary,error,started_at,finished_at,duration_ms"
+        "&select=id,automation_id,status,trigger_summary,result_summary,error,"
+        "started_at,finished_at,duration_ms,progress_phase,progress_detail,outcome_label"
     )
     r = _client().get(_rest_url(q), headers=_headers())
     r.raise_for_status()
@@ -340,6 +546,9 @@ def list_runs(
                 "started_at": raw.get("started_at"),
                 "finished_at": raw.get("finished_at"),
                 "duration_ms": raw.get("duration_ms"),
+                "progress_phase": raw.get("progress_phase"),
+                "progress_detail": raw.get("progress_detail"),
+                "outcome_label": raw.get("outcome_label"),
             }
         )
     return out

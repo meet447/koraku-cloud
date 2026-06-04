@@ -15,6 +15,8 @@ import { KorakuSearchInput } from "@/components/KorakuSearchInput";
 
 type ConfirmKind = "create" | "delete" | "run";
 
+type ScheduleKind = "every_n_minutes" | "daily" | "weekdays" | "weekly" | "custom";
+
 type Automation = {
   id: string;
   title: string;
@@ -27,8 +29,12 @@ type Automation = {
   event_display?: string | null;
   toolkits: string[];
   status_line?: string;
+  health_line?: string;
+  schedule_label?: string;
   next_run_at_computed?: string;
   last_run_at?: string | null;
+  current_run_id?: string | null;
+  consecutive_failures?: number;
 };
 
 type RunRow = {
@@ -40,7 +46,26 @@ type RunRow = {
   started_at: string;
   finished_at: string | null;
   duration_ms: number | null;
+  progress_phase?: string | null;
+  progress_detail?: string | null;
+  outcome_label?: string | null;
 };
+
+function buildSchedulePreset(
+  kind: ScheduleKind,
+  opts: { everyN: number; hour: number; minute: number; dayOfWeek: number; cron: string },
+): Record<string, unknown> {
+  if (kind === "custom") {
+    return { kind: "custom", cron_expression: opts.cron.trim() };
+  }
+  if (kind === "every_n_minutes") {
+    return { kind, every_n_minutes: opts.everyN };
+  }
+  if (kind === "weekly") {
+    return { kind, hour: opts.hour, minute: opts.minute, day_of_week: opts.dayOfWeek };
+  }
+  return { kind, hour: opts.hour, minute: opts.minute };
+}
 
 
 const AUTOMATION_TEMPLATES = [
@@ -108,11 +133,20 @@ function groupRuns(runs: RunRow[]): { label: string; runs: RunRow[] }[] {
 
 function triggerSubtitle(a: Automation): string {
   if (a.trigger_mode === "event") {
-    return a.event_display || "Event trigger";
+    return a.event_display || "Webhook event";
   }
-  const cr = a.cron_expression || "—";
+  const label = a.schedule_label || a.cron_expression || "—";
   const tz = a.timezone || "UTC";
-  return `${cr} (${tz})`;
+  return `${label} (${tz})`;
+}
+
+function runStatusBadge(run: RunRow): string | null {
+  if (run.status === "skipped") return "Skipped";
+  if (run.status === "running") return "Running";
+  if (run.outcome_label === "unchanged") return "Unchanged";
+  if (run.outcome_label === "changed") return "Updated";
+  if (run.outcome_label === "new") return "New result";
+  return null;
 }
 
 export default function AutomationsPage() {
@@ -135,8 +169,20 @@ export default function AutomationsPage() {
   const [formHeadline, setFormHeadline] = useState("");
   const [formSpec, setFormSpec] = useState("");
   const [formTz, setFormTz] = useState("UTC");
+  const [scheduleKind, setScheduleKind] = useState<ScheduleKind>("daily");
+  const [scheduleEveryN, setScheduleEveryN] = useState(30);
+  const [scheduleHour, setScheduleHour] = useState(9);
+  const [scheduleMinute, setScheduleMinute] = useState(0);
+  const [scheduleDow, setScheduleDow] = useState(5);
   const [formCron, setFormCron] = useState("0 9 * * *");
   const [formToolkits, setFormToolkits] = useState("");
+  const [formTriggerMode, setFormTriggerMode] = useState<"scheduled" | "event">("scheduled");
+  const [webhookReveal, setWebhookReveal] = useState<{
+    id: string;
+    url: string;
+    token: string;
+  } | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -223,6 +269,34 @@ export default function AutomationsPage() {
     }
   }, [selectedId, loadRuns]);
 
+  const pollActiveRun = selected?.current_run_id || activeRunId;
+  useEffect(() => {
+    if (!selectedId || !pollActiveRun) return;
+    const tick = () => {
+      void (async () => {
+        try {
+          const run = await korakuFetchJson<RunRow>(
+            `/koraku-api/api/automations/${selectedId}/runs/${pollActiveRun}`,
+          );
+          setRuns((prev) => {
+            const rest = prev.filter((r) => r.id !== run.id);
+            return [run, ...rest];
+          });
+          if (run.status !== "running") {
+            setActiveRunId(null);
+            setRunning(false);
+            void loadList();
+          }
+        } catch {
+          /* ignore transient poll errors */
+        }
+      })();
+    };
+    tick();
+    const id = window.setInterval(tick, 2000);
+    return () => window.clearInterval(id);
+  }, [selectedId, pollActiveRun, loadList]);
+
   function requestCreate() {
     setPendingConfirm("create");
   }
@@ -231,12 +305,12 @@ export default function AutomationsPage() {
     () =>
       [
         `Title: ${formTitle.trim() || "Untitled automation"}`,
-        `Trigger: ${formCron.trim()} (${formTz.trim()})`,
+        `Schedule: ${scheduleKind} (${formTz.trim()})`,
         formToolkits.trim() ? `Connected apps: ${formToolkits.trim()}` : "Connected apps: none specified",
         "",
         "Koraku will run this in the background. The agent can use IMessageSend when a phone is linked in External.",
       ].join("\n"),
-    [formTitle, formCron, formTz, formToolkits],
+    [formTitle, formTz, formToolkits, scheduleKind],
   );
 
   async function createAutomation() {
@@ -249,20 +323,39 @@ export default function AutomationsPage() {
         .map((s) => s.trim())
         .filter(Boolean)
         .map((s) => s.toUpperCase());
-      const body = {
+      const body: Record<string, unknown> = {
         title: formTitle.trim() || "Untitled automation",
         headline: formHeadline.trim(),
         natural_language_spec: formSpec.trim(),
-        trigger_mode: "scheduled",
+        trigger_mode: formTriggerMode,
         status: "active",
-        timezone: formTz.trim(),
-        cron_expression: formCron.trim(),
         toolkits,
       };
-      const created = await korakuFetchJson<Automation>("/koraku-api/api/automations", {
+      if (formTriggerMode === "scheduled") {
+        body.timezone = formTz.trim();
+        body.schedule_preset = buildSchedulePreset(scheduleKind, {
+          everyN: scheduleEveryN,
+          hour: scheduleHour,
+          minute: scheduleMinute,
+          dayOfWeek: scheduleDow,
+          cron: formCron,
+        });
+      } else {
+        body.event_display = "Webhook";
+      }
+      const created = await korakuFetchJson<
+        Automation & { webhook_url?: string; webhook_token?: string }
+      >("/koraku-api/api/automations", {
         method: "POST",
         json: body,
       });
+      if (created.webhook_url && created.webhook_token) {
+        setWebhookReveal({
+          id: created.id,
+          url: created.webhook_url,
+          token: created.webhook_token,
+        });
+      }
       setShowCreate(false);
       setFormTitle("");
       setFormHeadline("");
@@ -284,7 +377,10 @@ export default function AutomationsPage() {
     try {
       await korakuFetchOk(`/koraku-api/api/automations/${selectedId}`, {
         method: "PATCH",
-        json: { status: paused ? "paused" : "active" },
+        json: {
+          status: paused ? "paused" : "active",
+          ...(paused ? {} : { reset_failure_count: true }),
+        },
       });
       await loadList();
       setMenuOpen(false);
@@ -326,6 +422,14 @@ export default function AutomationsPage() {
       const r = await korakuFetch(`/koraku-api/api/automations/${selectedId}/run`, {
         method: "POST",
       });
+      let payload: { run_id?: string; status?: string } = {};
+      if (r.ok) {
+        try {
+          payload = (await r.json()) as { run_id?: string; status?: string };
+        } catch {
+          payload = {};
+        }
+      }
       if (!r.ok) {
         let msg = await r.text();
         try {
@@ -338,12 +442,19 @@ export default function AutomationsPage() {
         }
         throw new Error(msg || `HTTP ${r.status}`);
       }
+      if (payload.run_id) {
+        setActiveRunId(payload.run_id);
+      }
       await loadRuns(selectedId);
       await loadList();
+      if (payload.status !== "running") {
+        setRunning(false);
+        setActiveRunId(null);
+      }
     } catch (e) {
       setError(errorMessage(e, "Run failed"));
-    } finally {
       setRunning(false);
+      setActiveRunId(null);
     }
   }
 
@@ -389,6 +500,9 @@ export default function AutomationsPage() {
                     setFormTitle(template.title);
                     setFormHeadline(template.headline);
                     setFormSpec(template.spec);
+                    setScheduleKind("weekdays");
+                    setScheduleHour(8);
+                    setScheduleMinute(0);
                     setFormCron(template.cron);
                     setFormToolkits(template.toolkits);
                   }}
@@ -428,6 +542,26 @@ export default function AutomationsPage() {
                 placeholder="Describe the steps, timing, and what “done” looks like."
               />
             </label>
+            <label className="mt-3 block max-w-xs text-xs font-semibold uppercase tracking-wide text-neutral-500">
+              Trigger
+              <select
+                value={formTriggerMode}
+                onChange={(e) => setFormTriggerMode(e.target.value as "scheduled" | "event")}
+                className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-neutral-200"
+              >
+                <option value="scheduled">On a schedule</option>
+                <option value="event">Webhook event</option>
+              </select>
+            </label>
+            {formTriggerMode === "event" ? (
+              <p className="mt-2 max-w-2xl text-xs font-medium leading-relaxed text-neutral-600">
+                After you save, Koraku shows a one-time webhook URL and secret token. POST JSON to that URL
+                from Zapier, your app, or any integration. Set{" "}
+                <code className="rounded bg-neutral-100 px-1 font-mono text-[11px]">KORAKU_PUBLIC_API_URL</code>{" "}
+                on the API so the URL matches your public host.
+              </p>
+            ) : null}
+            {formTriggerMode === "scheduled" ? (
             <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
               <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
                 Timezone
@@ -439,7 +573,76 @@ export default function AutomationsPage() {
                 />
               </label>
               <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Schedule (cron)
+                Schedule
+                <select
+                  value={scheduleKind}
+                  onChange={(e) => setScheduleKind(e.target.value as ScheduleKind)}
+                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-neutral-200"
+                >
+                  <option value="every_n_minutes">Every N minutes</option>
+                  <option value="daily">Every day</option>
+                  <option value="weekdays">Weekdays</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="custom">Custom cron</option>
+                </select>
+              </label>
+            </div>
+            ) : null}
+            {formTriggerMode === "scheduled" && scheduleKind === "every_n_minutes" ? (
+              <label className="mt-3 block max-w-xs text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Interval (minutes)
+                <input
+                  type="number"
+                  min={1}
+                  max={59}
+                  value={scheduleEveryN}
+                  onChange={(e) => setScheduleEveryN(Number(e.target.value) || 30)}
+                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
+                />
+              </label>
+            ) : null}
+            {formTriggerMode === "scheduled" && scheduleKind !== "every_n_minutes" && scheduleKind !== "custom" ? (
+              <div className="mt-3 flex max-w-md flex-wrap gap-3">
+                <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Hour
+                  <input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={scheduleHour}
+                    onChange={(e) => setScheduleHour(Number(e.target.value))}
+                    className="mt-1 w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Minute
+                  <input
+                    type="number"
+                    min={0}
+                    max={59}
+                    value={scheduleMinute}
+                    onChange={(e) => setScheduleMinute(Number(e.target.value))}
+                    className="mt-1 w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm"
+                  />
+                </label>
+                {scheduleKind === "weekly" ? (
+                  <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    Day (0=Sun)
+                    <input
+                      type="number"
+                      min={0}
+                      max={6}
+                      value={scheduleDow}
+                      onChange={(e) => setScheduleDow(Number(e.target.value))}
+                      className="mt-1 w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm"
+                    />
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+            {formTriggerMode === "scheduled" && scheduleKind === "custom" ? (
+              <label className="mt-3 block max-w-3xl text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                Cron (5 fields)
                 <input
                   value={formCron}
                   onChange={(e) => setFormCron(e.target.value)}
@@ -447,7 +650,7 @@ export default function AutomationsPage() {
                   placeholder="minute hour day month weekday"
                 />
               </label>
-            </div>
+            ) : null}
             <label className="mt-3 block max-w-xl text-xs font-semibold uppercase tracking-wide text-neutral-500">
               Linked apps (optional)
               <input
@@ -578,8 +781,13 @@ export default function AutomationsPage() {
                             : "bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200/80",
                         )}
                       >
-                        {selected.status === "active" ? "Active" : "Paused"}
+                        {selected.status_line || (selected.status === "active" ? "Active" : "Paused")}
                       </span>
+                      {selected.health_line ? (
+                        <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-900 ring-1 ring-amber-200/80">
+                          {selected.health_line}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-1 text-sm font-medium text-neutral-500">
                       {selected.trigger_mode === "event"
@@ -594,9 +802,24 @@ export default function AutomationsPage() {
                         </span>
                       </p>
                     ) : null}
-                    {selected.trigger_mode === "event" ? (
-                      <p className="mt-2 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-amber-200/80">
-                        Event triggers are not available yet. Use Run now or recreate this automation on a schedule.
+                    {pollActiveRun ? (
+                      <p className="mt-2 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80">
+                        Run in progress…{" "}
+                        {runs.find((r) => r.id === pollActiveRun)?.progress_detail || "Working"}
+                      </p>
+                    ) : null}
+                    {webhookReveal?.id === selected.id ? (
+                      <div className="mt-3 max-w-xl rounded-2xl bg-amber-50 px-4 py-3 text-xs font-medium text-amber-950 ring-1 ring-amber-200/80">
+                        <p className="font-bold uppercase tracking-wide">Webhook (copy now)</p>
+                        <p className="mt-2 break-all font-mono text-[11px]">{webhookReveal.url}</p>
+                        <p className="mt-2">
+                          Token is only shown once. External callers POST JSON with{" "}
+                          <code className="rounded bg-white/80 px-1">?token=…</code> on the URL.
+                        </p>
+                      </div>
+                    ) : selected.trigger_mode === "event" && webhookReveal?.id !== selected.id ? (
+                      <p className="mt-2 text-xs font-medium text-neutral-500">
+                        Webhook URL was issued at creation. Create a new event automation if you need a fresh token.
                       </p>
                     ) : null}
                   </div>
@@ -672,7 +895,20 @@ export default function AutomationsPage() {
                               key={run.id}
                               className="rounded-2xl border border-neutral-200/80 bg-white px-4 py-3 shadow-[0_1px_2px_rgb(0_0_0_/0.04)]"
                             >
-                              <p className="text-[13px] font-semibold text-neutral-800">{run.trigger_summary}</p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-[13px] font-semibold text-neutral-800">{run.trigger_summary}</p>
+                                {runStatusBadge(run) ? (
+                                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-600">
+                                    {runStatusBadge(run)}
+                                  </span>
+                                ) : null}
+                              </div>
+                              {run.status === "running" && run.progress_detail ? (
+                                <p className="mt-2 text-[12px] font-medium text-sky-800">{run.progress_detail}</p>
+                              ) : null}
+                              {run.status === "skipped" ? (
+                                <p className="mt-2 text-[13px] font-medium text-neutral-600">{run.error || "Skipped"}</p>
+                              ) : null}
                               {run.status === "failed" ? (
                                 <div className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700">
                                   <p>{run.error || "Failed"}</p>
@@ -680,11 +916,11 @@ export default function AutomationsPage() {
                                     Check required connections, tighten the automation spec, then retry with Run now.
                                   </p>
                                 </div>
-                              ) : (
+                              ) : run.status !== "skipped" && run.status !== "running" ? (
                                 <p className="mt-2 whitespace-pre-wrap text-[13px] font-medium leading-snug text-neutral-600">
                                   {run.result_summary || "—"}
                                 </p>
-                              )}
+                              ) : null}
                               {run.duration_ms != null ? (
                                 <p className="mt-2 text-[11px] font-medium text-neutral-400">
                                   {run.status} · {run.duration_ms} ms
