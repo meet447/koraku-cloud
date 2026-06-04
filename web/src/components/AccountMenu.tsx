@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { UserAvatar } from "@/components/UserAvatar";
+import { clearOnboardingClientState } from "@/lib/onboarding";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { getUserDisplayName } from "@/lib/user-profile";
 
@@ -105,6 +106,7 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
 
   const signOut = () => {
     void (async () => {
+      clearOnboardingClientState();
       await supabase.auth.signOut();
       if (pathname.startsWith("/app")) {
         router.replace("/");

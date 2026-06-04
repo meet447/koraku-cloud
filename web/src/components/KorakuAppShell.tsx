@@ -11,7 +11,12 @@ import {
   isOnboardingRoute,
   ONBOARDING_PATH,
 } from "@/lib/app-path";
-import { isOnboardingComplete } from "@/lib/onboarding";
+import { loadPersonalization } from "@/lib/koraku-personalization";
+import {
+  hasPersonalizationOnboardingProfile,
+  isOnboardingComplete,
+  markOnboardingComplete,
+} from "@/lib/onboarding";
 import { AppChrome } from "@/components/AppChrome";
 import { ChatConversation } from "@/components/ChatApp";
 import { SetupStatusBanner } from "@/components/SetupStatusBanner";
@@ -19,18 +24,38 @@ import { SetupStatusBanner } from "@/components/SetupStatusBanner";
 function OnboardingGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
   const router = useRouter();
-  const [ready, setReady] = useState(false);
+  const [complete, setComplete] = useState<boolean | null>(null);
 
   useEffect(() => {
-    setReady(true);
+    if (isOnboardingComplete()) {
+      setComplete(true);
+      return;
+    }
+    let cancelled = false;
+    void loadPersonalization()
+      .then((data) => {
+        if (cancelled) return;
+        if (hasPersonalizationOnboardingProfile(data.memory)) {
+          markOnboardingComplete();
+          setComplete(true);
+        } else {
+          setComplete(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setComplete(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const complete = isOnboardingComplete();
   const onOnboarding = isOnboardingRoute(pathname);
   const inApp = isAppRoute(pathname);
+  const resolving = complete === null;
 
   useEffect(() => {
-    if (!ready) return;
+    if (resolving) return;
     if (onOnboarding && complete) {
       router.replace(APP_BASE);
       return;
@@ -38,9 +63,9 @@ function OnboardingGate({ children }: { children: ReactNode }) {
     if (inApp && !onOnboarding && !complete) {
       router.replace(ONBOARDING_PATH);
     }
-  }, [ready, onOnboarding, inApp, complete, router]);
+  }, [resolving, onOnboarding, inApp, complete, router]);
 
-  if (!ready) {
+  if (resolving) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
         Loading…
@@ -56,7 +81,11 @@ function OnboardingGate({ children }: { children: ReactNode }) {
   }
 
   if (inApp && !complete) {
-    return null;
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
+        Loading…
+      </div>
+    );
   }
 
   return <>{children}</>;

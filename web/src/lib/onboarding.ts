@@ -1,5 +1,9 @@
 import type { PersonalizationPayload } from "@/lib/koraku-personalization";
-import { buildMemoryFromSections } from "@/lib/personalization-memory";
+import {
+  buildMemoryFromSections,
+  parseMemorySections,
+  PROFILE_SECTION_HEADER,
+} from "@/lib/personalization-memory";
 
 export const ONBOARDING_DONE_KEY = "koraku_onboarding_done";
 export const ONBOARDING_DRAFT_KEY = "koraku_onboarding_draft";
@@ -122,6 +126,25 @@ export function markOnboardingComplete(): void {
   } catch {
     /* ignore */
   }
+}
+
+/** Clears client onboarding flags so the next signed-in user is not gated by a prior account. */
+export function clearOnboardingClientState(): void {
+  try {
+    window.localStorage.removeItem(ONBOARDING_DONE_KEY);
+    window.localStorage.removeItem(STARTER_PROMPTS_KEY);
+    window.sessionStorage.removeItem(ONBOARDING_DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** True when saved personalization already contains a finished onboarding profile. */
+export function hasPersonalizationOnboardingProfile(memory: string): boolean {
+  const text = memory.trim();
+  if (!text.includes(PROFILE_SECTION_HEADER)) return false;
+  const { profile } = parseMemorySections(text);
+  return Boolean(profile.userName.trim() && profile.about.trim());
 }
 
 export type OnboardingDraft = OnboardingFormData & { stepIndex: number };
