@@ -15,6 +15,10 @@ from koraku_cloud.automations import (
 )
 from koraku_cloud.automations.present import enrich_automation_row, enrich_automation_rows
 from koraku_cloud.automations.supabase_store import supabase_automations_configured
+from koraku_cloud.automations.imessage_notify import (
+    assert_notify_via_imessage_allowed,
+    imessage_delivery_status_sync,
+)
 from koraku_cloud.automations.validation import (
     EVENT_TRIGGER_UNAVAILABLE,
     validate_cron_expression,
@@ -108,6 +112,7 @@ class AutomationCreate(BaseModel):
     cron_expression: str | None = None
     event_display: str | None = Field(default=None, max_length=200)
     toolkits: list[str] = Field(default_factory=list, max_length=24)
+    notify_via_imessage: bool = False
 
     @model_validator(mode="after")
     def check_trigger_fields(self) -> "AutomationCreate":
@@ -137,6 +142,7 @@ class AutomationPatch(BaseModel):
     cron_expression: str | None = None
     event_display: str | None = Field(default=None, max_length=200)
     toolkits: list[str] | None = Field(default=None, max_length=24)
+    notify_via_imessage: bool | None = None
 
     @model_validator(mode="after")
     def check_cron(self) -> "AutomationPatch":
@@ -151,7 +157,10 @@ class AutomationPatch(BaseModel):
 async def automations_list(auth: AutomationsAuth = Depends(_automations_request_scope)):
     rows = await async_ops.list_automations(auth.user_id, auth.org_id)
     items = await enrich_automation_rows(list(rows))
-    return {"items": items}
+    imessage = await asyncio.to_thread(
+        imessage_delivery_status_sync, auth.user_id
+    )
+    return {"items": items, "imessage": imessage}
 
 
 @router.post("")
@@ -168,6 +177,13 @@ async def automations_create(
             limit=settings.automation_rate_limit_per_minute,
         )
     )
+    if body.notify_via_imessage:
+        try:
+            await asyncio.to_thread(
+                assert_notify_via_imessage_allowed, auth.user_id
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
     row = await async_ops.insert_automation(
         auth.user_id,
         auth.org_id,
@@ -180,6 +196,7 @@ async def automations_create(
         cron_expression=body.cron_expression,
         event_display=body.event_display,
         toolkits=body.toolkits,
+        notify_via_imessage=body.notify_via_imessage,
     )
     await automation_scheduler.sync_scheduler_jobs_async()
     return await enrich_automation_row(row)
@@ -209,6 +226,13 @@ async def automations_patch(
     patch = body.model_dump(exclude_unset=True)
     if not patch:
         return await enrich_automation_row(existing)
+    if patch.get("notify_via_imessage") is True:
+        try:
+            await asyncio.to_thread(
+                assert_notify_via_imessage_allowed, auth.user_id
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
     row = await async_ops.update_automation(
         auth.user_id,
         auth.org_id,
@@ -221,6 +245,7 @@ async def automations_patch(
         cron_expression=patch.get("cron_expression"),
         event_display=patch.get("event_display"),
         toolkits=patch.get("toolkits"),
+        notify_via_imessage=patch.get("notify_via_imessage"),
     )
     await automation_scheduler.sync_scheduler_jobs_async()
     assert row is not None

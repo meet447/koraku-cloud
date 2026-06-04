@@ -37,6 +37,7 @@ async def insert_automation(
     cron_expression: str | None,
     event_display: str | None,
     toolkits: list[str],
+    notify_via_imessage: bool = False,
 ) -> dict[str, Any]:
     def _go() -> dict[str, Any]:
         return supabase_store.insert_automation(
@@ -51,6 +52,7 @@ async def insert_automation(
             cron_expression=cron_expression,
             event_display=event_display,
             toolkits=toolkits,
+            notify_via_imessage=notify_via_imessage,
         )
 
     return await asyncio.to_thread(_go)
@@ -69,6 +71,7 @@ async def update_automation(
     cron_expression: str | None = None,
     event_display: str | None = None,
     toolkits: list[str] | None = None,
+    notify_via_imessage: bool | None = None,
 ) -> dict[str, Any] | None:
     def _go() -> dict[str, Any] | None:
         return supabase_store.update_automation(
@@ -83,6 +86,7 @@ async def update_automation(
             cron_expression=cron_expression,
             event_display=event_display,
             toolkits=toolkits,
+            notify_via_imessage=notify_via_imessage,
         )
 
     return await asyncio.to_thread(_go)

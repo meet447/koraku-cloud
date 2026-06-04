@@ -8,6 +8,7 @@ from typing import Any
 from koraku_cloud.automations import async_ops, scheduler
 from koraku_cloud.automations.present import enrich_automation_row, enrich_automation_rows
 from koraku_cloud.automations.supabase_store import supabase_automations_configured
+from koraku_cloud.automations.imessage_notify import assert_notify_via_imessage_allowed
 from koraku_cloud.automations.validation import (
     EVENT_TRIGGER_UNAVAILABLE,
     validate_cron_expression,
@@ -72,6 +73,7 @@ async def _automations_create(**kwargs: Any) -> str:
     headline = str(kwargs.get("headline") or "").strip()
     toolkits = kwargs.get("toolkits")
     status = str(kwargs.get("status") or "active").strip()
+    notify_via_imessage = bool(kwargs.get("notify_via_imessage"))
     uid = _uid()
     try:
         oid = _org_required()
@@ -100,6 +102,11 @@ async def _automations_create(**kwargs: Any) -> str:
             validate_cron_expression(cr_s)
     except ValueError as e:
         return f"Error: {e}"
+    if notify_via_imessage:
+        try:
+            assert_notify_via_imessage_allowed(uid)
+        except ValueError as e:
+            return f"Error: {e}"
 
     tz_out = (str(timezone).strip() if timezone is not None else None) or None
     cr_out = (
@@ -118,6 +125,7 @@ async def _automations_create(**kwargs: Any) -> str:
         cron_expression=cr_out,
         event_display=ev_out,
         toolkits=_normalize_toolkits(toolkits),
+        notify_via_imessage=notify_via_imessage,
     )
     await scheduler.sync_scheduler_jobs_async()
     enriched = await enrich_automation_row(row)
@@ -136,6 +144,7 @@ async def _automations_update(**kwargs: Any) -> str:
     cron_expression = kwargs.get("cron_expression")
     event_display = kwargs.get("event_display")
     toolkits = kwargs.get("toolkits")
+    notify_via_imessage = kwargs.get("notify_via_imessage")
     uid = _uid()
     try:
         oid = _org_required()
@@ -164,8 +173,16 @@ async def _automations_update(**kwargs: Any) -> str:
             validate_timezone_iana(str(timezone).strip())
     except ValueError as e:
         return f"Error: {e}"
+    if notify_via_imessage is True:
+        try:
+            assert_notify_via_imessage_allowed(uid)
+        except ValueError as e:
+            return f"Error: {e}"
 
     tk = _normalize_toolkits(toolkits) if toolkits is not None else None
+    notify_patch = (
+        bool(notify_via_imessage) if notify_via_imessage is not None else None
+    )
     row = await async_ops.update_automation(
         uid,
         oid,
@@ -178,6 +195,7 @@ async def _automations_update(**kwargs: Any) -> str:
         cron_expression=_opt_str(cron_expression),
         event_display=_opt_str(event_display),
         toolkits=tk,
+        notify_via_imessage=notify_patch,
     )
     if not row:
         return "Error: update failed."
@@ -280,6 +298,13 @@ def _build_automations_create_tool():
                     "type": "string",
                     "description": "active or paused (default active)",
                 },
+                "notify_via_imessage": {
+                    "type": "boolean",
+                    "description": (
+                        "When true, send each run's result to the user's linked iMessage phone "
+                        "(requires External → phone link and server SendBlue config)"
+                    ),
+                },
             },
             "required": ["title", "natural_language_spec", "trigger_mode"],
         },
@@ -312,6 +337,10 @@ def _build_automations_update_tool():
                 "cron_expression": {"type": "string"},
                 "event_display": {"type": "string"},
                 "toolkits": {"type": "array", "items": {"type": "string"}},
+                "notify_via_imessage": {
+                    "type": "boolean",
+                    "description": "Enable or disable iMessage delivery of run results",
+                },
             },
             "required": ["automation_id"],
         },

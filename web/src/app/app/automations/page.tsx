@@ -15,6 +15,12 @@ import { KorakuSearchInput } from "@/components/KorakuSearchInput";
 
 type ConfirmKind = "create" | "delete" | "run";
 
+type ImessageDelivery = {
+  configured: boolean;
+  linked: boolean;
+  available: boolean;
+};
+
 type Automation = {
   id: string;
   title: string;
@@ -26,7 +32,9 @@ type Automation = {
   cron_expression?: string | null;
   event_display?: string | null;
   toolkits: string[];
+  notify_via_imessage?: boolean;
   status_line?: string;
+  delivery_line?: string;
   next_run_at_computed?: string;
   last_run_at?: string | null;
 };
@@ -137,6 +145,12 @@ export default function AutomationsPage() {
   const [formTz, setFormTz] = useState("UTC");
   const [formCron, setFormCron] = useState("0 9 * * *");
   const [formToolkits, setFormToolkits] = useState("");
+  const [formNotifyImessage, setFormNotifyImessage] = useState(false);
+  const [imessage, setImessage] = useState<ImessageDelivery>({
+    configured: false,
+    linked: false,
+    available: false,
+  });
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -152,8 +166,14 @@ export default function AutomationsPage() {
   const loadList = useCallback(async () => {
     setError(null);
     try {
-      const data = await korakuFetchJson<{ items: Automation[] }>("/koraku-api/api/automations");
+      const data = await korakuFetchJson<{
+        items: Automation[];
+        imessage?: ImessageDelivery;
+      }>("/koraku-api/api/automations");
       setItems(data.items ?? []);
+      if (data.imessage) {
+        setImessage(data.imessage);
+      }
     } catch (e) {
       setError(errorMessage(e, "Load failed"));
     } finally {
@@ -233,11 +253,14 @@ export default function AutomationsPage() {
         `Title: ${formTitle.trim() || "Untitled automation"}`,
         `Trigger: ${formCron.trim()} (${formTz.trim()})`,
         formToolkits.trim() ? `Connected apps: ${formToolkits.trim()}` : "Connected apps: none specified",
+        formNotifyImessage ? "Results: send via iMessage when each run finishes" : "Results: in-app run history only",
         "",
         "Koraku will run this in the background. It should still ask for confirmation before high-impact external actions.",
       ].join("\n"),
-    [formTitle, formCron, formTz, formToolkits],
+    [formTitle, formCron, formTz, formToolkits, formNotifyImessage],
   );
+
+  const imessageNotifyBlocked = formNotifyImessage && !imessage.available;
 
   async function createAutomation() {
     setPendingConfirm(null);
@@ -258,6 +281,7 @@ export default function AutomationsPage() {
         timezone: formTz.trim(),
         cron_expression: formCron.trim(),
         toolkits,
+        notify_via_imessage: formNotifyImessage,
       };
       const created = await korakuFetchJson<Automation>("/koraku-api/api/automations", {
         method: "POST",
@@ -267,12 +291,37 @@ export default function AutomationsPage() {
       setFormTitle("");
       setFormHeadline("");
       setFormSpec("");
+      setFormNotifyImessage(false);
       await loadList();
       setSelectedId(created.id);
     } catch (e) {
       setError(errorMessage(e, "Create failed"));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function setNotifyImessage(enabled: boolean) {
+    if (!selectedId) {
+      return;
+    }
+    if (enabled && !imessage.available) {
+      setError(
+        imessage.configured
+          ? "iMessage is not linked. Open External to link your phone first."
+          : "iMessage delivery is not available on this server.",
+      );
+      return;
+    }
+    setError(null);
+    try {
+      await korakuFetchOk(`/koraku-api/api/automations/${selectedId}`, {
+        method: "PATCH",
+        json: { notify_via_imessage: enabled },
+      });
+      await loadList();
+    } catch (e) {
+      setError(errorMessage(e, "Update failed"));
     }
   }
 
@@ -466,9 +515,37 @@ export default function AutomationsPage() {
                 . External sends, shares, deletes, and calendar changes should be confirmed in the automation spec.
               </p>
             ) : null}
+            <label className="mt-4 flex max-w-3xl cursor-pointer items-start gap-3 rounded-2xl border border-neutral-200/80 bg-white px-4 py-3">
+              <input
+                type="checkbox"
+                checked={formNotifyImessage}
+                onChange={(e) => setFormNotifyImessage(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+              />
+              <span className="text-sm font-medium text-neutral-800">
+                Send run results via iMessage
+                <span className="mt-0.5 block text-xs font-medium text-neutral-500">
+                  After each run, Koraku texts a short summary to your linked phone.
+                </span>
+              </span>
+            </label>
+            {formNotifyImessage && !imessage.linked ? (
+              <p className="mt-2 max-w-3xl rounded-2xl bg-amber-50 px-4 py-3 text-xs font-semibold leading-relaxed text-amber-900 ring-1 ring-amber-200/80">
+                iMessage is not linked.{" "}
+                <Link href={`${APP_BASE}/external`} className="text-amber-950 underline">
+                  Link your phone in External
+                </Link>{" "}
+                before saving with iMessage delivery.
+              </p>
+            ) : null}
+            {formNotifyImessage && imessage.linked && !imessage.configured ? (
+              <p className="mt-2 max-w-3xl rounded-2xl bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900 ring-1 ring-amber-200/80">
+                iMessage delivery is not configured on this Koraku server (SendBlue).
+              </p>
+            ) : null}
             <div className="mt-4 flex gap-2">
               <KorakuButton
-                disabled={saving || !formSpec.trim()}
+                disabled={saving || !formSpec.trim() || imessageNotifyBlocked}
                 onClick={requestCreate}
               >
                 {saving ? "Saving…" : "Save automation"}
@@ -592,6 +669,35 @@ export default function AutomationsPage() {
                         <span className="font-mono text-neutral-600">
                           {new Date(selected.next_run_at_computed).toLocaleString()}
                         </span>
+                      </p>
+                    ) : null}
+                    <label className="mt-4 flex max-w-xl cursor-pointer items-start gap-3 rounded-2xl border border-neutral-200/80 bg-neutral-50/80 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(selected.notify_via_imessage)}
+                        onChange={(e) => void setNotifyImessage(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-neutral-300"
+                      />
+                      <span className="text-sm font-medium text-neutral-800">
+                        Send run results via iMessage
+                        {selected.delivery_line ? (
+                          <span className="mt-0.5 block text-xs font-semibold text-emerald-800">
+                            {selected.delivery_line}
+                          </span>
+                        ) : (
+                          <span className="mt-0.5 block text-xs font-medium text-neutral-500">
+                            Off — results stay in run history below.
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                    {selected.notify_via_imessage && !imessage.linked ? (
+                      <p className="mt-2 max-w-xl rounded-2xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 ring-1 ring-amber-200/80">
+                        iMessage is not linked — delivery will fail until you{" "}
+                        <Link href={`${APP_BASE}/external`} className="underline">
+                          link your phone
+                        </Link>
+                        .
                       </p>
                     ) : null}
                     {selected.trigger_mode === "event" ? (

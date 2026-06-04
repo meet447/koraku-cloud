@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from koraku.integrations.blaxel_lazy import clear_lazy_blaxel_session, set_lazy_blaxel_session
 from koraku.agent.runtime_context import AgentRunContext
 from koraku_cloud.automations import async_ops
+from koraku_cloud.automations.imessage_notify import send_automation_result_via_imessage
 from koraku_cloud.automations.run_context import prepare_automation_agent_context, reset_automation_tenant
 from koraku.core.config import settings
 from koraku.core.models import SessionState, utcnow
@@ -310,6 +311,28 @@ async def execute_automation(
             await _finalize_automation_run(
                 user_id, oid, automation_id, run_id, status, err, res, started, finished
             )
+
+            if auto.get("notify_via_imessage"):
+                try:
+                    sent = await send_automation_result_via_imessage(
+                        user_id,
+                        title=str(auto.get("title") or "Automation"),
+                        status=status,
+                        result_summary=res,
+                        error=err,
+                    )
+                    if not sent:
+                        log.warning(
+                            "automation imessage notify failed automation_id=%s run_id=%s",
+                            automation_id,
+                            run_id,
+                        )
+                except Exception:
+                    log.exception(
+                        "automation imessage notify error automation_id=%s run_id=%s",
+                        automation_id,
+                        run_id,
+                    )
 
             elapsed_ms = int((time.perf_counter() - t0) * 1000)
             log.info(

@@ -18,9 +18,18 @@ def automation_status_line(row: dict[str, Any]) -> str:
     return ""
 
 
+def delivery_line(row: dict[str, Any]) -> str | None:
+    if not row.get("notify_via_imessage"):
+        return None
+    return "Results via iMessage"
+
+
 async def enrich_automation_row(row: dict[str, Any]) -> dict[str, Any]:
     out = dict(row)
     out["status_line"] = automation_status_line(row)
+    dl = delivery_line(row)
+    if dl:
+        out["delivery_line"] = dl
     if (
         row.get("trigger_mode") == "scheduled"
         and row.get("cron_expression")
@@ -46,6 +55,9 @@ async def enrich_automation_rows(rows: list[dict[str, Any]]) -> list[dict[str, A
         for row in rows_batch:
             out = dict(row)
             out["status_line"] = automation_status_line(row)
+            dl = delivery_line(row)
+            if dl:
+                out["delivery_line"] = dl
             if (
                 row.get("trigger_mode") == "scheduled"
                 and row.get("cron_expression")
