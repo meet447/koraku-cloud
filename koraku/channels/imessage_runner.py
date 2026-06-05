@@ -183,7 +183,8 @@ async def run_imessage_turn(
     blaxel_on = imessage_blaxel_available()
 
     try:
-        session = get_or_create_chat_session(
+        session = await asyncio.to_thread(
+            get_or_create_chat_session,
             thread_id,
             owner_sub=user_id,
             owner_org_id=org_id,

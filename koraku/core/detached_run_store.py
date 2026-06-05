@@ -181,7 +181,7 @@ class MemoryRunBuffer(DetachedRunBuffer):
 class RedisRunBuffer(DetachedRunBuffer):
     """Chunk list + pub/sub so any API worker can subscribe to a run."""
 
-    __slots__ = ("run_id", "owner_sub", "owner_org_id", "_prefix")
+    __slots__ = ("run_id", "owner_sub", "owner_org_id", "_prefix", "_done_cached")
 
     def __init__(
         self,
@@ -193,6 +193,7 @@ class RedisRunBuffer(DetachedRunBuffer):
         self.owner_sub = owner_sub
         self.owner_org_id = owner_org_id
         self._prefix = _run_prefix(owner_org_id, run_id)
+        self._done_cached = False
 
     def _meta_key(self) -> str:
         return f"{self._prefix}:meta"
@@ -220,15 +221,27 @@ class RedisRunBuffer(DetachedRunBuffer):
         if not raw:
             return None
         try:
-            return json.loads(str(raw))
+            meta = json.loads(str(raw))
+            if not meta.get("done"):
+                seq_val = await client.get(f"{self._prefix}:seq")
+                if seq_val is not None:
+                    try:
+                        seq = int(seq_val)
+                        meta["next_seq"] = seq
+                        meta["last_event_id"] = seq - 1
+                    except ValueError:
+                        pass
+            return meta
         except json.JSONDecodeError:
             return None
 
     async def append(self, raw_chunk: str) -> None:
-        meta = await self._load_meta()
-        if meta is None or meta.get("done"):
+        if self._done_cached:
             return
         client = await self._client()
+        if await client.get(f"{self._prefix}:done"):
+            self._done_cached = True
+            return
         seq = int(await client.incr(f"{self._prefix}:seq")) - 1
         wrapped = _wrap_sse_chunk(seq, raw_chunk)
         entry = json.dumps({"seq": seq, "data": wrapped}, ensure_ascii=False)
@@ -237,21 +250,22 @@ class RedisRunBuffer(DetachedRunBuffer):
         pipe.ltrim(self._chunks_key(), -_MAX_CHUNKS_PER_RUN, -1)
         pipe.expire(self._chunks_key(), int(_DETACHED_GC_SEC))
         pipe.expire(self._meta_key(), int(_DETACHED_GC_SEC))
+        pipe.expire(f"{self._prefix}:seq", int(_DETACHED_GC_SEC))
         pipe.publish(self._channel_key(), wrapped)
         await pipe.execute()
-        meta["next_seq"] = seq + 1
-        meta["last_event_id"] = seq
-        await client.set(
-            self._meta_key(),
-            json.dumps(meta, ensure_ascii=False),
-            ex=int(_DETACHED_GC_SEC),
-        )
 
     async def finish(self) -> None:
+        self._done_cached = True
         client = await self._client()
+        await client.set(f"{self._prefix}:done", "1", ex=int(_DETACHED_GC_SEC))
         meta = await self._load_meta()
         if meta is not None:
             meta["done"] = True
+            seq_val = await client.get(f"{self._prefix}:seq")
+            if seq_val is not None:
+                seq = int(seq_val)
+                meta["next_seq"] = seq
+                meta["last_event_id"] = seq - 1
             await client.set(
                 self._meta_key(),
                 json.dumps(meta, ensure_ascii=False),

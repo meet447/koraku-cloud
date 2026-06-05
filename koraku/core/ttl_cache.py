@@ -50,6 +50,22 @@ class TtlCache(Generic[T]):
         if k:
             self._data.pop(k, None)
 
+    def __contains__(self, key: str) -> bool:
+        k = (key or "").strip()
+        return k in self._data
+
+    def __setitem__(self, key: str, value: T) -> None:
+        self.set(key, value)
+
+    def pop(self, key: str, default: Any = None) -> Any:
+        k = (key or "").strip()
+        if not k:
+            return default
+        row = self._data.pop(k, None)
+        if row is None:
+            return default
+        return row[1]
+
     def clear(self) -> None:
         self._data.clear()
 

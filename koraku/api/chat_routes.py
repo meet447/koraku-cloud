@@ -201,7 +201,8 @@ async def _stream_agent_sse(
     stream_run_id: str | None = None,
     execution_target: ExecutionTarget | None = None,
 ) -> AsyncIterator[str]:
-    session = get_or_create_chat_session(
+    session = await asyncio.to_thread(
+        get_or_create_chat_session,
         session_id, owner_sub=auth_sub, owner_org_id=auth_org_id
     )
     eff_provider, resolved_model = resolve_provider_and_model(provider, model)
@@ -394,7 +395,7 @@ async def _stream_agent_sse(
                 run_id=stream_state.run_id,
             )
             session.touch()
-            get_session_store().save(session)
+            await asyncio.to_thread(get_session_store().save, session)
             clear_lazy_blaxel_session(lazy_tok, lazy_root_tok)
             try:
                 queue.put_nowait(None)

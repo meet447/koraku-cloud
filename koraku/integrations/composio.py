@@ -26,10 +26,12 @@ _workspace_for_client: str = ""
 _composio_tool_map: ContextVar[dict[str, Tool] | None] = ContextVar("koraku_composio_tools", default=None)
 # When set, Composio list/auth/execute use this Supabase ``sub`` instead of the global fallback.
 _composio_request_user: ContextVar[str | None] = ContextVar("koraku_composio_request_user", default=None)
-_connections_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
-_prompt_section_cache: dict[str, tuple[float, str]] = {}
+from koraku.core.ttl_cache import TtlCache
+
+_connections_cache = TtlCache[list[dict[str, Any]]](max_size=2000)
+_prompt_section_cache = TtlCache[str](max_size=2000)
+_dynamic_tools_cache = TtlCache[list[Tool]](max_size=2000)
 _CACHE_TTL = 600.0
-_CONNECTIONS_CACHE_MAX_SIZE = 2000
 
 _TOOLKITS_CACHE_TTL = 300.0
 _curated_toolkits_cache: tuple[float, list[dict[str, str]]] | None = None
@@ -149,12 +151,9 @@ def list_connections_summary() -> list[dict[str, Any]]:
         return []
 
     uid = user_id()
-    now = time.monotonic()
-
-    if uid in _connections_cache:
-        cache_time, cached_data = _connections_cache[uid]
-        if (now - cache_time) < _CACHE_TTL:
-            return [dict(r) for r in cached_data]
+    cached_data = _connections_cache.get(uid, ttl_seconds=_CACHE_TTL)
+    if cached_data is not None:
+        return [dict(r) for r in cached_data]
 
     c = _client()
     resp = c.connected_accounts.list(user_ids=[uid], limit=80.0)
@@ -170,12 +169,9 @@ def list_connections_summary() -> list[dict[str, Any]]:
             "is_disabled": item.is_disabled,
         })
 
-    if len(_connections_cache) >= _CONNECTIONS_CACHE_MAX_SIZE:
-        _connections_cache.clear()
-        _prompt_section_cache.clear()
-    _connections_cache[uid] = (time.monotonic(), out)
+    _connections_cache.set(uid, out)
     for suffix in ("quick", "full", "flat"):
-        _prompt_section_cache.pop(f"{uid}:{suffix}", None)
+        _prompt_section_cache.invalidate(f"{uid}:{suffix}")
     return [dict(r) for r in out]
 
 
@@ -361,8 +357,14 @@ def _append_tools_from_raw(raw: Any, seen_slugs: set[str], tools: list[Tool]) ->
 
 
 def _build_dynamic_composio_tools_for_slugs(tk_slugs: list[str]) -> list[Tool]:
-    c = _client()
+    uid = user_id()
     cap = max(8, min(int(settings.composio_tools_limit), 120))
+    cache_key = f"{uid}:{','.join(sorted(tk_slugs))}:{cap}"
+    cached = _dynamic_tools_cache.get(cache_key, ttl_seconds=_CACHE_TTL)
+    if cached is not None:
+        return cached
+
+    c = _client()
     per_toolkit = max(1, cap // len(tk_slugs))
     seen_slugs: set[str] = set()
     tools: list[Tool] = []
@@ -418,6 +420,7 @@ def _build_dynamic_composio_tools_for_slugs(tk_slugs: list[str]) -> list[Tool]:
     except Exception:
         logger.warning("Composio get_raw_composio_tools failed for general toolkits: %s", tk_slugs, exc_info=True)
 
+    _dynamic_tools_cache.set(cache_key, tools)
     return tools
 
 
@@ -516,14 +519,11 @@ def composio_dispatcher_prompt_section_quick() -> str:
 
 
 def _cached_composio_prompt_section(cache_key: str, builder: Callable[[], str]) -> str:
-    now = time.monotonic()
-    cached = _prompt_section_cache.get(cache_key)
+    cached = _prompt_section_cache.get(cache_key, ttl_seconds=_CACHE_TTL)
     if cached is not None:
-        cache_time, text = cached
-        if (now - cache_time) < _CACHE_TTL:
-            return text
+        return cached
     text = builder()
-    _prompt_section_cache[cache_key] = (now, text)
+    _prompt_section_cache.set(cache_key, text)
     return text
 
 

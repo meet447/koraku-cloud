@@ -74,22 +74,8 @@ def _resolve_host_path(path: str, *, parent_for_new_file: bool = False) -> tuple
         return None, f"Error: Path must stay under workspace: {root}"
     return fpath, None
 
-async def _read(file_path: str, offset: int = 1, limit: int = 100) -> str:
-    """Read a file."""
+def _read_sync(fpath: str, offset: int, limit: int, file_path: str) -> str:
     from koraku.tools.binary_read_paths import format_binary_read_response, should_use_binary_read_branch
-    from koraku.tools.blaxel_dispatch import blaxel_read_if_active
-
-    bx = await blaxel_read_if_active(file_path, offset, limit)
-    if bx is not None:
-        return bx
-    host_block = await _host_file_tool_block()
-    if host_block:
-        return host_block
-
-    fpath, path_error = _resolve_host_path(file_path)
-    if path_error:
-        return path_error
-    assert fpath is not None
     if not os.path.exists(fpath):
         return f"Error: File not found: {file_path}"
     if should_use_binary_read_branch(fpath):
@@ -113,6 +99,24 @@ async def _read(file_path: str, offset: int = 1, limit: int = 100) -> str:
         return f"Error: {e}"
 
 
+async def _read(file_path: str, offset: int = 1, limit: int = 100) -> str:
+    """Read a file."""
+    from koraku.tools.blaxel_dispatch import blaxel_read_if_active
+
+    bx = await blaxel_read_if_active(file_path, offset, limit)
+    if bx is not None:
+        return bx
+    host_block = await _host_file_tool_block()
+    if host_block:
+        return host_block
+
+    fpath, path_error = _resolve_host_path(file_path)
+    if path_error:
+        return path_error
+    assert fpath is not None
+    return await asyncio.to_thread(_read_sync, fpath, offset, limit, file_path)
+
+
 read_tool = Tool(
     name="Read",
     description=(
@@ -133,6 +137,19 @@ read_tool = Tool(
 )
 
 
+def _write_sync(fpath: str, content: str, file_path: str) -> str:
+    try:
+        os.makedirs(os.path.dirname(fpath), exist_ok=True)
+        with open(fpath, "w", encoding="utf-8") as f:
+            f.write(content)
+        from koraku.channels.file_attachments import record_host_file_if_imessage
+
+        record_host_file_if_imessage(fpath, logical_path=file_path)
+        return f"Wrote {len(content)} chars to {file_path}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
 async def _write(file_path: str, content: str) -> str:
     """Write content to a file."""
     from koraku.tools.blaxel_dispatch import blaxel_write_if_active
@@ -148,16 +165,7 @@ async def _write(file_path: str, content: str) -> str:
     if path_error:
         return path_error
     assert fpath is not None
-    try:
-        os.makedirs(os.path.dirname(fpath), exist_ok=True)
-        with open(fpath, "w", encoding="utf-8") as f:
-            f.write(content)
-        from koraku.channels.file_attachments import record_host_file_if_imessage
-
-        record_host_file_if_imessage(fpath, logical_path=file_path)
-        return f"Wrote {len(content)} chars to {file_path}"
-    except Exception as e:
-        return f"Error: {e}"
+    return await asyncio.to_thread(_write_sync, fpath, content, file_path)
 
 
 write_tool = Tool(
@@ -180,21 +188,7 @@ write_tool = Tool(
 )
 
 
-async def _edit(file_path: str, old_string: str, new_string: str) -> str:
-    """Edit a file by replacing old_string with new_string."""
-    from koraku.tools.blaxel_dispatch import blaxel_edit_if_active
-
-    bx = await blaxel_edit_if_active(file_path, old_string, new_string)
-    if bx is not None:
-        return bx
-    host_block = await _host_file_tool_block()
-    if host_block:
-        return host_block
-
-    fpath, path_error = _resolve_host_path(file_path)
-    if path_error:
-        return path_error
-    assert fpath is not None
+def _edit_sync(fpath: str, old_string: str, new_string: str, file_path: str) -> str:
     if not os.path.exists(fpath):
         return f"Error: File not found: {file_path}"
     try:
@@ -211,6 +205,24 @@ async def _edit(file_path: str, old_string: str, new_string: str) -> str:
         return f"Edited {file_path}"
     except Exception as e:
         return f"Error: {e}"
+
+
+async def _edit(file_path: str, old_string: str, new_string: str) -> str:
+    """Edit a file by replacing old_string with new_string."""
+    from koraku.tools.blaxel_dispatch import blaxel_edit_if_active
+
+    bx = await blaxel_edit_if_active(file_path, old_string, new_string)
+    if bx is not None:
+        return bx
+    host_block = await _host_file_tool_block()
+    if host_block:
+        return host_block
+
+    fpath, path_error = _resolve_host_path(file_path)
+    if path_error:
+        return path_error
+    assert fpath is not None
+    return await asyncio.to_thread(_edit_sync, fpath, old_string, new_string, file_path)
 
 
 edit_tool = Tool(
@@ -281,6 +293,14 @@ bash_tool = Tool(
 )
 
 
+def _glob_sync(search_dir: str, pattern: str) -> str:
+    if not os.path.isdir(search_dir):
+        return f"Error: Dir not found: {search_dir}"
+    matches = pyglob.glob(os.path.join(search_dir, "**", pattern), recursive=True)
+    results = [os.path.relpath(m, search_dir) for m in matches[:30]]
+    return json.dumps(results, indent=2)
+
+
 async def _glob(pattern: str, path: str = ".") -> str:
     """Find files matching a glob pattern."""
     from koraku.tools.blaxel_dispatch import blaxel_glob_if_active
@@ -296,11 +316,7 @@ async def _glob(pattern: str, path: str = ".") -> str:
     if path_error:
         return path_error
     assert search_dir is not None
-    if not os.path.isdir(search_dir):
-        return f"Error: Dir not found: {search_dir}"
-    matches = pyglob.glob(os.path.join(search_dir, "**", pattern), recursive=True)
-    results = [os.path.relpath(m, search_dir) for m in matches[:30]]
-    return json.dumps(results, indent=2)
+    return await asyncio.to_thread(_glob_sync, search_dir, pattern)
 
 
 glob_tool = Tool(
@@ -319,21 +335,7 @@ glob_tool = Tool(
 )
 
 
-async def _grep(pattern: str, path: str = ".", include: str = "*") -> str:
-    """Search file contents with regex."""
-    from koraku.tools.blaxel_dispatch import blaxel_grep_if_active
-
-    bx = await blaxel_grep_if_active(pattern, path, include)
-    if bx is not None:
-        return bx
-    host_block = await _host_file_tool_block()
-    if host_block:
-        return host_block
-
-    search_dir, path_error = _resolve_host_path(path)
-    if path_error:
-        return path_error
-    assert search_dir is not None
+def _grep_sync(search_dir: str, pattern: str, include: str) -> str:
     if not os.path.isdir(search_dir):
         return f"Error: Dir not found: {search_dir}"
     results = []
@@ -360,6 +362,24 @@ async def _grep(pattern: str, path: str = ".", include: str = "*") -> str:
     if not results:
         return "No matches."
     return "\n".join(results[:100])
+
+
+async def _grep(pattern: str, path: str = ".", include: str = "*") -> str:
+    """Search file contents with regex."""
+    from koraku.tools.blaxel_dispatch import blaxel_grep_if_active
+
+    bx = await blaxel_grep_if_active(pattern, path, include)
+    if bx is not None:
+        return bx
+    host_block = await _host_file_tool_block()
+    if host_block:
+        return host_block
+
+    search_dir, path_error = _resolve_host_path(path)
+    if path_error:
+        return path_error
+    assert search_dir is not None
+    return await asyncio.to_thread(_grep_sync, search_dir, pattern, include)
 
 
 grep_tool = Tool(
