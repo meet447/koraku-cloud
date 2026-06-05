@@ -56,7 +56,11 @@ def _snippet_text(text: str, max_chars: int, truncated_note: str) -> str:
 
 
 def _clean_one_line(text: str, max_chars: int = _WORKING_MEMORY_ITEM_CHARS) -> str:
-    s = re.sub(r"\s+", " ", text or "").strip()
+    if not text:
+        return ""
+    # Slice first to avoid running regex on huge strings
+    truncated = text[:max_chars * 2]
+    s = re.sub(r"\s+", " ", truncated).strip()
     if len(s) > max_chars:
         return s[: max_chars - 3].rstrip() + "..."
     return s
