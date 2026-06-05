@@ -98,12 +98,19 @@ class ToolExecutionMixin:
         tool_id = tool_use["id"]
 
         if isinstance(tool_input, dict) and "_partial_json" in tool_input:
+            hint = ""
+            if tool_name == "Write":
+                hint = (
+                    " Write smaller chunks (~4KB) with mode=append, or use Bash: "
+                    "`cat <<'EOF' > file.py` … `EOF`."
+                )
             return {
                 "type": "tool_result",
                 "tool_use_id": tool_id,
                 "content": (
                     f"Execution failure: Driver argument structure for '{tool_name}' arrived truncated. "
                     "Reduce operational parameter sizing layouts or split multi-tier targets into sequential steps."
+                    f"{hint}"
                 ),
                 "is_error": True,
             }

@@ -162,3 +162,48 @@ def test_summary_preserves_visible_artifact_reference_for_later_followup() -> No
     assert isinstance(out[1].content, str)
     assert "latest_news_2026-04-25.md" in out[1].content
     assert "send sarthak this news" in out[-1].content[0]["text"]  # type: ignore[index]
+
+
+def test_sliding_window_preserves_tool_pair_at_cut_boundary() -> None:
+    """Cutting history must not leave orphaned tool_result messages (OpenAI template 400)."""
+    msgs: list[AgentMessage] = [
+        AgentMessage(role="user", content=[{"type": "text", "text": "make charts"}]),
+    ]
+    for i in range(15):
+        msgs.append(
+            AgentMessage(
+                role="assistant",
+                content=[{"type": "tool_use", "name": "Bash", "id": f"t{i}", "input": {}}],
+            )
+        )
+        msgs.append(
+            AgentMessage(
+                role="user",
+                content=[{"type": "tool_result", "tool_use_id": f"t{i}", "content": f"out {i}"}],
+            )
+        )
+    cm = ContextManager(max_messages=10, compact_tool_rounds=False, summarize_after=999)
+    out = cm.process_messages(msgs)
+    from koraku.llm.canonical import openai_chat_messages_from_agent_messages
+
+    openai_msgs = openai_chat_messages_from_agent_messages(out)
+    for idx, msg in enumerate(openai_msgs):
+        if msg.get("role") == "tool":
+            assert idx > 0
+            prev = openai_msgs[idx - 1]
+            assert prev.get("role") == "assistant"
+            assert prev.get("tool_calls")
+
+
+def test_ensure_valid_tool_chains_drops_orphan_tool_results() -> None:
+    msgs = [
+        AgentMessage(role="user", content=[{"type": "text", "text": "hi"}]),
+        AgentMessage(
+            role="user",
+            content=[{"type": "tool_result", "tool_use_id": "t1", "content": "orphan"}],
+        ),
+    ]
+    cm = ContextManager(compact_tool_rounds=False, summarize_after=999)
+    out = cm.process_messages(msgs)
+    assert len(out) == 1
+    assert out[0].role == "user"

@@ -71,3 +71,25 @@ def test_blaxel_read_binary_pdf_uses_read_binary(monkeypatch: pytest.MonkeyPatch
     assert "spec.pdf" in out
     assert len(calls) == 1
     assert calls[0].startswith("binary:")
+
+
+def test_resolve_grep_target_file_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    import koraku.tools.blaxel_dispatch as bd
+
+    monkeypatch.setattr(bd, "settings", SimpleNamespace(blaxel_sandbox_workdir="/tmp"))
+    monkeypatch.setattr(
+        bd,
+        "get_active_blaxel_session_root",
+        lambda: "/tmp/koraku/users/u1/sessions/sid",
+    )
+    base, pat = bd._resolve_grep_target("generate_charts.py", "*")
+    assert base == "/tmp/koraku/users/u1/sessions/sid"
+    assert pat == "generate_charts.py"
+
+
+def test_bash_with_sandbox_env_prepends_venv_bootstrap() -> None:
+    import koraku.tools.blaxel_dispatch as bd
+
+    wrapped = bd._bash_with_sandbox_env("python -V")
+    assert ".koraku-venv" in wrapped
+    assert wrapped.strip().endswith("python -V")

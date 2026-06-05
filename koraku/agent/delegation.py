@@ -20,6 +20,7 @@ from koraku.integrations.artifact_prompt import (
     build_artifact_subagent_system_prompt,
 )
 from koraku.integrations.blaxel_runtime import resolve_blaxel_session_root
+from koraku.tools.blaxel_dispatch import format_blaxel_sandbox_execution_guide
 from koraku.agent.prompt_sections import format_runtime_context_section
 from koraku.agent.budget import (
     TurnLimits,
@@ -171,10 +172,7 @@ class SubagentDelegationMixin:
                 session_root = None
         env_note: str | None = None
         if ctx.cloud_sandbox is not None and session_root:
-            env_note = (
-                f"- **Sandbox Environment Space**: **Read**, **Write**, **Edit**, **Bash**, "
-                f"**Glob**, **Grep** occur isolated under relative context `{session_root}`."
-            )
+            env_note = format_blaxel_sandbox_execution_guide(session_root)
 
         tk_seen: set[str] = set()
         for t in comp_tools:
@@ -307,10 +305,7 @@ class SubagentDelegationMixin:
                 session_root = None
         env_note: str | None = None
         if (ctx.cloud_sandbox is not None or ctx.blaxel_sandbox_active) and session_root:
-            env_note = (
-                f"- **Blaxel sandbox** (this chat): **Read**, **Write**, **Edit**, **Bash**, "
-                f"**Glob**, **Grep** under `{session_root}`."
-            )
+            env_note = format_blaxel_sandbox_execution_guide(session_root)
 
         system_prompt = build_artifact_subagent_system_prompt(
             ctx.workspace,

@@ -137,24 +137,29 @@ read_tool = Tool(
 )
 
 
-def _write_sync(fpath: str, content: str, file_path: str) -> str:
+def _write_sync(fpath: str, content: str, file_path: str, *, mode: str = "overwrite") -> str:
     try:
         os.makedirs(os.path.dirname(fpath), exist_ok=True)
-        with open(fpath, "w", encoding="utf-8") as f:
-            f.write(content)
+        if mode.strip().lower() == "append" and os.path.exists(fpath):
+            with open(fpath, "a", encoding="utf-8") as f:
+                f.write(content)
+        else:
+            with open(fpath, "w", encoding="utf-8") as f:
+                f.write(content)
         from koraku.channels.file_attachments import record_host_file_if_imessage
 
         record_host_file_if_imessage(fpath, logical_path=file_path)
-        return f"Wrote {len(content)} chars to {file_path}"
+        action = "Appended" if mode.strip().lower() == "append" else "Wrote"
+        return f"{action} {len(content)} chars to {file_path}"
     except Exception as e:
         return f"Error: {e}"
 
 
-async def _write(file_path: str, content: str) -> str:
+async def _write(file_path: str, content: str, mode: str = "overwrite") -> str:
     """Write content to a file."""
     from koraku.tools.blaxel_dispatch import blaxel_write_if_active
 
-    bx = await blaxel_write_if_active(file_path, content)
+    bx = await blaxel_write_if_active(file_path, content, mode=mode)
     if bx is not None:
         return bx
     host_block = await _host_file_tool_block()
@@ -165,7 +170,7 @@ async def _write(file_path: str, content: str) -> str:
     if path_error:
         return path_error
     assert fpath is not None
-    return await asyncio.to_thread(_write_sync, fpath, content, file_path)
+    return await asyncio.to_thread(_write_sync, fpath, content, file_path, mode=mode)
 
 
 write_tool = Tool(
@@ -173,13 +178,21 @@ write_tool = Tool(
     description=(
         "Write content to a file. Creates parent dirs if needed. "
         "Use workspace-relative paths only (e.g. outputs/presentations/deck.pptx) — "
-        "never absolute host paths like /Users/.../koraku-cloud."
+        "never absolute host paths like /Users/.../koraku-cloud. "
+        "For large files (>~4KB), use mode=append across multiple calls or Bash heredoc "
+        "(`cat <<'EOF' > path` … EOF) when tool args truncate."
     ),
     input_schema={
         "type": "object",
         "properties": {
             "file_path": {"type": "string", "description": "Path to file"},
             "content": {"type": "string", "description": "Content to write"},
+            "mode": {
+                "type": "string",
+                "enum": ["overwrite", "append"],
+                "description": "overwrite (default) or append to existing file",
+                "default": "overwrite",
+            },
         },
         "required": ["file_path", "content"],
     },
@@ -279,7 +292,11 @@ async def _bash(command: str, timeout: int = 30) -> str:
 
 bash_tool = Tool(
     name="Bash",
-    description="Run a shell command. Use for git, file ops, scripts.",
+    description=(
+        "Run a shell command. Use for git, scripts, pip installs, and heredoc file creation. "
+        "In the Blaxel sandbox, `.koraku-venv` is auto-created on first use — run Python as "
+        "`python script.py` after installing packages with pip."
+    ),
     input_schema={
         "type": "object",
         "properties": {
@@ -335,7 +352,24 @@ glob_tool = Tool(
 )
 
 
-def _grep_sync(search_dir: str, pattern: str, include: str) -> str:
+def _grep_sync(search_dir: str, pattern: str, include: str, *, single_file: str | None = None) -> str:
+    if single_file:
+        fpath = single_file
+        if not os.path.isfile(fpath):
+            return f"Error: File not found: {fpath}"
+        regex = re.compile(pattern)
+        results: list[str] = []
+        try:
+            with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                for i, line in enumerate(f, 1):
+                    if regex.search(line):
+                        rel = os.path.relpath(fpath, os.path.dirname(fpath) or ".")
+                        results.append(f"{rel}:{i}: {line.rstrip()}")
+                        if len(results) >= 100:
+                            break
+        except OSError as e:
+            return f"Error: {e}"
+        return "\n".join(results) if results else "No matches."
     if not os.path.isdir(search_dir):
         return f"Error: Dir not found: {search_dir}"
     results = []
@@ -375,21 +409,29 @@ async def _grep(pattern: str, path: str = ".", include: str = "*") -> str:
     if host_block:
         return host_block
 
-    search_dir, path_error = _resolve_host_path(path)
+    resolved, path_error = _resolve_host_path(path)
     if path_error:
         return path_error
-    assert search_dir is not None
-    return await asyncio.to_thread(_grep_sync, search_dir, pattern, include)
+    assert resolved is not None
+    raw = (path or "").strip()
+    if raw and not raw.endswith("/") and os.path.isfile(resolved):
+        return await asyncio.to_thread(_grep_sync, resolved, pattern, include, single_file=resolved)
+    if not os.path.isdir(resolved):
+        return f"Error: Dir not found: {path}"
+    return await asyncio.to_thread(_grep_sync, resolved, pattern, include)
 
 
 grep_tool = Tool(
     name="Grep",
-    description="Search file contents with regex. Returns file:line matches.",
+    description=(
+        "Search file contents with regex. Returns file:line matches. "
+        "path is usually a directory; a file path also works (searches that file only)."
+    ),
     input_schema={
         "type": "object",
         "properties": {
             "pattern": {"type": "string", "description": "Regex pattern"},
-            "path": {"type": "string", "description": "Directory", "default": "."},
+            "path": {"type": "string", "description": "Directory or file path", "default": "."},
             "include": {"type": "string", "description": "File filter like '*.py'", "default": "*"},
         },
         "required": ["pattern"],

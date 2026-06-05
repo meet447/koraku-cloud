@@ -243,6 +243,7 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
     ) -> AsyncIterator[dict[str, Any]]:
         from koraku.integrations.blaxel_lazy import lazy_blaxel_session_active
         from koraku.integrations.blaxel_runtime import cloud_blaxel_block_reason, resolve_blaxel_session_root
+        from koraku.tools.blaxel_dispatch import format_blaxel_sandbox_execution_guide
 
         ws = resolve_agent_workspace(workspace, run_context)
         execution_target = resolve_execution_target(run_context)
@@ -269,21 +270,9 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                 sname = cloud_sandbox.metadata.name
             except Exception:
                 sname = "sandbox"
-            scope_label = (
-                "iMessage workspace"
-                if blaxel_root_override and "/imessage/" in blaxel_root_override
-                else "this chat's folder"
-            )
-            env_note = (
-                f"- **Blaxel sandbox `{sname}`** (one VM per user): **Read**, **Write**, **Edit**, **Bash**, "
-                f"**Glob**, and **Grep** run under {scope_label} `{session_root}`. "
-                "Use paths relative to that folder (e.g. `notes.md`, `todo.txt`)."
-            )
+            env_note = format_blaxel_sandbox_execution_guide(session_root or "")
         elif blaxel_lazy and session_root:
-            env_note = (
-                f"- **Blaxel sandbox** (lazy attach): **Read**, **Write**, **Edit**, **Bash**, **Glob**, and **Grep** "
-                f"use this chat's folder `{session_root}`. The VM connects on the first file/shell tool call."
-            )
+            env_note = format_blaxel_sandbox_execution_guide(session_root)
         elif execution_target == "cloud" and cloud_blaxel_block_reason(settings):
             env_note = cloud_blaxel_block_reason(settings)
         imessage_budget_tok = None

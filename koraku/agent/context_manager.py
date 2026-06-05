@@ -46,7 +46,36 @@ class ContextManager:
         cleaned = self._truncate_tool_results(cleaned)
         cleaned = self._summarize_if_needed(cleaned)
         cleaned = self._apply_sliding_window(cleaned)
+        cleaned = self._ensure_valid_tool_chains(cleaned)
         return cleaned
+
+    @staticmethod
+    def _adjust_start_for_tool_pairs(messages: list[AgentMessage], start: int) -> int:
+        """Move ``start`` earlier so ``messages[start:]`` never begins with orphaned tool results."""
+        start = max(0, min(start, len(messages)))
+        while start > 0 and ContextManager._user_is_tool_results_only(messages[start]):
+            start -= 1
+        return start
+
+    def _ensure_valid_tool_chains(self, messages: list[AgentMessage]) -> list[AgentMessage]:
+        """Drop orphaned tool-result turns that would break OpenAI-style chat templates."""
+        if not messages:
+            return messages
+        out: list[AgentMessage] = []
+        for msg in messages:
+            if self._user_is_tool_results_only(msg):
+                prev = out[-1] if out else None
+                if prev is None:
+                    continue
+                if prev.role == "assistant" and isinstance(prev.content, list):
+                    has_tool_use = any(
+                        isinstance(b, dict) and b.get("type") == "tool_use" for b in prev.content
+                    )
+                    if has_tool_use:
+                        out.append(msg)
+                continue
+            out.append(msg)
+        return out
 
     @staticmethod
     def _assistant_is_tool_use_only(msg: AgentMessage) -> bool:
@@ -194,7 +223,9 @@ class ContextManager:
         # Keep the first user message, summarize everything between
         # first message and the last N messages
         keep_recent = 8
-        to_summarize = messages[1:-keep_recent]
+        start = max(1, len(messages) - keep_recent)
+        start = self._adjust_start_for_tool_pairs(messages, start)
+        to_summarize = messages[1:start]
 
         if not to_summarize:
             return messages
@@ -259,7 +290,7 @@ class ContextManager:
         # Rebuild message list: first msg + summary + recent msgs
         new_messages = [messages[0]]
         new_messages.append(AgentMessage(role="user", content=summary_text))
-        new_messages.extend(messages[-keep_recent:])
+        new_messages.extend(messages[start:])
         return new_messages
 
     def _apply_sliding_window(self, messages: list[AgentMessage]) -> list[AgentMessage]:
@@ -267,8 +298,10 @@ class ContextManager:
         if len(messages) <= self.max_messages:
             return messages
         # Always keep the first message (original user query)
-        # and the most recent N-1 messages
-        return [messages[0]] + messages[-(self.max_messages - 1):]
+        # and the most recent N-1 messages, aligned to complete tool rounds
+        start = len(messages) - (self.max_messages - 1)
+        start = self._adjust_start_for_tool_pairs(messages, start)
+        return [messages[0]] + messages[start:]
 
     def estimate_tokens(
         self,

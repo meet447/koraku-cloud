@@ -11,6 +11,39 @@ from koraku.core.config import settings
 from koraku.integrations.blaxel_lazy import cloud_file_tool_block_reason
 from koraku.tools.binary_read_paths import format_binary_read_response, should_use_binary_read_branch
 
+SANDBOX_VENV_DIR = ".koraku-venv"
+
+_SANDBOX_PYTHON_PREAMBLE = f"""\
+if [ -x {SANDBOX_VENV_DIR}/bin/python ]; then
+  export PATH="{SANDBOX_VENV_DIR}/bin:$PATH"
+elif [ ! -f {SANDBOX_VENV_DIR}/.bootstrap_attempted ]; then
+  mkdir -p {SANDBOX_VENV_DIR}
+  touch {SANDBOX_VENV_DIR}/.bootstrap_attempted
+  python3 -m venv {SANDBOX_VENV_DIR} 2>/dev/null || true
+  if [ -x {SANDBOX_VENV_DIR}/bin/pip ]; then
+    {SANDBOX_VENV_DIR}/bin/pip install -q -U pip matplotlib numpy pillow pandas 2>/dev/null \\
+      || {SANDBOX_VENV_DIR}/bin/pip install -q -U pip matplotlib numpy pillow pandas --break-system-packages 2>/dev/null \\
+      || true
+  fi
+  [ -x {SANDBOX_VENV_DIR}/bin/python ] && export PATH="{SANDBOX_VENV_DIR}/bin:$PATH"
+fi
+"""
+
+
+def format_blaxel_sandbox_execution_guide(session_root: str) -> str:
+    """Short sandbox cookbook appended to the per-turn execution environment note."""
+    root = session_root.rstrip("/")
+    return (
+        f"- **Blaxel sandbox** uses folder `{root}`.\n"
+        "- **Paths**: relative to that folder (e.g. `chart.py`, `outputs/plot.png`).\n"
+        "- **Python / charts**: Bash auto-activates `.koraku-venv` (created on first shell use). "
+        "Run scripts with `python script.py` after `pip install` packages inside the venv.\n"
+        "- **Large files**: prefer **Write** with `mode=append` in ~4KB chunks, or Bash "
+        "`cat <<'EOF' > file.py` … `EOF` when Write args truncate.\n"
+        "- **Grep**: `path` is a directory; to search one file use `path='.'` and "
+        "`include='filename.py'`, or pass the file path directly (auto-resolved).\n"
+    )
+
 
 async def _run_blaxel_tool(runner: Callable[[Any], Awaitable[str]]) -> str | None:
     """Try lazy Blaxel attach, then run ``runner(sandbox)``; ``None`` if Blaxel is not active."""
@@ -69,6 +102,27 @@ def _to_sandbox_path(file_path: str) -> str:
     return posixpath.join(root, posixpath.basename(raw))
 
 
+def _resolve_grep_target(path: str, include: str) -> tuple[str, str | None]:
+    """Map grep path to a directory + optional file pattern (Blaxel fs.grep expects a directory)."""
+    base = _to_sandbox_path(path)
+    raw = (path or "").strip().replace("\\", "/")
+    file_pat = None if include in ("*", "**/*") else include
+    if raw and not raw.endswith("/") and "." in posixpath.basename(base):
+        parent = posixpath.dirname(base)
+        if parent and parent not in (".", base):
+            basename = posixpath.basename(base)
+            if file_pat is None:
+                file_pat = basename
+            return parent, file_pat
+    return base, file_pat
+
+
+def _bash_with_sandbox_env(command: str) -> str:
+    """Prepend idempotent venv bootstrap + PATH for sandbox Python workloads."""
+    cmd = (command or "").strip()
+    return f"{_SANDBOX_PYTHON_PREAMBLE}\n{cmd}"
+
+
 async def blaxel_read_if_active(file_path: str, offset: int, limit: int) -> str | None:
     async def _read(sb: Any) -> str:
         path = _to_sandbox_path(file_path)
@@ -91,7 +145,12 @@ async def blaxel_read_if_active(file_path: str, offset: int, limit: int) -> str 
     return await _run_blaxel_tool(_read)
 
 
-async def blaxel_write_if_active(file_path: str, content: str) -> str | None:
+async def blaxel_write_if_active(
+    file_path: str,
+    content: str,
+    *,
+    mode: str = "overwrite",
+) -> str | None:
     async def _write(sb: Any) -> str:
         path = _to_sandbox_path(file_path)
         try:
@@ -100,14 +159,22 @@ async def blaxel_write_if_active(file_path: str, content: str) -> str | None:
                 await sb.fs.mkdir(parent, permissions="0755")
         except Exception:
             pass
+        payload = content
+        if (mode or "overwrite").strip().lower() == "append":
+            try:
+                existing = await sb.fs.read(path)
+            except Exception:
+                existing = ""
+            payload = (existing or "") + content
         try:
-            await sb.fs.write(path, content)
+            await sb.fs.write(path, payload)
         except Exception as e:
             return f"Error (Blaxel write): {e}"
         from koraku.channels.file_attachments import export_blaxel_file_if_imessage
 
         await export_blaxel_file_if_imessage(sb, path, file_path)
-        return f"Wrote {len(content)} chars to {file_path}"
+        action = "Appended" if mode == "append" else "Wrote"
+        return f"{action} {len(content)} chars to {file_path}"
 
     return await _run_blaxel_tool(_write)
 
@@ -137,10 +204,11 @@ async def blaxel_edit_if_active(file_path: str, old_string: str, new_string: str
 async def blaxel_bash_if_active(command: str, timeout: int = 30) -> str | None:
     async def _bash(sb: Any) -> str:
         wd = _sandbox_root_posix()
+        wrapped = _bash_with_sandbox_env(command)
         try:
             resp = await sb.process.exec(
                 {
-                    "command": command,
+                    "command": wrapped,
                     "working_dir": wd,
                     "wait_for_completion": True,
                     "timeout": int(timeout),
@@ -186,8 +254,7 @@ async def blaxel_glob_if_active(pattern: str, path: str = ".") -> str | None:
 
 async def blaxel_grep_if_active(pattern: str, path: str = ".", include: str = "*") -> str | None:
     async def _grep(sb: Any) -> str:
-        base = _to_sandbox_path(path)
-        file_pat = None if include in ("*", "**/*") else include
+        base, file_pat = _resolve_grep_target(path, include)
         try:
             res = await sb.fs.grep(
                 query=pattern,
