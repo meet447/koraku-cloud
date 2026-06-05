@@ -189,6 +189,15 @@ async def run_imessage_turn(
             owner_sub=user_id,
             owner_org_id=org_id,
         )
+        from koraku.core.product_hooks import fetch_account_personalization
+
+        account_p = None
+        if user_id:
+            try:
+                account_p = await fetch_account_personalization(user_id, org_id)
+            except Exception as e:
+                log.warning("imessage personalization fetch failed: %s", e)
+
         if blaxel_on:
             cloud_sandbox, imessage_root = await prepare_imessage_sandbox(user_id, thread_id)
             if not imessage_root:
@@ -231,6 +240,7 @@ async def run_imessage_turn(
             emit,
             run_context=run_context,
             cloud_sandbox=cloud_sandbox,
+            account_personalization=account_p,
         ):
             pass
 
