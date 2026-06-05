@@ -49,17 +49,17 @@ async def test_lazy_ensure_uses_imessage_session_root_override(monkeypatch) -> N
     class FakeSb:
         pass
 
-    async def fake_ensure_chat_sandbox(sid: str, settings: object, *, user_id: str | None = None) -> FakeSb:
-        return FakeSb()
+    async def fake_ensure_session_workspace(sid: str, settings: object, *, user_id: str | None = None) -> tuple[FakeSb, str]:
+        return FakeSb(), "/tmp/session-root"
 
     def fake_bind(sb: object, root: str) -> tuple[object, object]:
         bound.append(root)
         return (object(), object())
 
     monkeypatch.setattr(bl, "cloud_blaxel_block_reason", lambda _s: None)
-    monkeypatch.setattr(bl, "ensure_chat_sandbox", fake_ensure_chat_sandbox)
+    monkeypatch.setattr("koraku.integrations.blaxel_runtime.ensure_session_workspace", fake_ensure_session_workspace)
     monkeypatch.setattr(bl, "bind_blaxel_sandbox", fake_bind)
-    monkeypatch.setattr(bl, "settings", SimpleNamespace(blaxel_cloud_sandbox_enabled=True))
+    monkeypatch.setattr(bl, "settings", SimpleNamespace(blaxel_cloud_sandbox_enabled=True, bl_workspace="ws", bl_api_key="key", blaxel_sandbox_image="", blaxel_sandbox_memory_mb=1024, blaxel_sandbox_cpu=1, blaxel_sandbox_region="us-east-1"))
     monkeypatch.setattr(bl, "effective_cloud_user_id", lambda: "user-1")
 
     imessage_root = "/tmp/koraku/users/user-1/imessage/thread-1"

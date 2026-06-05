@@ -10,7 +10,7 @@ def test_tiered_prompt_includes_stable_and_context() -> None:
         "/tmp/ws",
         learned_memory_prefetch="## Learned memory\n- User likes tea\n",
     )
-    assert "buddy-style second brain" in prompt
+    assert "sovereign digital mind" in prompt
     assert "Explicit preferences" in prompt or "User memory" in prompt
     assert "User likes tea" in prompt
 

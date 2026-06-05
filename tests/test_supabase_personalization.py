@@ -26,12 +26,12 @@ def test_build_system_prompt_daily_driver_contract() -> None:
         composio_section="",
     )
 
-    assert "buddy-style second brain" in s
-    assert "## Task modes" in s
+    assert "sovereign digital mind" in s
+    assert "## Task & Tool Orchestration Modes" in s
     assert "## Memory (explicit + learned)" in s
     assert "**MemorySearch**" in s
     assert "**MemorySave**" in s
-    assert "## Core behavior" in s
+    assert "## Strict Behavioral Protocols" in s
 
 
 def test_working_memory_context_is_bounded_and_recent() -> None:
@@ -45,7 +45,7 @@ def test_working_memory_context_is_bounded_and_recent() -> None:
     assert msg is not None
     assert msg.role == "user"
     assert isinstance(msg.content, str)
-    assert "Working memory for this run" in msg.content
+    assert "## Transient Operational Insights (Current Turn)" in msg.content
     assert "finding 11" in msg.content
     assert "finding 0" not in msg.content
     assert len(msg.content) <= 2_100
