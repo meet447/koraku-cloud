@@ -241,7 +241,7 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
         cancel_event: asyncio.Event | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         from koraku.integrations.blaxel_lazy import lazy_blaxel_session_active
-        from koraku.integrations.blaxel_runtime import cloud_blaxel_block_reason
+        from koraku.integrations.blaxel_runtime import cloud_blaxel_block_reason, resolve_blaxel_session_root
 
         ws = resolve_agent_workspace(workspace, run_context)
         execution_target = resolve_execution_target(run_context)
