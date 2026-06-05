@@ -709,7 +709,7 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
             if loop_tracker.has_repeat():
                 session.add_message("user", LOOP_STEERING_USER)
 
-            self._update_memory(working_memory, tool_results)
+            _update_memory(working_memory, tool_results)
             if working_memory:
                 mem_ev = {"type": "agent.memory", "data": {"findings": len(working_memory)}}
                 emit(mem_ev)
