@@ -24,9 +24,7 @@ import { SetupStatusBanner } from "@/components/SetupStatusBanner";
 function OnboardingGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
   const router = useRouter();
-  const [complete, setComplete] = useState<boolean | null>(() =>
-    typeof window !== "undefined" && isOnboardingComplete() ? true : null,
-  );
+  const [complete, setComplete] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (complete !== null) return;

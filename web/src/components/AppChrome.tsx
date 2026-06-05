@@ -60,11 +60,10 @@ export function AppChrome({
       {/* Sidebar container */}
       <div
         className={clsx(
-          "box-border h-full shrink-0 bg-white p-2 pr-1",
-          // Desktop styling: inline, normal layout
-          "hidden md:flex md:relative md:z-auto",
-          // Mobile styling: overlay drawer
-          "flex fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-out",
+          "box-border h-full shrink-0 bg-white p-2 pr-1 transition-transform duration-300 ease-out",
+          // Layout mode: fixed on mobile, relative/flex on desktop
+          "fixed inset-y-0 left-0 z-50 md:relative md:z-auto md:flex",
+          // Visibility translation: slide out of screen on mobile when closed
           mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
