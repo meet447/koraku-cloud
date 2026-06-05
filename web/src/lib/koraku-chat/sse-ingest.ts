@@ -2,10 +2,10 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import {
   applyKorakuSseEvent,
   initialRunState,
-  parseKorakuEventInner,
   type RunState,
   type TurnStreamStatus,
 } from "@/lib/korakuReducer";
+import { parseKorakuEventInner } from "@koraku/client";
 import type { ChatMessage, StreamingTurn } from "@/lib/koraku-chat/types";
 
 function parseSseBlock(raw: string): { event: string; data: string; id?: string } {

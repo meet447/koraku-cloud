@@ -1,7 +1,7 @@
 import {
   clientIpFromRequest,
   resolveLocalContextPlace,
-} from "@/lib/local-context";
+} from "@/lib/local-context-server";
 
 export const runtime = "nodejs";
 

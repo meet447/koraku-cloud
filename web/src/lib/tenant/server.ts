@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { ORG_ID_COOKIE, ORG_ID_HEADER } from "@/lib/tenant/constants";
+import { getCachedJson, setCachedJson } from "../koraku-redis";
 
 export type OrgSummary = {
   id: string;
@@ -61,6 +62,16 @@ export async function resolveActiveOrgId(
   const jar = await cookies();
   const fromCookie = jar.get(ORG_ID_COOKIE)?.value?.trim();
   if (fromCookie) {
+    const cacheKey = `org-verify:${userId}:${fromCookie}`;
+    try {
+      const cached = await getCachedJson<boolean>(cacheKey);
+      if (cached) {
+        return fromCookie;
+      }
+    } catch {
+      /* ignore cache read errors */
+    }
+
     const { data } = await supabase
       .from("koraku_org_member")
       .select("org_id")
@@ -68,6 +79,12 @@ export async function resolveActiveOrgId(
       .eq("org_id", fromCookie)
       .maybeSingle();
     if (data?.org_id) {
+      try {
+        // Cache organization verification for 5 minutes (300 seconds)
+        await setCachedJson(cacheKey, true, 300);
+      } catch {
+        /* ignore cache write errors */
+      }
       return String(data.org_id);
     }
   }

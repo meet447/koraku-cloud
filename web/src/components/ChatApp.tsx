@@ -14,7 +14,14 @@ import { MarkdownBody } from "./MarkdownBody";
 import { AgentBusyRow } from "./AgentBusyRow";
 import { BrandMark } from "./BrandMark";
 import { NewChatLocalContext } from "./NewChatLocalContext";
-import { WorkspacePanel } from "./WorkspacePanel";
+import dynamic from "next/dynamic";
+
+const WorkspacePanel = dynamic(
+  () => import("./WorkspacePanel").then((mod) => mod.WorkspacePanel),
+  {
+    ssr: false,
+  }
+);
 import { RunWorkspaceAttachments } from "./RunWorkspaceAttachments";
 import { StreamingReplySkeleton } from "./StreamingReplySkeleton";
 import { initialRunState } from "@/lib/korakuReducer";
