@@ -536,7 +536,11 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                     *context_messages,
                     AgentMessage(role="user", content=BUDGET_STEERING_USER),
                 ]
-            token_estimate = context_manager.estimate_tokens(context_messages)
+            token_estimate = context_manager.estimate_tokens(
+                context_messages,
+                system_prompt=system_prompt,
+                tool_schemas=active_tools,
+            )
             ctx_event = {
                 "type": "agent.context",
                 "data": {"messages": len(context_messages), "estimated_tokens": token_estimate},

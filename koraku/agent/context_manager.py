@@ -270,8 +270,17 @@ class ContextManager:
         # and the most recent N-1 messages
         return [messages[0]] + messages[-(self.max_messages - 1):]
 
-    def estimate_tokens(self, messages: list[AgentMessage]) -> int:
+    def estimate_tokens(
+        self,
+        messages: list[AgentMessage],
+        system_prompt: str | None = None,
+        tool_schemas: list[any] | None = None,
+    ) -> int:
         """Rough token estimate for context telemetry."""
         from koraku.credits.token_estimator import estimate_messages_tokens
 
-        return estimate_messages_tokens(messages)
+        return estimate_messages_tokens(
+            messages,
+            system_prompt=system_prompt,
+            tool_schemas=tool_schemas,
+        )
