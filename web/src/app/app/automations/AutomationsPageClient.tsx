@@ -165,6 +165,7 @@ function runStatusBadge(run: RunRow): string | null {
 export function AutomationsPageClient() {
   const [items, setItems] = useState<Automation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -803,7 +804,10 @@ export function AutomationsPageClient() {
         ) : null}
 
         <div className="flex min-h-0 flex-1">
-          <aside className="flex w-full max-w-sm shrink-0 flex-col border-r border-neutral-200/80 bg-neutral-50/50">
+          <aside className={clsx(
+            "w-full max-w-sm shrink-0 flex-col border-r border-neutral-200/80 bg-neutral-50/50",
+            mobileShowDetail ? "hidden md:flex" : "flex"
+          )}>
             <div className="p-3">
               <KorakuSearchInput
                 variant="compact"
@@ -833,7 +837,10 @@ export function AutomationsPageClient() {
                       <li key={a.id}>
                         <button
                           type="button"
-                          onClick={() => setSelectedId(a.id)}
+                          onClick={() => {
+                            setSelectedId(a.id);
+                            setMobileShowDetail(true);
+                          }}
                           className={clsx(
                             "flex w-full flex-col gap-1 rounded-2xl px-3 py-3 text-left transition",
                             active ? "bg-white shadow-sm ring-1 ring-neutral-200/80" : "hover:bg-white/80",
@@ -877,11 +884,22 @@ export function AutomationsPageClient() {
             </div>
           </aside>
 
-          <section className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-white px-6 py-6">
+          <section className={clsx(
+            "min-h-0 min-w-0 flex-1 overflow-y-auto bg-white px-4 py-6 md:px-6",
+            mobileShowDetail ? "flex flex-col" : "hidden md:flex"
+          )}>
             {!selected ? (
               <p className="mt-20 text-center text-sm font-medium text-neutral-500">Select an automation</p>
             ) : (
               <>
+                {/* Mobile Back Button */}
+                <button
+                  type="button"
+                  onClick={() => setMobileShowDetail(false)}
+                  className="mb-4 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500 hover:text-neutral-800 md:hidden"
+                >
+                  ← Back to list
+                </button>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">

@@ -20,7 +20,7 @@ export function KorakuAppPage({
     <main
       className={clsx(
         "min-h-0 flex-1 overflow-y-auto bg-white",
-        density === "compact" ? "px-5 py-5 sm:px-6" : "px-6 py-10",
+        density === "compact" ? "px-4 py-4 sm:px-6 sm:py-5" : "px-4 py-8 sm:px-6 sm:py-10",
         className,
       )}
     >

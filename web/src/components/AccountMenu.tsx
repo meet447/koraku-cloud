@@ -15,6 +15,16 @@ const iconStroke = 1.5;
 export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const actuallyCollapsed = collapsed && !isMobile;
 
   const supabase = useMemo(() => {
     try {
@@ -55,7 +65,7 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
     return (
       <span
         className={
-          collapsed ? "flex justify-center text-xs text-neutral-400" : "text-xs text-neutral-400"
+          actuallyCollapsed ? "flex justify-center text-xs text-neutral-400" : "text-xs text-neutral-400"
         }
         aria-live="polite"
       >
@@ -65,7 +75,7 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
   }
 
   if (!supabase || !user) {
-    if (collapsed) {
+    if (actuallyCollapsed) {
       return (
         <div className="flex flex-col items-center gap-1">
           <Link
@@ -119,7 +129,7 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
     })();
   };
 
-  if (collapsed) {
+  if (actuallyCollapsed) {
     return (
       <div
         className="flex flex-col items-center gap-1.5 py-0.5"

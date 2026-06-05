@@ -240,7 +240,7 @@ export function ChatConversation() {
       <div
         className={clsx(
           "flex min-h-0 flex-1 flex-row overflow-hidden",
-          workspaceOpen && "gap-2 pr-2 pt-2 pb-2",
+          workspaceOpen && "md:gap-2 md:pr-2 md:pt-2 md:pb-2",
         )}
       >
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

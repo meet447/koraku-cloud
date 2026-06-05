@@ -209,6 +209,14 @@ export function WorkspacePanel({
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [resizeMode, setResizeMode] = useState<null | "panel" | "tree">(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const [relPath, setRelPath] = useState("");
   const [tree, setTree] = useState<TreeResponse | null>(null);
@@ -467,30 +475,45 @@ export function WorkspacePanel({
   const segments = relPath ? relPath.split("/").filter(Boolean) : [];
 
   const panelW = hydrated ? panelWidthPx : PANEL_DEFAULT;
+  const widthStyle = isMobile ? undefined : (visible ? panelW : 0);
 
   return (
-    <aside
-      style={{ width: visible ? panelW : 0 }}
-      className={clsx(
-        "relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden rounded-[28px] border border-neutral-200/90 bg-[#f7f7f7] ease-out",
-        "shadow-[0_0_0_3px_rgb(255_255_255),0_0_0_4px_rgb(229_229_229_/_0.55),0_14px_40px_-14px_rgb(0_0_0_/_0.09)]",
-        resizeMode === "panel" ? "duration-0" : "duration-200 transition-[width]",
-        visible ? "min-w-[300px]" : "min-w-0 border-transparent shadow-none",
-      )}
-      aria-hidden={!visible}
-    >
-      {visible ? (
-        <button
-          type="button"
-          aria-label="Resize workspace panel"
-          onMouseDown={startPanelResize}
-          className={clsx(
-            "absolute left-0 top-0 z-20 h-full w-3 -translate-x-1/2 cursor-col-resize touch-none",
-            "bg-transparent hover:bg-neutral-900/[0.06] active:bg-neutral-900/[0.1]",
-            resizeMode === "panel" && "bg-neutral-900/10",
-          )}
+    <>
+      {isMobile && visible && (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 z-40 bg-neutral-950/20 backdrop-blur-[2px] transition-opacity duration-300 md:hidden"
         />
-      ) : null}
+      )}
+      <aside
+        style={{ width: widthStyle }}
+        className={clsx(
+          "flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-neutral-200/90 bg-[#f7f7f7] ease-out",
+          "shadow-[0_0_0_3px_rgb(255_255_255),0_0_0_4px_rgb(229_229_229_/_0.55),0_14px_40px_-14px_rgb(0_0_0_/_0.09)]",
+          
+          // Desktop specific layout
+          "md:relative md:shrink-0 md:translate-x-0",
+          resizeMode === "panel" ? "md:duration-0" : "md:duration-200 md:transition-[width]",
+          visible ? "md:min-w-[300px]" : "md:min-w-0 md:border-transparent md:shadow-none",
+
+          // Mobile specific layout (slide over)
+          "fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] transition-transform duration-300 md:w-auto md:fixed-none",
+          visible ? "translate-x-0" : "translate-x-full md:translate-x-0"
+        )}
+        aria-hidden={!visible}
+      >
+        {visible ? (
+          <button
+            type="button"
+            aria-label="Resize workspace panel"
+            onMouseDown={startPanelResize}
+            className={clsx(
+              "absolute left-0 top-0 z-20 h-full w-3 -translate-x-1/2 cursor-col-resize touch-none hidden md:block",
+              "bg-transparent hover:bg-neutral-900/[0.06] active:bg-neutral-900/[0.1]",
+              resizeMode === "panel" && "bg-neutral-900/10",
+            )}
+          />
+        ) : null}
       {visible ? (
       <div
         key={serverSessionId ?? "workspace"}
@@ -548,8 +571,11 @@ export function WorkspacePanel({
               ) : (
                 <>
                   <div
-                    style={{ width: treeWidthPx }}
-                    className="flex min-h-0 min-w-0 shrink-0 flex-col border-r border-neutral-200/70 bg-neutral-100/50"
+                    style={{ width: isMobile ? "100%" : treeWidthPx }}
+                    className={clsx(
+                      "min-h-0 min-w-0 shrink-0 flex-col border-r border-neutral-200/70 bg-neutral-100/50",
+                      isMobile && fileRel ? "hidden" : "flex"
+                    )}
                   >
                     <div className="flex h-8 shrink-0 items-center justify-between border-b border-neutral-200/60 px-2">
                       <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-500">
@@ -703,7 +729,7 @@ export function WorkspacePanel({
                     aria-label="Resize explorer"
                     onMouseDown={startTreeResize}
                     className={clsx(
-                      "group relative z-10 w-1 shrink-0 cursor-col-resize touch-none border-0 bg-neutral-200/40 p-0",
+                      "group relative z-10 w-1 shrink-0 cursor-col-resize touch-none border-0 bg-neutral-200/40 p-0 hidden md:block",
                       resizeMode === "tree" && "bg-neutral-300",
                     )}
                   >
@@ -712,8 +738,23 @@ export function WorkspacePanel({
                 </>
               )}
 
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
+              <div className={clsx(
+                "min-h-0 min-w-0 flex-1 flex-col bg-white",
+                isMobile && !fileRel ? "hidden md:flex" : "flex"
+              )}>
                 <div className="flex h-9 shrink-0 items-end gap-px overflow-x-auto border-b border-neutral-200/70 bg-neutral-100/40 px-1 pt-1">
+                  {isMobile && fileRel && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFileRel(null);
+                        setFilePreview(null);
+                      }}
+                      className="flex items-center h-8 px-2.5 text-xs font-semibold text-neutral-500 hover:text-neutral-800 border border-b-0 border-neutral-200/80 rounded-t-md bg-white mr-1 shadow-sm transition"
+                    >
+                      ← Explorer
+                    </button>
+                  )}
                   {fileRel ? (
                     <div
                       className="flex h-8 max-w-full items-center gap-2 rounded-t-md border border-b-0 border-neutral-200/80 bg-white px-3 text-[12px] font-medium text-koraku-ink shadow-sm"
@@ -809,5 +850,6 @@ export function WorkspacePanel({
         <div className="flex h-full min-h-0 w-full min-w-0 flex-col opacity-0 pointer-events-none" aria-hidden />
       )}
     </aside>
+    </>
   );
 }

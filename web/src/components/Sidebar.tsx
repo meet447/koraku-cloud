@@ -12,6 +12,7 @@ import {
   Plus,
   Settings2,
   Wand2,
+  X,
 } from "lucide-react";
 import clsx from "clsx";
 import type { ChatSession } from "@/hooks/useKorakuChat";
@@ -46,6 +47,7 @@ export function Sidebar({
   onNewChat,
   onDeleteChat,
   onRefreshChat,
+  onCloseMobile,
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
@@ -59,6 +61,7 @@ export function Sidebar({
   onNewChat: () => void | Promise<void>;
   onDeleteChat: (id: string) => void | Promise<void>;
   onRefreshChat: (id: string) => void | Promise<void>;
+  onCloseMobile?: () => void;
 }) {
   const pathname = usePathname() || "";
   const router = useRouter();
@@ -76,31 +79,45 @@ export function Sidebar({
         "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[28px] border border-neutral-200/80 bg-koraku-panel transition-[width] duration-200 ease-out",
         // Layered “pill input” border: hairline edge + white halo gap + soft outer stroke + float shadow
         "shadow-[0_0_0_3px_rgb(255_255_255),0_0_0_4px_rgb(229_229_229_/_0.55),0_14px_40px_-14px_rgb(0_0_0_/_0.09)]",
-        collapsed ? "w-[3.75rem] px-1.5 py-2.5" : "w-[14rem] p-3",
+        collapsed ? "w-[14rem] md:w-[3.75rem] p-3 md:px-1.5 md:py-2.5" : "w-[14rem] p-3",
       )}
     >
       <div
         className={clsx(
           "flex shrink-0 items-center",
           collapsed
-            ? "mb-1.5 flex-col gap-1.5"
+            ? "mb-4 w-full flex-row justify-between gap-2 md:mb-1.5 md:flex-col md:gap-1.5"
             : "mb-4 w-full flex-row justify-between gap-2",
         )}
       >
         <div className="flex min-w-0 items-center gap-2.5">
           <BrandMark size={48} priority />
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-semibold leading-tight text-neutral-900">
-                Koraku
-              </p>
-            </div>
-          )}
+          <div className={clsx("min-w-0 flex-1", collapsed ? "block md:hidden" : "block")}>
+            <p className="truncate text-[15px] font-semibold leading-tight text-neutral-900">
+              Koraku
+            </p>
+          </div>
         </div>
+        
+        {/* Mobile close button */}
+        {onCloseMobile && (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition hover:bg-white/90 hover:text-neutral-900 md:hidden"
+            aria-label="Close sidebar"
+          >
+            <X className="h-4 w-4" strokeWidth={iconStroke} />
+          </button>
+        )}
+
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition hover:bg-white/90 hover:text-neutral-900"
+          className={clsx(
+            "h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition hover:bg-white/90 hover:text-neutral-900",
+            onCloseMobile ? "hidden md:flex" : "flex"
+          )}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? (
@@ -123,7 +140,7 @@ export function Sidebar({
                 onClick={onNewChat}
                 className={clsx(
                   "flex items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold text-neutral-800 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent",
-                  collapsed ? "justify-center px-0" : "",
+                  collapsed ? "justify-start px-2.5 md:justify-center md:px-0" : "",
                 )}
                 title="New chat"
               >
@@ -131,7 +148,9 @@ export function Sidebar({
                   className="h-4 w-4 shrink-0 text-neutral-600"
                   strokeWidth={iconStroke}
                 />
-                {!collapsed && item.label}
+                <span className={clsx(collapsed ? "block md:hidden" : "block")}>
+                  {item.label}
+                </span>
               </button>
             );
           }
@@ -145,7 +164,7 @@ export function Sidebar({
               href={href}
               className={clsx(
                 "flex items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold transition",
-                collapsed && "justify-center px-0",
+                collapsed && "justify-start px-2.5 md:justify-center md:px-0",
                 active
                   ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200/70"
                   : "text-neutral-600 hover:bg-white/80 hover:text-neutral-900",
@@ -153,24 +172,28 @@ export function Sidebar({
               title={item.label}
             >
               <Icon className="h-4 w-4 shrink-0" strokeWidth={iconStroke} />
-              {!collapsed && item.label}
+              <span className={clsx(collapsed ? "block md:hidden" : "block")}>
+                {item.label}
+              </span>
             </Link>
           );
         })}
       </nav>
 
-      {!collapsed ? (
-        <SidebarChatList
-          chatsLoading={chatsLoading}
-          sessions={sessions}
-          activeId={activeId}
-          streamingSessionIds={streamingSessionIds}
-          deletingSessionIds={deletingSessionIds}
-          refreshingSessionIds={refreshingSessionIds}
-          onSelectSession={onSelectSession}
-          onDeleteChat={onDeleteChat}
-          onRefreshChat={onRefreshChat}
-        />
+      {!collapsed || true ? (
+        <div className={clsx(collapsed ? "block md:hidden" : "block", "min-h-0 flex-1 flex flex-col")}>
+          <SidebarChatList
+            chatsLoading={chatsLoading}
+            sessions={sessions}
+            activeId={activeId}
+            streamingSessionIds={streamingSessionIds}
+            deletingSessionIds={deletingSessionIds}
+            refreshingSessionIds={refreshingSessionIds}
+            onSelectSession={onSelectSession}
+            onDeleteChat={onDeleteChat}
+            onRefreshChat={onRefreshChat}
+          />
+        </div>
       ) : null}
 
       <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-neutral-200/60 pt-2">
@@ -185,7 +208,8 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => {
-              if (collapsed) {
+              const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+              if (collapsed && !isMobile) {
                 router.push(SETTINGS_PANEL_HREF.profile);
                 return;
               }
@@ -198,17 +222,19 @@ export function Sidebar({
               !collapsed && onSettingsRoute
                 ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200/80"
                 : "text-neutral-600 hover:bg-white/80 hover:text-neutral-900",
-              collapsed && "justify-center px-0",
+              collapsed && "justify-start px-2.5 md:justify-center md:px-0",
             )}
           >
             <Settings2 className="h-4 w-4 shrink-0" strokeWidth={iconStroke} />
-            {!collapsed && "Settings"}
+            <span className={clsx(collapsed ? "block md:hidden" : "block")}>
+              Settings
+            </span>
           </button>
         )}
         <div
           className={clsx(
             "min-w-0",
-            collapsed ? "flex justify-center" : "w-full px-0.5 pb-0.5",
+            collapsed ? "flex justify-start px-0.5 pb-0.5 md:justify-center md:px-0 md:pb-0" : "w-full px-0.5 pb-0.5",
           )}
         >
           <AccountMenu collapsed={collapsed} />
