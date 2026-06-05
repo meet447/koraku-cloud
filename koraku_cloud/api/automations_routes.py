@@ -231,7 +231,7 @@ async def automations_create(
     request: Request,
     auth: AutomationsAuth = Depends(_automations_request_scope),
 ):
-    enforce_rate_limit(
+    await enforce_rate_limit(
         RateLimit(
             key=rate_limit_key(
                 request, scope="automation-create", user_id=auth.user_id, org_id=auth.org_id
@@ -443,7 +443,7 @@ async def automations_run_now(
     request: Request,
     auth: AutomationsAuth = Depends(_automations_request_scope),
 ):
-    enforce_rate_limit(
+    await enforce_rate_limit(
         RateLimit(
             key=rate_limit_key(
                 request, scope="automation-run", user_id=auth.user_id, org_id=auth.org_id

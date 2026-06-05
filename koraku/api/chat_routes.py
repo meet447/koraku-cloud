@@ -459,7 +459,7 @@ async def stream_endpoint_post(body: StreamChatBody, request: Request):
     resolved.require_chat_access()
     auth_sub = resolved.sub
     auth_org_id = resolved.org_id
-    enforce_rate_limit(
+    await enforce_rate_limit(
         RateLimit(
             key=rate_limit_key(
                 request, scope="chat-stream", user_id=auth_sub, org_id=auth_org_id

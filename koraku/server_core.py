@@ -90,13 +90,16 @@ def run_startup_checks() -> None:
 
 
 def make_lifespan(
-    agent: Agent | None,
-    mode: str,
+    agent: Agent | None = None,
+    mode: str | None = None,
     *,
     enable_automation_scheduler: bool,
 ) -> Callable[[FastAPI], AsyncIterator[None]]:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        nonlocal agent, mode
+        if mode is None:
+            agent, mode = run_startup_checks()
         app.state.koraku_agent = agent
         app.state.server_mode = mode
         log.info("%s v%s starting up in %s mode", settings.agent_name, settings.version, mode)

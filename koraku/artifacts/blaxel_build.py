@@ -10,9 +10,11 @@ from koraku.agent.blaxel_scope import get_active_blaxel_session_root
 from koraku.tools.blaxel_dispatch import blaxel_bash_if_active, sandbox_abs_path
 
 
-def _pip_install(package: str) -> str:
+def _pip_install(package: str, import_name: str | None = None) -> str:
+    imp = import_name or package.replace("-", "_")
     return (
-        f"(pip install -q {shlex.quote(package)} 2>/dev/null "
+        f"python3 -c 'import {shlex.quote(imp)}' 2>/dev/null "
+        f"|| (pip install -q {shlex.quote(package)} 2>/dev/null "
         f"|| pip3 install -q {shlex.quote(package)} 2>/dev/null "
         f"|| pip3 install -q --break-system-packages {shlex.quote(package)} 2>/dev/null "
         f"|| true)"
@@ -21,7 +23,7 @@ def _pip_install(package: str) -> str:
 
 def _blaxel_pptx_script(spec: dict[str, Any], abs_out: str) -> str:
     b64 = base64.b64encode(json.dumps(spec).encode()).decode()
-    return f"""{_pip_install("python-pptx")}
+    return f"""{_pip_install("python-pptx", import_name="pptx")}
 python3 <<'PY'
 import base64, json, os
 from pptx import Presentation
@@ -70,7 +72,7 @@ PY"""
 
 def _blaxel_docx_script(spec: dict[str, Any], abs_out: str) -> str:
     b64 = base64.b64encode(json.dumps(spec).encode()).decode()
-    return f"""{_pip_install("python-docx")}
+    return f"""{_pip_install("python-docx", import_name="docx")}
 python3 <<'PY'
 import base64, json, os
 from docx import Document

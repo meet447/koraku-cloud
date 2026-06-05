@@ -28,7 +28,7 @@ _composio_tool_map: ContextVar[dict[str, Tool] | None] = ContextVar("koraku_comp
 _composio_request_user: ContextVar[str | None] = ContextVar("koraku_composio_request_user", default=None)
 _connections_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 _prompt_section_cache: dict[str, tuple[float, str]] = {}
-_CACHE_TTL = 15.0
+_CACHE_TTL = 600.0
 _CONNECTIONS_CACHE_MAX_SIZE = 2000
 
 _TOOLKITS_CACHE_TTL = 300.0

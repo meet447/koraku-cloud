@@ -49,9 +49,9 @@ def claim_idempotency(key: str) -> bool:
     return True
 
 
-def enforce_automation_webhook_rate_limit(request: Request, automation_id: str) -> None:
+async def enforce_automation_webhook_rate_limit(request: Request, automation_id: str) -> None:
     """Per-IP + automation cap to limit abuse when a webhook token leaks."""
-    enforce_rate_limit(
+    await enforce_rate_limit(
         RateLimit(
             key=f"{rate_limit_key(request, scope='automation-webhook', user_id=None)}:{automation_id}",
             limit=60,

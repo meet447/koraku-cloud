@@ -42,7 +42,7 @@ async def automation_event_webhook(
     if len(resolved_token) < 16:
         raise HTTPException(status_code=401, detail="Webhook token required")
 
-    enforce_automation_webhook_rate_limit(request, automation_id)
+    await enforce_automation_webhook_rate_limit(request, automation_id)
 
     stored_hash = await async_ops.get_event_webhook_hash(automation_id)
     if not verify_webhook_token(resolved_token, stored_hash):

@@ -68,7 +68,8 @@ async def _memory_search(query: str, limit: int = 8) -> str:
         uid = effective_auth_user_sub()
     except RuntimeError as e:
         return f"Error: {e}"
-    return search_memories_sync(
+    return await asyncio.to_thread(
+        search_memories_sync,
         uid,
         query,
         org_id=effective_tenant_org_id(),
@@ -83,7 +84,12 @@ async def _memory_save(content: str) -> str:
         uid = effective_auth_user_sub()
     except RuntimeError as e:
         return f"Error: {e}"
-    return save_memory_sync(uid, content, org_id=effective_tenant_org_id())
+    return await asyncio.to_thread(
+        save_memory_sync,
+        uid,
+        content,
+        org_id=effective_tenant_org_id(),
+    )
 
 
 memory_search_tool = Tool(

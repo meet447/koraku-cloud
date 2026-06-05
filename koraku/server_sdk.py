@@ -14,7 +14,26 @@ from koraku.server_core import (
     run_startup_checks,
 )
 
-_AGENT, _MODE = run_startup_checks()
+from typing import Any
+
+_AGENT_VAL: Any = None
+_MODE_VAL: str | None = None
+
+
+def _resolve_lazy_checks() -> tuple[Any, str]:
+    global _AGENT_VAL, _MODE_VAL
+    if _MODE_VAL is None:
+        _AGENT_VAL, _MODE_VAL = run_startup_checks()
+    return _AGENT_VAL, _MODE_VAL
+
+
+def __getattr__(name: str) -> Any:
+    if name in ("_AGENT", "_MODE"):
+        agent, mode = _resolve_lazy_checks()
+        if name == "_AGENT":
+            return agent
+        return mode
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def create_sdk_app(
@@ -27,8 +46,6 @@ def create_sdk_app(
         title=f"{settings.agent_name} (SDK)" if index_variant == "sdk" else settings.agent_name,
         version=settings.version,
         lifespan=make_lifespan(
-            _AGENT,
-            _MODE,
             enable_automation_scheduler=enable_automation_scheduler,
         ),
     )

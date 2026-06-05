@@ -87,7 +87,7 @@ def _enforce_in_memory(limit: RateLimit) -> None:
     bucket.append(now)
 
 
-def enforce_rate_limit(limit: RateLimit) -> None:
+async def enforce_rate_limit(limit: RateLimit) -> None:
     """Raise 429 when a principal exceeds the configured requests per window.
 
     When ``REDIS_URL`` is configured, use a fixed-window counter shared across workers.
@@ -98,22 +98,28 @@ def enforce_rate_limit(limit: RateLimit) -> None:
     if max_hits <= 0:
         return
 
-    from koraku.core import redis_client
+    from koraku.core import redis_async
 
-    if redis_client.is_configured():
-        window_s = max(1, int(limit.window_seconds))
-        bucket_idx = int(time.time()) // window_s
-        rkey = f"koraku:rl:{limit.key}:{bucket_idx}"
-        count = redis_client.increment_with_ttl(rkey, window_s + 5)
-        if count is None:
-            _enforce_in_memory(limit)
-            return
-        if count > max_hits:
-            raise HTTPException(
-                status_code=429,
-                detail="Too many requests. Please wait a moment before trying again.",
-                headers={"Retry-After": str(window_s)},
-            )
-        return
+    if redis_async.is_configured():
+        client = await redis_async.get_client()
+        if client is not None:
+            window_s = max(1, int(limit.window_seconds))
+            bucket_idx = int(time.time()) // window_s
+            rkey = f"koraku:rl:{limit.key}:{bucket_idx}"
+            try:
+                async with client.pipeline() as pipe:
+                    pipe.incr(rkey)
+                    pipe.expire(rkey, window_s + 5, nx=True)
+                    results = await pipe.execute()
+                count = int(results[0])
+                if count > max_hits:
+                    raise HTTPException(
+                        status_code=429,
+                        detail="Too many requests. Please wait a moment before trying again.",
+                        headers={"Retry-After": str(window_s)},
+                    )
+                return
+            except Exception as e:
+                log.warning("redis async INCR %s failed: %s", rkey, e)
 
     _enforce_in_memory(limit)

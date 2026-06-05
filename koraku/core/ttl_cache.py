@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from collections import OrderedDict
 from typing import Any, Generic, TypeVar
 
 T = TypeVar("T")
@@ -13,7 +14,7 @@ class TtlCache(Generic[T]):
     __slots__ = ("_data", "_max_size")
 
     def __init__(self, *, max_size: int = 512) -> None:
-        self._data: dict[str, tuple[float, T]] = {}
+        self._data: OrderedDict[str, tuple[float, T]] = OrderedDict()
         self._max_size = max(16, int(max_size))
 
     def get(self, key: str, *, ttl_seconds: float) -> T | None:
@@ -29,15 +30,19 @@ class TtlCache(Generic[T]):
         if ttl > 0 and (time.monotonic() - _ts) >= ttl:
             self._data.pop(k, None)
             return None
+        # Move key to the end to maintain LRU/FIFO ordering on access
+        self._data.move_to_end(k)
         return value
 
     def set(self, key: str, value: T) -> None:
         k = (key or "").strip()
         if not k:
             return
-        if len(self._data) >= self._max_size:
-            oldest = min(self._data.items(), key=lambda item: item[1][0])[0]
-            self._data.pop(oldest, None)
+        if k in self._data:
+            self._data.pop(k)
+        elif len(self._data) >= self._max_size:
+            # Pop the oldest item (first item in OrderedDict) in O(1) time
+            self._data.popitem(last=False)
         self._data[k] = (time.monotonic(), value)
 
     def invalidate(self, key: str) -> None:
