@@ -124,9 +124,6 @@ def user_id() -> str:
     """
     Composio entity id: per-request JWT user (``set_composio_request_user``), else explicit
     ``COMPOSIO_USER_ID`` / settings for single-tenant embeds.
-
-    When Composio is configured, does not fall back to a shared ``koraku-local`` id — callers
-    must bind the authenticated user or set ``COMPOSIO_USER_ID`` intentionally.
     """
     ctx = _composio_request_user.get()
     if ctx and ctx.strip():
@@ -157,7 +154,6 @@ def list_connections_summary() -> list[dict[str, Any]]:
     if uid in _connections_cache:
         cache_time, cached_data = _connections_cache[uid]
         if (now - cache_time) < _CACHE_TTL:
-            # Shallow copy of rows (each row is a flat str/bool dict) so callers cannot mutate the cache.
             return [dict(r) for r in cached_data]
 
     c = _client()
@@ -196,7 +192,6 @@ def active_toolkit_slugs() -> list[str]:
 
 def start_toolkit_auth(toolkit: str, *, callback_url: str | None = None) -> dict[str, Any]:
     """Begin OAuth / Composio Link for a toolkit; returns redirect URL when applicable."""
-    # callback_url: reserved for future explicit OAuth return URLs; managed auth uses Composio-hosted flow.
     _ = callback_url
     if not is_configured():
         raise RuntimeError("Composio is not configured")
@@ -296,11 +291,8 @@ def _execute_factory(slug: str) -> Callable[..., Coroutine[Any, Any, str]]:
 
 
 def _execute_composio_tool_sync(slug: str, arguments: dict[str, Any]) -> str:
-    """Sync Composio SDK work; run via ``asyncio.to_thread`` so the asyncio loop stays responsive."""
     try:
         c = _client()
-        # Composio SDK refuses ``version="latest"`` unless ``dangerously_skip_version_check`` is set.
-        # Pin to the catalog version when available so the API gets a concrete toolkit version.
         version: str | None = None
         try:
             meta = c.tools.get_raw_composio_tool_by_slug(slug)
@@ -357,7 +349,6 @@ def _tool_from_composio_raw_item(t: Any) -> Tool | None:
 
 
 def _append_tools_from_raw(raw: Any, seen_slugs: set[str], tools: list[Tool]) -> int:
-    """Merge Composio raw tool rows into ``tools``; return count of newly added tools."""
     n = 0
     for t in raw:
         item = _tool_from_composio_raw_item(t)
@@ -370,7 +361,6 @@ def _append_tools_from_raw(raw: Any, seen_slugs: set[str], tools: list[Tool]) ->
 
 
 def _build_dynamic_composio_tools_for_slugs(tk_slugs: list[str]) -> list[Tool]:
-    """Build Composio tools for a non-empty list of toolkit slugs (callers validate ACTIVE / configured)."""
     c = _client()
     cap = max(8, min(int(settings.composio_tools_limit), 120))
     per_toolkit = max(1, cap // len(tk_slugs))
@@ -432,15 +422,6 @@ def _build_dynamic_composio_tools_for_slugs(tk_slugs: list[str]) -> list[Tool]:
 
 
 def build_dynamic_composio_tools() -> list[Tool]:
-    """Anthropic-shaped tools for active integrations only.
-
-    Fetches tools **per connected toolkit** with an even share of ``composio_tools_limit`` so
-    one toolkit (e.g. Gmail) cannot fill the entire budget and hide another (e.g. Calendar).
-
-    For toolkits in ``_COMPOSIO_PRIORITY_SLUGS_BY_TOOLKIT``, high-value actions are loaded **by
-    explicit slug** first; Composio's paginated toolkit list often omits them (e.g. many ``ACL_*``
-    tools sort before ``GOOGLECALENDAR_EVENTS_LIST``).
-    """
     if not is_configured():
         return []
     tk_slugs = active_toolkit_slugs()
@@ -450,11 +431,6 @@ def build_dynamic_composio_tools() -> list[Tool]:
 
 
 def build_dynamic_composio_tools_for_toolkits(toolkits: list[str]) -> list[Tool]:
-    """Composio tools for **only** the given toolkits (must be ACTIVE connections).
-
-    Used by the Composio sub-agent so each run exposes a small, toolkit-scoped tool surface
-    instead of every integration at once.
-    """
     if not is_configured():
         return []
     active = set(active_toolkit_slugs())
@@ -495,28 +471,26 @@ def composio_system_prompt_section() -> str:
     if not is_configured():
         return ""
     lines = [
-        "## Connected integrations (Composio)",
-        f"- Koraku user id for Composio: `{user_id()}`",
-        "- When the user asks to use Gmail, Google Calendar, Google Drive, Slack, Notion, Sheets, or similar apps, "
-        "prefer the **Composio** tools that appear in your tool list (for example `GMAIL_*`, `GOOGLECALENDAR_*`, "
-        "`GOOGLEDRIVE_*`). They run against the accounts connected in the Koraku **Connections** page.",
-        "- For read/search/list tasks, use connected tools directly when available and summarize the account/tool target.",
-        "- **Never** tell the user specific mailbox/calendar/Drive contents (counts, subjects, snippets, 'no emails', "
-        "'inbox empty', 'nothing found') **before** you have run the relevant Composio tool and read its output. "
-        "Guessing from chat context alone is wrong and reads as contradictory when you later report tool results.",
-        "- For external side effects like sending email, posting a message, creating/updating calendar events, sharing files, "
-        "or editing remote data, verify the recipient/channel/date/content/attachment first. If the user's intent and "
-        "details are already explicit, proceed; otherwise ask for the missing high-impact detail.",
-        "- If no relevant tool is available, suggest opening **Connections** to connect the needed app. If a Composio tool "
-        "returns an auth error, tell the user to reconnect that service in **Connections**.",
+        "## Connected Integration Infrastructure",
+        f"- Scope Context Identifier: `{user_id()}`",
+        "- When executing tasks regarding Gmail, Calendar, Drive, Slack, Notion, or Sheets, use the explicit "
+        "**Composio** tools in your environment (e.g., `GMAIL_*`, `GOOGLECALENDAR_*`). These interface with the "
+        "accounts bound to the environment.",
+        "- Never declare evaluation conclusions or make absolute claims about mailbox states, documents, or event logs "
+        "(such as stating an inbox is empty, or no matches exist) *until* you have executed the respective tracking "
+        "tool and evaluated the operational output payload. Reporting on context assumptions prior to execution is banned.",
+        "- Before dispatching mutating requests (sending email, modifying remote data states, publishing events), verify the "
+        "structural parameters (recipient targets, channels, timestamps, payload parameters) are cleanly stated. Speak using your "
+        "assigned identity layer to verify missing variables naturally.",
+        "- If an app configuration is missing or encounters validation failures, explicitly prompt the account owner to check the "
+        "**Connections** environment mapping.",
     ]
     active = active_toolkit_slugs()
     if active:
-        lines.append(f"- Currently **active** toolkits: {', '.join(active)}.")
+        lines.append(f"- Active Toolset Baselines: {', '.join(active)}.")
     else:
         lines.append(
-            "- No integrations are **ACTIVE** yet. Suggest opening **Connections** in the app to connect Gmail, "
-            "Google Drive, or other services."
+            "- No integrations are mapped yet. Prompt the session manager to update the **Connections** layout."
         )
     return "\n".join(lines) + "\n\n"
 
@@ -526,23 +500,22 @@ def composio_dispatcher_prompt_section_quick() -> str:
     if not is_configured():
         return ""
     lines = [
-        "## Connected integrations (Composio)",
-        "- For Gmail, Calendar, Drive, Slack, and similar tasks, call **ComposioRun** once with ACTIVE "
-        "toolkit slugs and a **short, concrete** `goal` (rewrite the user ask — not a copy-paste of chat).",
-        "- If the user has not connected an app, suggest the **Connections** page.",
+        "## Connected Integration Baselines",
+        "- For targeted integrations (Gmail, Calendar, Drive, Slack), call **ComposioRun** supplying the chosen uppercase toolkit "
+        "identifier and a single concise, optimized operational `goal`. Frame the intent cleanly using your voice layer.",
+        "- If a system target is not connected, reference updating the configuration maps.",
     ]
     active = active_toolkit_slugs()
     if active:
-        lines.append(f"- **ACTIVE** toolkits: {', '.join(active)}.")
+        lines.append(f"- Active Targets: {', '.join(active)}.")
     else:
         lines.append(
-            "- No integrations are **ACTIVE** yet. Suggest **Connections** in the app."
+            "- No integrated channels mapped. Reference the configuration interface."
         )
     return "\n".join(lines) + "\n\n"
 
 
 def _cached_composio_prompt_section(cache_key: str, builder: Callable[[], str]) -> str:
-    """Per-user Composio prompt slice; TTL aligned with ``list_connections_summary`` cache."""
     now = time.monotonic()
     cached = _prompt_section_cache.get(cache_key)
     if cached is not None:
@@ -555,7 +528,6 @@ def _cached_composio_prompt_section(cache_key: str, builder: Callable[[], str]) 
 
 
 def composio_prompt_section_for_turn(task_class: str) -> str:
-    """Composio system slice for a main-agent turn (cached; quick variant for non-research)."""
     if not is_configured():
         return ""
     uid = user_id()
@@ -577,24 +549,22 @@ def composio_dispatcher_prompt_section() -> str:
     if not is_configured():
         return ""
     lines = [
-        "## Connected integrations (Composio) — sub-agent mode",
-        f"- Koraku user id for Composio: `{user_id()}`",
-        "- Linked apps (Gmail, Calendar, Drive, Slack, …) are accessed via **ComposioRun**, not as individual tools on this agent.",
-        "- You still have **WebSearch**, **MemorySearch**, and workspace tools — use whichever fits the user ask.",
-        "- For linked-app work, call **ComposioRun** with:",
-        "  - `toolkits`: **ACTIVE** toolkit slugs from the list below (uppercase, e.g. `GMAIL`, `GOOGLECALENDAR`).",
-        "  - `goal`: one crisp instruction for the worker (include concrete params when known, e.g. Gmail `query: …`).",
-        "- Distill intent into `goal`; do not paste the full chat transcript.",
-        "- Prefer one ComposioRun per app task when possible; combine toolkits when the task truly spans apps.",
-        "- Do not claim inbox/calendar/Drive contents until ComposioRun returns (brief 'checking…' is fine).",
-        "- Prefer drafts over send when the user did not clearly confirm.",
-        "- If a toolkit is missing, suggest **Connections** in the app.",
+        "## Connected Integration Infrastructure — Task Redirection Mode",
+        f"- Scope Context Identifier: `{user_id()}`",
+        "- External platform operations (Gmail, Calendar, Drive, Slack, etc.) must be accessed via **ComposioRun**. Do not call standalone action bindings.",
+        "- Retain your core tool baseline capabilities (**WebSearch**, **MemorySearch**, and local system tools) alongside this channel.",
+        "- Execute **ComposioRun** with the following structural layout parameters:",
+        "  - `toolkits`: The uppercase identifier from the validated set detailed below (e.g., `GMAIL`, `GOOGLECALENDAR`).",
+        "  - `goal`: A single concise instruction statement for the worker thread. Deliver clear context parameters natively.",
+        "- Consolidate operations cleanly; avoid raw chat log duplication into payload string spaces.",
+        "- Retain full identity consistency: Do not report data assertions until the subprocess loop returns execution output payloads.",
+        "- If an app mapping is not listed, reference updating the configuration dashboard maps.",
     ]
     active = active_toolkit_slugs()
     if active:
-        lines.append(f"- **ACTIVE** toolkits (valid `toolkits` values): {', '.join(active)}.")
+        lines.append(f"- Valid Toolset Directives: {', '.join(active)}.")
     else:
         lines.append(
-            "- No integrations are **ACTIVE** yet. Suggest **Connections** in the app to link Gmail, Google Calendar, etc."
+            "- No integrations mapped yet. Prompt the execution environment manager to initialize needed channels."
         )
     return "\n".join(lines) + "\n\n"

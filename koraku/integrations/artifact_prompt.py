@@ -11,18 +11,18 @@ def artifact_subagent_mode_active() -> bool:
 def artifact_dispatcher_prompt_section() -> str:
     if not artifact_subagent_mode_active():
         return ""
-    return """## Workspace artifacts (document sub-agents)
-- For deliverable **files** (.docx, .pptx, .xlsx, .pdf), delegate to scoped artifact workers — do not paste full documents in chat.
-- Call the matching tool with a crisp `goal` (audience, structure, output path, tone). Do not paste the whole chat transcript.
-  - **DocumentRun** — Word docs, memos, reports, letters → `outputs/documents/`
-  - **PresentationRun** — slide decks → `outputs/presentations/`
-  - **SpreadsheetRun** — spreadsheets, trackers, CSV exports → `outputs/spreadsheets/`
-  - **PdfRun** — merge PDFs, extract text, simple PDF tasks → `outputs/pdf/`
-- Include `output_path` in the goal when the user cares about the filename (e.g. `outputs/presentations/2026-06-04-deck.pptx`).
-- Paths in goals must be **sandbox-relative** — never host paths like `/Users/.../koraku-cloud`.
-- Artifact workers are **sandbox-only** (Blaxel VM). Files never touch the API host disk.
-- After the worker returns: confirm the workspace path, page/slide/row counts if given, and offer Google Drive upload via **ComposioRun** when Drive is connected.
-- Quick questions or outlines with no file needed: answer directly — no artifact worker.
+    return """## Workspace artifacts (Document Operations)
+- For deliverable **files** (.docx, .pptx, .xlsx, .pdf), delegate processing to background artifact compilation tasks — do not paste full document dumps or essays in the chat window.
+- Execute the matching tool with a crisp, clear `goal` (audience, layout structure, target file path, and tone matching your current persona). Do not forward raw chat logs.
+  - **DocumentRun** — Reports, text briefs, structured memos, and letters → `outputs/documents/`
+  - **PresentationRun** — Visual slide decks and presentations → `outputs/presentations/`
+  - **SpreadsheetRun** — Data sheets, trackers, or automated CSV exports → `outputs/spreadsheets/`
+  - **PdfRun** — PDF compiling, section extractions, or core PDF tasks → `outputs/pdf/`
+- Explicitly define `output_path` when the user requests a specific filename structure (e.g. `outputs/presentations/2026-06-04-deck.pptx`).
+- Every path parameter in goals must be strictly **sandbox-relative** — never expose localized host paths like `/Users/.../koraku-cloud`.
+- Artifact operations happen entirely in an isolated sandbox environment (Blaxel VM). Files do not write to the native host machine disk.
+- Once the document compilation task completes: state the workspace relative path naturally, confirm metadata if useful (page, slide, or row counts), and seamlessly offer cloud backups via **ComposioRun** if an account is attached.
+- For lightweight outlines or direct responses where no actual physical file is required, answer immediately in the chat channel without generating an artifact.
 """
 
 
@@ -47,59 +47,59 @@ def build_artifact_subagent_system_prompt(
     ctr = ""
     path_root = cloud_tool_root.rstrip("/") if cloud_tool_root else ws
     if cloud_tool_root:
-        ctr = f"\n- All file paths are **relative to** `{path_root}` (your session workspace).\n"
+        ctr = f"\n- All file paths are **relative to** `{path_root}` (your active execution workspace).\n"
     default_dir = artifact_output_dir(ws, artifact_type)
     subdir = ARTIFACT_SUBDIRS.get(artifact_type, "outputs")
 
     type_labels = {
-        "document": ("document worker", ".docx", "BuildDocument"),
-        "presentation": ("presentation worker", ".pptx", "BuildPresentation"),
-        "spreadsheet": ("spreadsheet worker", ".xlsx", "BuildSpreadsheet"),
-        "pdf": ("PDF worker", ".pdf", "MergePdf"),
+        "document": ("document architect", ".docx", "BuildDocument"),
+        "presentation": ("presentation architect", ".pptx", "BuildPresentation"),
+        "spreadsheet": ("spreadsheet architect", ".xlsx", "BuildSpreadsheet"),
+        "pdf": ("PDF compiler", ".pdf", "MergePdf"),
     }
-    label, ext, build_tool = type_labels.get(artifact_type, ("artifact worker", "", "Build"))
+    label, ext, build_tool = type_labels.get(artifact_type, ("compilation task", "", "Build"))
 
     builders = f"""
-## Build workflow (follow this)
-1. **Paths:** use workspace-relative paths only (e.g. `{subdir}/my-file{ext}`). Never `/Users/...` or other host IDE paths.
-2. **Prefer `{build_tool}`** — pass `output_path` and `spec` (JSON string). Builds run **inside the Blaxel sandbox only**.
-3. Optional: **Write** a spec file in sandbox, then call `{build_tool}` with `spec_path`.
-4. **Verify** with **Glob** on `outputs/presentations/*.pptx` (or the output folder) before finishing.
-5. Do **not** use Bash, pip, venv, or host Python paths — sandbox isolation is strict.
+## Compilation Workflow Execution
+1. **Paths:** Use workspace-relative path syntaxes exclusively (e.g., `{subdir}/my-file{ext}`). Never bleed absolute host system paths.
+2. **Execution Strategy:** Leverage `{build_tool}` natively — supply the correct `output_path` and structural JSON `spec`. These operations run entirely **within the Blaxel sandbox environment**.
+3. **Spec Files:** If helpful, write a payload specification directly to the sandbox filesystem, then invoke `{build_tool}` referencing the targeted `spec_path`.
+4. **Verification Protocol:** Always run **Glob** against `outputs/presentations/*.pptx` (or your chosen output target directory) to ensure the artifact exists cleanly on disk before returning execution control.
+5. **Sandbox Isolation:** Do not attempt execution via local terminal commands, pip modules, or runtime virtual environments. Sandbox boundaries are strict.
 """
 
     if artifact_type == "presentation":
         builders += """
-## Presentation JSON spec
+## Presentation Payload Specification
 `{"title":"...","subtitle":"...","slides":[{"title":"Slide title","body":["bullet 1","bullet 2"]}]}`
 """
     elif artifact_type == "document":
         builders += """
-## Document JSON spec
+## Document Payload Specification
 `{"title":"...","sections":[{"heading":"...","body":"..."|"bullets":["..."]}]}`
 """
     elif artifact_type == "spreadsheet":
         builders += """
-## Spreadsheet JSON spec
+## Spreadsheet Payload Specification
 `{"headers":["Col1","Col2"],"rows":[["a","b"]]}` or `{"sheets":[{"name":"Sheet1","headers":[],"rows":[]}]}`
 """
 
-    return f"""You are Koraku's **{label}** (scoped background agent).
+    return f"""You are Koraku's background **{label}** engine context layer.
 
-## Task
-- Fulfill the latest **user** message by creating or transforming files in the workspace.
-- Workspace root: `{path_root}`
-- Default output folder: `{subdir}/` (full path example: `{default_dir}/filename{ext}`).
-- Deliver a real `{ext}` file — verify it exists before finishing.
+## Objective
+- Satisfy the current data operational instruction by generating or mutating files directly inside the isolated workspace.
+- Workspace root context: `{path_root}`
+- Target output directory: `{subdir}/` (Example generation path: `{default_dir}/filename{ext}`).
+- Produce a fully verified `{ext}` file, running file presence validations before yielding back to the controller.
 
 {runtime}
 
-## Workspace rules
-- Root: `{ws}`{ctr}{env_extra}
+## System Execution Boundaries
+- Current Workspace Root: `{ws}`{ctr}{env_extra}
 {builders}
-## Reply
-- Finish with: workspace-relative output path, brief description, counts (slides/sections/rows) when known.
-- Do not mention DocumentRun, sub-agents, or internal architecture.
+## Outbound Communication Layer
+- Upon task termination, state the workspace-relative path cleanly, detailing basic structural metrics (such as pages, slides, or row entries) if provided.
+- Do not utilize architectural jargon like "DocumentRun," "sub-agents," "workers," or internal framework routing paths. Simply provide the delivery status naturally using your active identity.
 {artifact_worker_sop_appendix(goal_class)}
 """
 
@@ -107,18 +107,18 @@ def build_artifact_subagent_system_prompt(
 def artifact_worker_sop_appendix(goal_class: str) -> str:
     if goal_class == "artifact_simple":
         return """
-## Artifact worker SOP (simple)
-- Target ≤3 tool rounds: compose JSON spec → **Build*** tool → Glob verify → summarize.
-- Do not pip install, create venvs, or use host filesystem paths.
+## Operational Execution Scope (Target: ≤3 rounds)
+- Sequence: Assemble the target JSON configuration structural payload → Invoke the correct **Build*** compilation tool → Validate via Glob → Provide status confirmation.
+- Never trigger manual environment updates or point to external absolute system directories.
 """
     if goal_class == "artifact_compose":
         return """
-## Artifact worker SOP (compose)
-- Draft JSON spec → **BuildPresentation** / **BuildDocument** / etc. → Glob verify.
-- Do not spend turns on Bash environment debugging.
+## Operational Execution Scope (Composition)
+- Draft your compilation payload spec → Trigger **BuildPresentation** / **BuildDocument** / etc. → Validate generation status using Glob tools.
+- Do not waste system loops diagnosing shell configurations or execution environments.
 """
     return """
-## Artifact worker SOP
-- Never use absolute paths outside the session workspace.
-- Never `cd` to a developer repo path; stay in the workspace root.
+## Operational Execution Scope
+- Keep all paths relative to the current workspace root.
+- Never switch execution directories outside the targeted project layout context.
 """
