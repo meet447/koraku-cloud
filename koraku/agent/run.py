@@ -52,6 +52,7 @@ from koraku.agent.budget import (
     dispatcher_mode_active,
     dispatcher_system_appendix,
     tools_for_dispatcher_turn,
+    resolve_turn_limits,
 )
 from koraku.agent.utils import (
     build_user_message_blocks,
