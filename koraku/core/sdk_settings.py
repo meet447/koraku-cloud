@@ -67,14 +67,14 @@ class SdkSettings(BaseSettings):
     agent_concurrency_limit: int = 8
     tool_concurrency_limit: int = 16
     agent_llm_stream_timeout_seconds: float = Field(
-        default=180.0,
+        default=900.0,
         validation_alias=AliasChoices(
             "AGENT_LLM_STREAM_TIMEOUT_SECONDS",
             "agent_llm_stream_timeout_seconds",
         ),
     )
     agent_tool_phase_timeout_seconds: float = Field(
-        default=240.0,
+        default=600.0,
         validation_alias=AliasChoices(
             "AGENT_TOOL_PHASE_TIMEOUT_SECONDS",
             "agent_tool_phase_timeout_seconds",
@@ -109,11 +109,19 @@ class SdkSettings(BaseSettings):
 
     llm_max_retries: int = 5
     llm_retry_base_seconds: float = 1.5
-    max_tokens: int = 4096
+    # Target model context window; related caps are sized for this tier (Kimi K2.6 = 262k).
+    llm_context_tokens: int = Field(
+        default=262_000,
+        validation_alias=AliasChoices("LLM_CONTEXT_TOKENS", "llm_context_tokens"),
+    )
+    max_tokens: int = Field(
+        default=128_000,
+        validation_alias=AliasChoices("MAX_TOKENS", "max_tokens"),
+    )
     max_steps: int = 15
     research_max_steps: int = 100
     chat_turn_wall_seconds_standard: float = Field(
-        default=180.0,
+        default=900.0,
         validation_alias=AliasChoices("CHAT_TURN_WALL_SECONDS_STANDARD", "chat_turn_wall_seconds_standard"),
     )
     chat_turn_wall_seconds_quick: float = Field(
@@ -121,18 +129,18 @@ class SdkSettings(BaseSettings):
         validation_alias=AliasChoices("CHAT_TURN_WALL_SECONDS_QUICK", "chat_turn_wall_seconds_quick"),
     )
     chat_turn_wall_seconds_integration: float = Field(
-        default=120.0,
+        default=600.0,
         validation_alias=AliasChoices(
             "CHAT_TURN_WALL_SECONDS_INTEGRATION",
             "chat_turn_wall_seconds_integration",
         ),
     )
     chat_turn_wall_seconds_research: float = Field(
-        default=600.0,
+        default=1800.0,
         validation_alias=AliasChoices("CHAT_TURN_WALL_SECONDS_RESEARCH", "chat_turn_wall_seconds_research"),
     )
     chat_max_rounds_standard: int = Field(
-        default=32,
+        default=48,
         validation_alias=AliasChoices("CHAT_MAX_ROUNDS_STANDARD", "chat_max_rounds_standard"),
     )
     chat_max_rounds_integration: int = Field(
@@ -155,7 +163,56 @@ class SdkSettings(BaseSettings):
         default=12.0,
         validation_alias=AliasChoices("AGENT_LLM_STREAM_HEARTBEAT_SECONDS", "agent_llm_stream_heartbeat_seconds"),
     )
-    max_tool_result_chars: int = 48_000
+    max_tool_result_chars: int = Field(
+        default=128_000,
+        validation_alias=AliasChoices("MAX_TOOL_RESULT_CHARS", "max_tool_result_chars"),
+    )
+    context_max_messages: int = Field(
+        default=56,
+        validation_alias=AliasChoices("CONTEXT_MAX_MESSAGES", "context_max_messages"),
+    )
+    context_summarize_after: int = Field(
+        default=28,
+        validation_alias=AliasChoices("CONTEXT_SUMMARIZE_AFTER", "context_summarize_after"),
+    )
+    context_snippet_max_chars: int = Field(
+        default=16_000,
+        validation_alias=AliasChoices("CONTEXT_SNIPPET_MAX_CHARS", "context_snippet_max_chars"),
+    )
+    tool_bash_output_max_chars: int = Field(
+        default=32_000,
+        validation_alias=AliasChoices("TOOL_BASH_OUTPUT_MAX_CHARS", "tool_bash_output_max_chars"),
+    )
+    tool_web_fetch_max_chars: int = Field(
+        default=32_000,
+        validation_alias=AliasChoices("TOOL_WEB_FETCH_MAX_CHARS", "tool_web_fetch_max_chars"),
+    )
+    tool_read_default_limit: int = Field(
+        default=300,
+        validation_alias=AliasChoices("TOOL_READ_DEFAULT_LIMIT", "tool_read_default_limit"),
+    )
+    tool_grep_max_matches: int = Field(
+        default=500,
+        validation_alias=AliasChoices("TOOL_GREP_MAX_MATCHES", "tool_grep_max_matches"),
+    )
+    tool_sse_input_trunc_bytes: int = Field(
+        default=32_000,
+        validation_alias=AliasChoices("TOOL_SSE_INPUT_TRUNC_BYTES", "tool_sse_input_trunc_bytes"),
+    )
+    skill_catalog_per_skill_max_chars: int = Field(
+        default=24_000,
+        validation_alias=AliasChoices(
+            "SKILL_CATALOG_PER_SKILL_MAX_CHARS",
+            "skill_catalog_per_skill_max_chars",
+        ),
+    )
+    skill_catalog_total_max_chars: int = Field(
+        default=56_000,
+        validation_alias=AliasChoices(
+            "SKILL_CATALOG_TOTAL_MAX_CHARS",
+            "skill_catalog_total_max_chars",
+        ),
+    )
     temperature: float = 0.5
     top_p: float = 0.85
     top_k: int = 20

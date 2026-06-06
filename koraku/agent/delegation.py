@@ -129,8 +129,8 @@ class SubagentDelegationMixin:
         sub_session_id = f"{ctx.session.session_id}:integration_run"
         sub_session = SessionState(session_id=sub_session_id)
         sub_cm = ContextManager(
-            max_messages=24,
-            summarize_after=14,
+            max_messages=int(settings.context_max_messages),
+            summarize_after=int(settings.context_summarize_after),
             max_tool_result_chars=self.context_manager.max_tool_result_chars,
             compact_tool_rounds=self.context_manager.compact_tool_rounds,
         )
@@ -259,8 +259,8 @@ class SubagentDelegationMixin:
         sub_session_id = f"{ctx.session.session_id}:artifact:{atype}"
         sub_session = SessionState(session_id=sub_session_id)
         sub_cm = ContextManager(
-            max_messages=24,
-            summarize_after=14,
+            max_messages=int(settings.context_max_messages),
+            summarize_after=int(settings.context_summarize_after),
             max_tool_result_chars=self.context_manager.max_tool_result_chars,
             compact_tool_rounds=self.context_manager.compact_tool_rounds,
         )

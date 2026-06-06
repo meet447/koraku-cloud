@@ -203,56 +203,6 @@ export function useKorakuChat() {
         setActiveId(newId);
         setMessagesBySession(msgMap);
         setHydrated(true);
-
-        // Prefetch recent thread messages in the background so the sidebar can render
-        // immediately after the thread list loads (no sequential /messages gate).
-        void (async () => {
-          const loadMessages = async (threadId: string) => {
-            const mr = await fetch(`/api/chat/threads/${threadId}/messages`, {
-              credentials: "include",
-            });
-            if (cancelled || !mr.ok) return;
-            const mp = (await mr.json()) as {
-              messages?: { id: string; role: string; contentJson: unknown }[];
-            };
-            msgMap[threadId] = (mp.messages ?? [])
-              .map(apiRowToChatMessage)
-              .filter((m): m is ChatMessage => m != null);
-          };
-
-          const prefetchIds = new Set(sessList.slice(0, 5).map((s) => s.id));
-          await Promise.all([...prefetchIds].map((threadId) => loadMessages(threadId)));
-
-          let streaming = collectStreamingTurns(sessList, msgMap);
-          const extraIds = streaming
-            .filter((t) => (msgMap[t.threadId]?.length ?? 0) === 0)
-            .map((t) => t.threadId);
-          await Promise.all(extraIds.map((threadId) => loadMessages(threadId)));
-
-          if (cancelled) return;
-
-          streaming = collectStreamingTurns(sessList, msgMap);
-          for (const t of streaming) {
-            messagesLoadedForThreadRef.current.add(t.threadId);
-          }
-          for (const threadId of prefetchIds) {
-            if ((msgMap[threadId]?.length ?? 0) > 0) {
-              messagesLoadedForThreadRef.current.add(threadId);
-            }
-          }
-
-          setMessagesBySession((prev) => {
-            const next = { ...prev };
-            for (const [threadId, messages] of Object.entries(msgMap)) {
-              if (messages.length > 0) {
-                next[threadId] = messages;
-              }
-            }
-            messagesBySessionRef.current = next;
-            return next;
-          });
-          setTimeout(() => resumeStreamingTurnsRef.current(), 0);
-        })();
       } catch {
         if (cancelled) return;
         const id = uid();

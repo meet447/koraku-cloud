@@ -101,8 +101,7 @@ class ToolExecutionMixin:
             hint = ""
             if tool_name == "Write":
                 hint = (
-                    " Write smaller chunks (~4KB) with mode=append, or use Bash: "
-                    "`cat <<'EOF' > file.py` … `EOF`."
+                    " Write smaller chunks (~32KB) with mode=append across multiple calls."
                 )
             return {
                 "type": "tool_result",

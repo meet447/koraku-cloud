@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from koraku.core.config import settings
+
 _skill_catalog_cache: dict[str, tuple[float, str]] = {}
 
 
@@ -62,9 +64,15 @@ def _skills_tree_max_mtime(root: Path) -> float:
 
 def _load_skill_catalog_uncached(
     workspace: str,
-    max_total_chars: int = 14_000,
-    per_skill_cap: int = 6_000,
+    max_total_chars: int | None = None,
+    per_skill_cap: int | None = None,
 ) -> str:
+    max_total_chars = int(
+        max_total_chars if max_total_chars is not None else settings.skill_catalog_total_max_chars
+    )
+    per_skill_cap = int(
+        per_skill_cap if per_skill_cap is not None else settings.skill_catalog_per_skill_max_chars
+    )
     root = skill_roots(workspace)
     workspace_slugs: set[str] = set()
     chunks: list[str] = []
@@ -99,7 +107,11 @@ def _load_skill_catalog_uncached(
     return "## Loaded workspace skills\n" + "".join(chunks)
 
 
-def load_skill_catalog(workspace: str, max_total_chars: int = 14_000, per_skill_cap: int = 6_000) -> str:
+def load_skill_catalog(
+    workspace: str,
+    max_total_chars: int | None = None,
+    per_skill_cap: int | None = None,
+) -> str:
     """Return markdown-ish text listing skills and trimmed SKILL.md bodies for the system prompt."""
     ws = str(Path(workspace).resolve())
     root = skill_roots(ws)

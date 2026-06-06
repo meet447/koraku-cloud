@@ -12,8 +12,8 @@ export type ChatMessage =
 
 export const MAX_CONCURRENT_CHAT_STREAMS = 3;
 
-export const CLIENT_HISTORY_MAX_MESSAGES = 24;
-export const CLIENT_HISTORY_MAX_TEXT_CHARS = 8_000;
+export const CLIENT_HISTORY_MAX_MESSAGES = 48;
+export const CLIENT_HISTORY_MAX_TEXT_CHARS = 32_000;
 
 export const EMPTY_THREAD_MESSAGES: ChatMessage[] = [];
 

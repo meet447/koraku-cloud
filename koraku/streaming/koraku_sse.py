@@ -8,6 +8,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from koraku.core.config import settings
 from koraku.credits.calculator import UsageAccumulator
 from koraku.tools.registry import available_tools
 
@@ -105,7 +106,7 @@ def _tool_started_events(
     state.started_tool_use_ids.add(scoped_tool_use_id)
     if is_new:
         state.usage.record_tool(tool_name)
-    t_args = _json_len(tool_input) > _TOOL_INPUT_TRUNC_BYTES
+    t_args = _json_len(tool_input) > _tool_input_trunc_bytes()
     return [
         _tool_event(
             inner_session_id=inner_session_id,
@@ -387,7 +388,8 @@ class KorakuStreamState:
         return out
 
 
-_TOOL_INPUT_TRUNC_BYTES = 8_000
+def _tool_input_trunc_bytes() -> int:
+    return int(settings.tool_sse_input_trunc_bytes)
 
 
 def map_koraku_stream_events(event: dict[str, Any], state: KorakuStreamState) -> list[dict[str, Any]]:

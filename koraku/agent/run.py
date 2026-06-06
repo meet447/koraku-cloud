@@ -110,9 +110,9 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
     def __init__(self) -> None:
         self._llm_by_provider: dict[str, UnifiedLLMClient] = {}
         self.context_manager = ContextManager(
-            max_messages=28,
-            summarize_after=14,
-            max_tool_result_chars=max(4_000, int(settings.max_tool_result_chars)),
+            max_messages=int(settings.context_max_messages),
+            summarize_after=int(settings.context_summarize_after),
+            max_tool_result_chars=int(settings.max_tool_result_chars),
             compact_tool_rounds=bool(settings.chat_compact_tool_context),
         )
 

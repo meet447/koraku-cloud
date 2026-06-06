@@ -91,7 +91,7 @@ class CloudSettings(BaseSettings):
         ),
     )
     chat_history_supabase_limit: int = Field(
-        default=60,
+        default=120,
         validation_alias=AliasChoices(
             "CHAT_HISTORY_SUPABASE_LIMIT",
             "chat_history_supabase_limit",
@@ -146,7 +146,7 @@ class CloudSettings(BaseSettings):
         validation_alias=AliasChoices("SUPERMEMORY_API_KEY", "supermemory_api_key"),
     )
     supermemory_context_max_chars: int = Field(
-        default=6_000,
+        default=24_000,
         validation_alias=AliasChoices(
             "SUPERMEMORY_CONTEXT_MAX_CHARS",
             "supermemory_context_max_chars",

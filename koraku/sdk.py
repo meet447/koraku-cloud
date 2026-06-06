@@ -28,7 +28,7 @@ class KorakuConfig:
     anthropic_model: str = "claude-3-5-sonnet-20241022"
     llm_openai_compat_ids: str = ""
     max_steps: int = 15
-    max_tokens: int = 4096
+    max_tokens: int = 128_000
     temperature: float = 0.5
     workspace: str | None = None
     execution_target: ExecutionTarget = "local"

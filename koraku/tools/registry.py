@@ -128,7 +128,11 @@ read_tool = Tool(
         "properties": {
             "file_path": {"type": "string", "description": "Path to file"},
             "offset": {"type": "integer", "description": "Start line (1-indexed)", "default": 1},
-            "limit": {"type": "integer", "description": "Max lines", "default": 100},
+            "limit": {
+                "type": "integer",
+                "description": "Max lines",
+                "default": settings.tool_read_default_limit,
+            },
         },
         "required": ["file_path"],
     },
@@ -179,8 +183,7 @@ write_tool = Tool(
         "Write content to a file. Creates parent dirs if needed. "
         "Use workspace-relative paths only (e.g. outputs/presentations/deck.pptx) — "
         "never absolute host paths like /Users/.../koraku-cloud. "
-        "For large files (>~4KB), use mode=append across multiple calls or Bash heredoc "
-        "(`cat <<'EOF' > path` … EOF) when tool args truncate."
+        "For very large files, use mode=append in ~32KB chunks across multiple calls."
     ),
     input_schema={
         "type": "object",
@@ -287,7 +290,10 @@ async def _bash(command: str, timeout: int = 30) -> str:
     output = stdout.decode("utf-8", errors="replace")
     if stderr:
         output += "\n[stderr]\n" + stderr.decode("utf-8", errors="replace")
-    return output[:4000]
+    cap = int(settings.tool_bash_output_max_chars)
+    if len(output) > cap:
+        return output[:cap] + f"\n...[truncated: bash output exceeded {cap} chars]"
+    return output
 
 
 bash_tool = Tool(
@@ -353,6 +359,7 @@ glob_tool = Tool(
 
 
 def _grep_sync(search_dir: str, pattern: str, include: str, *, single_file: str | None = None) -> str:
+    match_cap = int(settings.tool_grep_max_matches)
     if single_file:
         fpath = single_file
         if not os.path.isfile(fpath):
@@ -365,7 +372,7 @@ def _grep_sync(search_dir: str, pattern: str, include: str, *, single_file: str 
                     if regex.search(line):
                         rel = os.path.relpath(fpath, os.path.dirname(fpath) or ".")
                         results.append(f"{rel}:{i}: {line.rstrip()}")
-                        if len(results) >= 100:
+                        if len(results) >= match_cap:
                             break
         except OSError as e:
             return f"Error: {e}"
@@ -387,15 +394,15 @@ def _grep_sync(search_dir: str, pattern: str, include: str, *, single_file: str 
                             rel = os.path.relpath(fpath, search_dir)
                             results.append(f"{rel}:{i}: {line.rstrip()}")
                             count += 1
-                            if count >= 100:
+                            if count >= match_cap:
                                 break
             except OSError:
                 continue
-        if count >= 100:
+        if count >= match_cap:
             break
     if not results:
         return "No matches."
-    return "\n".join(results[:100])
+    return "\n".join(results[:match_cap])
 
 
 async def _grep(pattern: str, path: str = ".", include: str = "*") -> str:
@@ -509,11 +516,14 @@ _JINA_READER_BASE = "https://r.jina.ai/"
 _JINA_FETCH_TIMEOUT_SECONDS = 30.0
 _EXA_FETCH_TIMEOUT_SECONDS = 25.0
 _FIRECRAWL_FETCH_TIMEOUT_SECONDS = 45.0
-_WEB_FETCH_MAX_CHARS = 8_000
 
 
 def _jina_reader_url(page_url: str) -> str:
     return f"{_JINA_READER_BASE}{page_url}"
+
+
+def _web_fetch_max_chars(max_chars: int | None) -> int:
+    return int(max_chars if max_chars is not None else settings.tool_web_fetch_max_chars)
 
 
 async def _web_search(
@@ -606,11 +616,12 @@ web_search_tool = Tool(
 async def _jina_fetch_page(
     url: str,
     *,
-    max_chars: int = _WEB_FETCH_MAX_CHARS,
+    max_chars: int | None = None,
     extract_prompt: str | None = None,
 ) -> tuple[bool, str]:
     """Fetch page markdown via Jina Reader. Returns (ok, body_or_error_detail)."""
     _ = extract_prompt  # Jina returns full-page markdown; structured extract uses Exa/Firecrawl.
+    max_chars = _web_fetch_max_chars(max_chars)
     page_url = (url or "").strip()
     if not page_url:
         return False, "empty URL"
@@ -634,10 +645,11 @@ async def _jina_fetch_page(
 async def _exa_fetch_page(
     url: str,
     *,
-    max_chars: int = _WEB_FETCH_MAX_CHARS,
+    max_chars: int | None = None,
     extract_prompt: str | None = None,
 ) -> tuple[bool, str]:
     """Fetch page text via Exa Contents. Returns (ok, body_or_error_detail)."""
+    max_chars = _web_fetch_max_chars(max_chars)
     if not settings.exa_api_key:
         return False, "Exa API key not configured"
 
@@ -754,7 +766,8 @@ async def _firecrawl_fetch_page(
 
     md = (result.get("markdown") or "").strip()
     if "markdown" in result:
-        parts.append(f"\n--- Content ---\n{result['markdown'][:8000]}")
+        md_cap = int(settings.tool_web_fetch_max_chars)
+        parts.append(f"\n--- Content ---\n{result['markdown'][:md_cap]}")
     
     if "html" in result:
         html_content = result["html"]

@@ -38,7 +38,7 @@ def format_blaxel_sandbox_execution_guide(session_root: str) -> str:
         "- **Paths**: relative to that folder (e.g. `chart.py`, `outputs/plot.png`).\n"
         "- **Python / charts**: Bash auto-activates `.koraku-venv` (created on first shell use). "
         "Run scripts with `python script.py` after `pip install` packages inside the venv.\n"
-        "- **Large files**: prefer **Write** with `mode=append` in ~4KB chunks, or Bash "
+        "- **Large files**: prefer **Write** with `mode=append` in ~32KB chunks, or Bash "
         "`cat <<'EOF' > file.py` … `EOF` when Write args truncate.\n"
         "- **Grep**: `path` is a directory; to search one file use `path='.'` and "
         "`include='filename.py'`, or pass the file path directly (auto-resolved).\n"

@@ -36,7 +36,7 @@ def _read_file_cap(path: Path, max_chars: int, truncated_note: str) -> str:
     return text
 
 
-def load_memory_snippet(workspace: str, max_chars: int = 4_000) -> str:
+def load_memory_snippet(workspace: str, max_chars: int = 16_000) -> str:
     primary = memory_path(workspace)
     legacy = legacy_memory_path(workspace)
     if primary.is_file():
@@ -46,7 +46,7 @@ def load_memory_snippet(workspace: str, max_chars: int = 4_000) -> str:
     return ""
 
 
-def load_soul_snippet(workspace: str, max_chars: int = 4_000) -> str:
+def load_soul_snippet(workspace: str, max_chars: int = 16_000) -> str:
     return _read_file_cap(
         soul_path(workspace),
         max_chars,

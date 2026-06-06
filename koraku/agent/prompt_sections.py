@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from koraku.core.config import settings
 from koraku.workspace.context import (
     load_agent_display_name,
     load_memory_snippet,
@@ -73,21 +74,22 @@ def load_personalization_snippets(
     workspace: str,
     account_personalization: dict[str, str] | None,
 ) -> tuple[str, str, str | None]:
+    snippet_cap = int(settings.context_snippet_max_chars)
     if account_personalization is not None:
         mem = _snippet_text(
             account_personalization.get("memory", ""),
-            4_000,
+            snippet_cap,
             "\n\n[... Memory truncated ...]",
         )
         soul = _snippet_text(
             account_personalization.get("soul", ""),
-            4_000,
+            snippet_cap,
             "\n\n[... Soul truncated ...]",
         )
         raw_display = (account_personalization.get("agent_name") or "").strip() or None
     else:
-        mem = load_memory_snippet(workspace)
-        soul = load_soul_snippet(workspace)
+        mem = load_memory_snippet(workspace, snippet_cap)
+        soul = load_soul_snippet(workspace, snippet_cap)
         raw_display = load_agent_display_name(workspace)
 
     display_name = None
