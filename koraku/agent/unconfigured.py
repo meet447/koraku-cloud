@@ -18,7 +18,7 @@ async def run_unconfigured(
         "• FIREWORKS_API_KEY and LLM_PROVIDER=fireworks\n"
         "• LLM_OPENAI_COMPAT_IDS=openai,groq (with OPENAI_BASE_URL, OPENAI_API_KEY, OPENAI_MODEL, …)\n"
         "• Or CUSTOM_BASE_URL alone (registers provider id ``custom``)\n\n"
-        "Optional tool keys: EXA_API_KEY (WebSearch + WebFetch), FIRECRAWL_API_KEY (WebFetch fallback)."
+        "Optional tool keys: EXA_API_KEY (WebSearch + WebFetch fallback), FIRECRAWL_API_KEY (WebFetch fallback)."
     )
 
     yield _emit(emit, {

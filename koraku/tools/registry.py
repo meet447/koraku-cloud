@@ -2,9 +2,9 @@
 
 Web tools are presented generically to the LLM:
 - WebSearch: discovers content (internally uses Exa)
-- WebFetch: reads pages (Exa Contents first, Firecrawl fallback for hard URLs)
+- WebFetch: reads pages (Jina Reader first, Exa Contents second, Firecrawl fallback)
 
-The LLM doesn't need to know about Exa or Firecrawl — it just searches and fetches.
+The LLM doesn't need to know about Jina, Exa, or Firecrawl — it just searches and fetches.
 """
 import asyncio
 import glob as pyglob
@@ -505,9 +505,15 @@ todo_write_tool = Tool(
 # WEB TOOLS (abstracted — LLM sees generic names)
 # ========================================================================
 
+_JINA_READER_BASE = "https://r.jina.ai/"
+_JINA_FETCH_TIMEOUT_SECONDS = 30.0
 _EXA_FETCH_TIMEOUT_SECONDS = 25.0
 _FIRECRAWL_FETCH_TIMEOUT_SECONDS = 45.0
 _WEB_FETCH_MAX_CHARS = 8_000
+
+
+def _jina_reader_url(page_url: str) -> str:
+    return f"{_JINA_READER_BASE}{page_url}"
 
 
 async def _web_search(
@@ -595,6 +601,34 @@ web_search_tool = Tool(
     handler=_web_search,
     categories=["web"],
 )
+
+
+async def _jina_fetch_page(
+    url: str,
+    *,
+    max_chars: int = _WEB_FETCH_MAX_CHARS,
+    extract_prompt: str | None = None,
+) -> tuple[bool, str]:
+    """Fetch page markdown via Jina Reader. Returns (ok, body_or_error_detail)."""
+    _ = extract_prompt  # Jina returns full-page markdown; structured extract uses Exa/Firecrawl.
+    page_url = (url or "").strip()
+    if not page_url:
+        return False, "empty URL"
+
+    headers = {"Accept": "text/markdown, text/plain, */*"}
+    async with httpx.AsyncClient(timeout=_JINA_FETCH_TIMEOUT_SECONDS, follow_redirects=True) as client:
+        try:
+            resp = await client.get(_jina_reader_url(page_url), headers=headers)
+            resp.raise_for_status()
+        except Exception as e:
+            return False, f"Jina request failed: {e}"
+
+    text = (resp.text or "").strip()
+    if not text:
+        return False, "Jina returned no readable text for this URL"
+
+    parts = [f"URL: {page_url}", "(source: Jina Reader)", f"\n--- Content ---\n{text[:max_chars]}"]
+    return True, "\n".join(parts)
 
 
 async def _exa_fetch_page(
@@ -770,31 +804,39 @@ async def _web_page(
     include_html: bool = False,
     extract_prompt: str | None = None,
 ) -> str:
-    """Fetch a URL: Exa Contents first (fast), Firecrawl when Exa fails or for raw HTML."""
+    """Fetch a URL: Jina Reader first, Exa Contents second, Firecrawl for hard pages / raw HTML."""
     page_url = (url or "").strip()
     if not page_url:
         return "Error: URL is required."
 
-    if not settings.exa_api_key and not settings.firecrawl_api_key:
-        return (
-            "Error: Web page fetching is not available "
-            "(set EXA_API_KEY and/or FIRECRAWL_API_KEY)."
-        )
+    if include_html and not settings.firecrawl_api_key:
+        return "Error: Web page fetching requires FIRECRAWL_API_KEY when include_html=true."
 
+    jina_note = ""
     exa_note = ""
-    if settings.exa_api_key and not include_html:
-        ok, exa_body = await _exa_fetch_page(
+    if not include_html:
+        ok, jina_body = await _jina_fetch_page(
             page_url,
             extract_prompt=extract_prompt,
         )
         if ok:
-            return exa_body
-        exa_note = exa_body
+            return jina_body
+        jina_note = jina_body
+
+        if settings.exa_api_key:
+            ok, exa_body = await _exa_fetch_page(
+                page_url,
+                extract_prompt=extract_prompt,
+            )
+            if ok:
+                return exa_body
+            exa_note = exa_body
 
     if not settings.firecrawl_api_key:
-        if exa_note:
-            return f"Error: {exa_note}"
-        return "Error: Web page fetching requires FIRECRAWL_API_KEY for this request (include_html=true)."
+        notes = [n for n in (jina_note, exa_note) if n]
+        if notes:
+            return f"Error: {'; '.join(notes)}"
+        return "Error: Web page fetching requires FIRECRAWL_API_KEY for this request."
 
     fc_body = await _firecrawl_fetch_page(
         page_url,
@@ -802,20 +844,28 @@ async def _web_page(
         include_html=include_html,
         extract_prompt=extract_prompt,
     )
+    attempt_notes = " / ".join(
+        note
+        for note in (
+            f"Jina: {jina_note}" if jina_note else "",
+            f"Exa: {exa_note}" if exa_note else "",
+        )
+        if note
+    )
     if tool_stdout_indicates_error(fc_body, tool_name="WebFetch"):
-        if exa_note:
-            return f"{fc_body}\n(Exa attempt: {exa_note})"
+        if attempt_notes:
+            return f"{fc_body}\n({attempt_notes})"
         return fc_body
 
-    if exa_note:
-        return f"{fc_body.rstrip()}\n(Firecrawl fallback — Exa: {exa_note})"
+    if attempt_notes:
+        return f"{fc_body.rstrip()}\n(Firecrawl fallback — {attempt_notes})"
     return fc_body
 
 
 web_fetch_tool = Tool(
     name="WebFetch",
     description=(
-        "Fetch and read a web page (Exa first, Firecrawl fallback). "
+        "Fetch and read a web page (Jina Reader first, Exa second, Firecrawl fallback). "
         "Use after WebSearch when you need full article text. "
         "Set include_html=true only when you need image URLs from raw HTML."
     ),
@@ -835,7 +885,8 @@ web_fetch_tool = Tool(
 
 
 def web_fetch_available() -> bool:
-    return bool(settings.exa_api_key or settings.firecrawl_api_key)
+    # Jina Reader works without API keys; Exa/Firecrawl are optional fallbacks.
+    return True
 
 # ========================================================================
 # TOOL REGISTRY + ROUTER

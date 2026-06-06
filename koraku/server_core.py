@@ -121,8 +121,9 @@ def make_lifespan(
                 settings.max_steps,
                 settings.research_max_steps,
             )
+            log.info("Jina Reader web fetch (primary) enabled")
             if settings.exa_api_key:
-                log.info("Exa web search + fetch (primary) enabled")
+                log.info("Exa web search + fetch fallback enabled")
             if settings.firecrawl_api_key:
                 log.info("Firecrawl web fetch fallback enabled")
             if settings.blaxel_cloud_sandbox_enabled:
