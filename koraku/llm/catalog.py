@@ -2,6 +2,12 @@
 from typing import Any
 
 from koraku.core.config import settings
+from koraku.llm.model_profiles import (
+    get_model_profile,
+    is_known_fireworks_model,
+    list_fireworks_featured,
+    resolve_limits,
+)
 from koraku.llm.openai_compat_registry import (
     get_openai_compat_provider,
     is_openai_compat_provider,
@@ -12,54 +18,40 @@ from koraku.llm.openai_compat_registry import (
 
 _BUILTIN_PROVIDER_IDS = frozenset({"anthropic", "fireworks"})
 
-# Only models exposed in the Fireworks composer picker (order = UI order).
-_FIREWORKS_CURATED: list[dict[str, str]] = [
-    {
-        "id": "accounts/fireworks/models/kimi-k2p6",
-        "logo_url": "https://app.fireworks.ai/images/logos/moonshot-icon.svg",
-        "label": "Kimi K2",
-    },
-    {
-        "id": "accounts/fireworks/models/qwen3p6-plus",
-        "logo_url": "https://app.fireworks.ai/images/logos/qwen-icon.svg",
-        "label": "Qwen3 6 Plus",
-    },
-    {
-        "id": "accounts/fireworks/models/minimax-m2p7",
-        "logo_url": "https://app.fireworks.ai/images/logos/minimax-icon.svg",
-        "label": "MiniMax M2",
-    },
-    {
-        "id": "accounts/fireworks/models/glm-5p1",
-        "logo_url": "https://app.fireworks.ai/images/logos/z-ai.svg",
-        "label": "GLM 5.1",
-    },
-]
-
-_FIREWORKS_CURATED_BY_ID: dict[str, dict[str, str]] = {e["id"]: e for e in _FIREWORKS_CURATED}
-
 
 def known_provider_ids() -> frozenset[str]:
     return _BUILTIN_PROVIDER_IDS | frozenset(load_openai_compat_providers().keys())
 
 
+def _fireworks_featured_entries() -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for profile in list_fireworks_featured():
+        limits = resolve_limits(profile.id, "fireworks")
+        out.append(profile.to_ui_entry(limits=limits))
+    return out
+
+
 def _fireworks_curated_ids() -> list[str]:
-    return [e["id"] for e in _FIREWORKS_CURATED]
+    return [e["id"] for e in _fireworks_featured_entries()]
 
 
 def _normalize_fireworks_model_id(model_id: str | None) -> str:
     m = (model_id or "").strip()
-    if m in _FIREWORKS_CURATED_BY_ID:
+    if is_known_fireworks_model(m):
         return m
-    return _fireworks_curated_ids()[0]
+    default = (settings.fireworks_model or "").strip()
+    if is_known_fireworks_model(default):
+        return default
+    ids = _fireworks_curated_ids()
+    return ids[0] if ids else default or "accounts/fireworks/models/kimi-k2p6"
 
 
 def _fireworks_ui_block() -> dict[str, Any]:
     pid = "fireworks"
     configured = is_provider_configured(pid)
     default_model = _normalize_fireworks_model_id(settings.fireworks_model)
-    models = _fireworks_curated_ids()
-    entries = [dict(e) for e in _FIREWORKS_CURATED]
+    entries = _fireworks_featured_entries()
+    models = [e["id"] for e in entries]
     return {
         "id": pid,
         "label": "Fireworks",
@@ -73,13 +65,23 @@ def _fireworks_ui_block() -> dict[str, Any]:
 def _anthropic_ui_block() -> dict[str, Any]:
     pid = "anthropic"
     model = settings.anthropic_model
+    limits = resolve_limits(model, pid)
+    profile = get_model_profile(model)
+    entry: dict[str, Any] = {
+        "id": model,
+        "label": profile.name if profile else model,
+        "context_tokens": limits.context_tokens,
+        "max_output_tokens": limits.max_output_tokens,
+    }
+    if profile and profile.capabilities:
+        entry["capabilities"] = profile.capabilities.to_dict()
     return {
         "id": pid,
         "label": "Anthropic",
         "configured": is_provider_configured(pid),
         "default_model": model,
         "models": [model],
-        "entries": [{"id": model, "label": model}],
+        "entries": [entry],
     }
 
 
@@ -120,7 +122,7 @@ def resolve_effective_model(override: str | None, provider_id: str | None = None
     o = (override or "").strip()
     pid = (provider_id or settings.llm_provider or "fireworks").strip().lower()
     if o:
-        if pid == "fireworks" and o not in _FIREWORKS_CURATED_BY_ID:
+        if pid == "fireworks" and not is_known_fireworks_model(o):
             return _normalize_fireworks_model_id(settings.fireworks_model)
         return o
     return default_model_for_provider(provider_id)

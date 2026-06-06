@@ -12,6 +12,7 @@ from koraku.core.redact import redact_secrets
 from koraku.core.models import SessionState
 from koraku.agent.context_manager import ContextManager
 from koraku.llm.catalog import resolve_effective_model, resolve_provider_id
+from koraku.llm.model_profiles import configure_context_manager
 from koraku.tools.registry import tools_for_execution_target
 from koraku.integrations import composio as composio_runtime
 from koraku.agent.composio_delegate_context import get_composio_delegate_context
@@ -129,8 +130,8 @@ class SubagentDelegationMixin:
         sub_session_id = f"{ctx.session.session_id}:integration_run"
         sub_session = SessionState(session_id=sub_session_id)
         sub_cm = ContextManager(
-            max_messages=int(settings.context_max_messages),
-            summarize_after=int(settings.context_summarize_after),
+            max_messages=self.context_manager.max_messages,
+            summarize_after=self.context_manager.summarize_after,
             max_tool_result_chars=self.context_manager.max_tool_result_chars,
             compact_tool_rounds=self.context_manager.compact_tool_rounds,
         )
@@ -147,6 +148,7 @@ class SubagentDelegationMixin:
         active_sub = tools_for_composio_worker(base, comp_tools, goal)
         eff_provider = resolve_provider_id(ctx.provider)
         effective_model = resolve_effective_model(ctx.model, provider_id=eff_provider)
+        configure_context_manager(sub_cm, effective_model, eff_provider)
         max_sub = composio_max_rounds_for_goal(goal, override=max_steps_override)
         sub_limits = TurnLimits(
             task_class=goal_class,
@@ -259,8 +261,8 @@ class SubagentDelegationMixin:
         sub_session_id = f"{ctx.session.session_id}:artifact:{atype}"
         sub_session = SessionState(session_id=sub_session_id)
         sub_cm = ContextManager(
-            max_messages=int(settings.context_max_messages),
-            summarize_after=int(settings.context_summarize_after),
+            max_messages=self.context_manager.max_messages,
+            summarize_after=self.context_manager.summarize_after,
             max_tool_result_chars=self.context_manager.max_tool_result_chars,
             compact_tool_rounds=self.context_manager.compact_tool_rounds,
         )
@@ -280,6 +282,7 @@ class SubagentDelegationMixin:
 
         eff_provider = resolve_provider_id(ctx.provider)
         effective_model = resolve_effective_model(ctx.model, provider_id=eff_provider)
+        configure_context_manager(sub_cm, effective_model, eff_provider)
         max_sub = artifact_max_rounds_for_goal(goal, override=max_steps_override)
         sub_limits = TurnLimits(
             task_class=goal_class,

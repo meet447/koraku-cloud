@@ -64,6 +64,9 @@ Repository = "https://github.com/meet447/koraku-cloud"
 where = ["."]
 include = ["koraku*"]
 exclude = ["koraku_cloud*"]
+
+[tool.setuptools.package-data]
+koraku = ["llm/models.json"]
 # Monorepo / Cloud: ``koraku_cloud`` is on PYTHONPATH (repo root) or install from this repo clone.
 # See docs/PACKAGING.md. PyPI wheel ships ``koraku`` only.
 

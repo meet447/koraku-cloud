@@ -17,6 +17,11 @@ from koraku.core.models import AgentMessage, SessionState
 from koraku.agent.context_manager import ContextManager
 from koraku.llm.client import UnifiedLLMClient
 from koraku.llm.catalog import resolve_effective_model, resolve_provider_id
+from koraku.llm.model_profiles import (
+    configure_context_manager,
+    reset_active_limits,
+    set_active_limits,
+)
 from koraku.tools.runtime import set_active_session
 from koraku.agent.runtime_context import (
     AgentRunContext,
@@ -284,6 +289,7 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
             from koraku_cloud.tools.imessage_send_tool import reset_imessage_send_budget
 
             imessage_budget_tok = reset_imessage_send_budget()
+        limits_tok = None
         try:
             with (
                 agent_workspace_scope(ws),
@@ -293,6 +299,12 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                 composio_runtime.configure_workspace_cache(ws)
                 eff_provider = resolve_provider_id(provider)
                 effective_model = resolve_effective_model(model, provider_id=eff_provider)
+                model_limits = configure_context_manager(
+                    self.context_manager,
+                    effective_model,
+                    eff_provider,
+                )
+                limits_tok = set_active_limits(model_limits)
                 imgs = list(image_parts or [])
                 budget_text = user_input.strip() or ("[images]" if imgs else "")
                 mode, turn_limits = resolve_turn_limits(budget_text, max_steps_override)
@@ -307,6 +319,8 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                         "dispatcher_mode": dispatcher_mode_active(),
                         "model": effective_model,
                         "provider": eff_provider,
+                        "context_tokens": model_limits.context_tokens,
+                        "max_output_tokens": model_limits.max_output_tokens,
                         "session_id": session.session_id,
                         "run_id": run_id or "",
                         "execution_target": execution_target,
@@ -397,6 +411,8 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                     if delegate_tok is not None:
                         reset_composio_delegate_context(delegate_tok)
         finally:
+            if limits_tok is not None:
+                reset_active_limits(limits_tok)
             if imessage_budget_tok is not None:
                 from koraku_cloud.tools.imessage_send_tool import (
                     restore_imessage_send_budget,

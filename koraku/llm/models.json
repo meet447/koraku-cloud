@@ -1,0 +1,463 @@
+{
+  "version": 1,
+  "defaults": {
+    "max_output_tokens": 128000,
+    "max_tool_result_chars": 128000,
+    "context_max_messages": 56,
+    "context_summarize_after": 28,
+    "tool_bash_output_max_chars": 32000,
+    "tool_web_fetch_max_chars": 32000
+  },
+  "models": [
+    {
+      "id": "accounts/fireworks/models/kimi-k2p6",
+      "name": "Kimi K2.6",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_uncached_per_million": 0.95,
+        "input_cached_per_million": 0.16,
+        "output_per_million": 4.0
+      },
+      "capabilities": {
+        "function_calling": true,
+        "vision": true,
+        "tunable": true,
+        "serverless": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/moonshot-icon.svg",
+      "featured": true,
+      "ui_order": 1
+    },
+    {
+      "id": "accounts/fireworks/models/qwen3p6-plus",
+      "name": "Qwen3.6 Plus",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_uncached_per_million": 0.5,
+        "input_cached_per_million": 0.1,
+        "output_per_million": 3.0
+      },
+      "capabilities": {
+        "function_calling": true,
+        "vision": true,
+        "serverless": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/qwen-icon.svg",
+      "featured": true,
+      "ui_order": 2
+    },
+    {
+      "id": "accounts/fireworks/models/minimax-m2p7",
+      "name": "MiniMax M2.7",
+      "provider": "fireworks",
+      "context_tokens": 196000,
+      "max_output_tokens": 98000,
+      "pricing": {
+        "input_uncached_per_million": 0.3,
+        "input_cached_per_million": 0.06,
+        "output_per_million": 1.2
+      },
+      "capabilities": {
+        "function_calling": true,
+        "serverless": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/minimax-icon.svg",
+      "featured": true,
+      "ui_order": 3
+    },
+    {
+      "id": "accounts/fireworks/models/glm-5p1",
+      "name": "GLM 5.1",
+      "provider": "fireworks",
+      "context_tokens": 202000,
+      "max_output_tokens": 101000,
+      "pricing": {
+        "input_uncached_per_million": 1.4,
+        "input_cached_per_million": 0.26,
+        "output_per_million": 4.4
+      },
+      "capabilities": {
+        "function_calling": true,
+        "tunable": true,
+        "serverless": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/z-ai.svg",
+      "featured": true,
+      "ui_order": 4
+    },
+    {
+      "id": "accounts/fireworks/models/nemotron-3-ultra-nvfp4",
+      "name": "NVIDIA Nemotron 3 Ultra NVFP4",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/nvidia-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/nemotron-3-ultra-bf16",
+      "name": "NVIDIA Nemotron 3 Ultra BF16",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/nvidia-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/deepseek-v4-pro",
+      "name": "DeepSeek-V4-Pro",
+      "provider": "fireworks",
+      "context_tokens": 1000000,
+      "max_output_tokens": 256000,
+      "pricing": {
+        "input_uncached_per_million": 1.74,
+        "input_cached_per_million": 0.15,
+        "output_per_million": 3.48
+      },
+      "capabilities": {
+        "function_calling": true,
+        "serverless": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/deepseek-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/kimi-k2p5",
+      "name": "Kimi K2.5",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "pricing": {
+        "input_uncached_per_million": 0.6,
+        "input_cached_per_million": 0.1,
+        "output_per_million": 3.0
+      },
+      "capabilities": {
+        "function_calling": true,
+        "vision": true,
+        "tunable": true,
+        "serverless": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/moonshot-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/gemma-4-26b-a4b-it",
+      "name": "Gemma 4 26B A4B IT",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "vision": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/google-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/gemma-4-31b-it",
+      "name": "Gemma 4 31B IT",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "vision": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/google-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/qwen3p5-397b-a17b",
+      "name": "Qwen3.5 397B A17B",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "vision": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/qwen-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/deepseek-v3p2",
+      "name": "DeepSeek v3.2",
+      "provider": "fireworks",
+      "context_tokens": 163000,
+      "max_output_tokens": 81500,
+      "capabilities": {
+        "function_calling": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/deepseek-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/gpt-oss-120b",
+      "name": "OpenAI gpt-oss-120b",
+      "provider": "fireworks",
+      "context_tokens": 131000,
+      "max_output_tokens": 65500,
+      "pricing": {
+        "input_uncached_per_million": 0.15,
+        "input_cached_per_million": 0.01,
+        "output_per_million": 0.6
+      },
+      "capabilities": {
+        "function_calling": true,
+        "tunable": true,
+        "serverless": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/openai-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/gpt-oss-20b",
+      "name": "OpenAI gpt-oss-20b",
+      "provider": "fireworks",
+      "context_tokens": 131000,
+      "max_output_tokens": 65500,
+      "pricing": {
+        "input_uncached_per_million": 0.07,
+        "input_cached_per_million": 0.04,
+        "output_per_million": 0.3
+      },
+      "capabilities": {
+        "tunable": true,
+        "serverless": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/openai-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/gemma-4-31b-it-nvfp4",
+      "name": "Gemma 4 31B IT NVFP4",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "vision": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/google-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/glm-5",
+      "name": "GLM-5",
+      "provider": "fireworks",
+      "context_tokens": 202000,
+      "max_output_tokens": 101000,
+      "capabilities": {
+        "function_calling": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/z-ai.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/qwen3-vl-235b-a22b-thinking",
+      "name": "Qwen3 VL 235B A22B Thinking",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "vision": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/qwen-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/qwen3-vl-235b-a22b-instruct",
+      "name": "Qwen3 VL 235B A22B Instruct",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "vision": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/qwen-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/kimi-k2-instruct-0905",
+      "name": "Kimi K2 Instruct 0905",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/moonshot-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/deepseek-v3p1",
+      "name": "DeepSeek V3.1",
+      "provider": "fireworks",
+      "context_tokens": 163000,
+      "max_output_tokens": 81500,
+      "capabilities": {
+        "function_calling": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/deepseek-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/qwen3-235b-a22b",
+      "name": "Qwen3 235B A22B",
+      "provider": "fireworks",
+      "context_tokens": 131000,
+      "max_output_tokens": 65500,
+      "capabilities": {
+        "function_calling": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/qwen-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/nemotron-3-super-120b-a12b-nvfp4",
+      "name": "NVIDIA Nemotron 3 Super 120B A12B NVFP4",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/nvidia-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/nemotron-3-super-120b-a12b-fp8",
+      "name": "NVIDIA Nemotron 3 Super 120B A12B FP8",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/nvidia-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/kimi-k2-thinking",
+      "name": "Kimi K2 Thinking",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/moonshot-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/glm-4p6",
+      "name": "GLM-4.6",
+      "provider": "fireworks",
+      "context_tokens": 202000,
+      "max_output_tokens": 101000,
+      "capabilities": {
+        "function_calling": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/z-ai.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/qwen3-235b-a22b-thinking-2507",
+      "name": "Qwen3 235B A22B Thinking 2507",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/qwen-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/qwen3-coder-480b-a35b-instruct",
+      "name": "Qwen3 Coder 480B A35B Instruct",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/qwen-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/qwen3-235b-a22b-instruct-2507",
+      "name": "Qwen3 235B A22B Instruct 2507",
+      "provider": "fireworks",
+      "context_tokens": 262000,
+      "max_output_tokens": 128000,
+      "capabilities": {
+        "function_calling": true,
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/qwen-icon.svg",
+      "featured": false
+    },
+    {
+      "id": "accounts/fireworks/models/llama-v3p3-70b-instruct",
+      "name": "Llama 3.3 70B Instruct",
+      "provider": "fireworks",
+      "context_tokens": 131000,
+      "max_output_tokens": 65500,
+      "capabilities": {
+        "tunable": true,
+        "llm": true
+      },
+      "logo_url": "https://app.fireworks.ai/images/logos/meta-icon.svg",
+      "featured": false
+    }
+  ]
+}

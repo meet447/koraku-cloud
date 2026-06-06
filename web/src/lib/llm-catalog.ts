@@ -3,12 +3,16 @@ export type LandingLlmModel = {
   label: string;
   providerId: string;
   logoUrl?: string;
+  contextTokens?: number;
+  maxOutputTokens?: number;
 };
 
 type ModelCatalogEntry = {
   id: string;
   logo_url?: string;
   label?: string;
+  context_tokens?: number;
+  max_output_tokens?: number;
 };
 
 type ProviderBlock = {
@@ -26,35 +30,41 @@ export type ChatModelsResponse = {
   default_model?: string;
 };
 
-/** Mirrors `koraku/llm/catalog.py` curated Fireworks models. */
+/** Offline fallback when the chat-models API is unavailable. */
 export const LANDING_LLM_MODELS: LandingLlmModel[] = [
   {
     id: "accounts/fireworks/models/kimi-k2p6",
-    label: "Kimi K2",
+    label: "Kimi K2.6",
     providerId: "fireworks",
     logoUrl: "https://app.fireworks.ai/images/logos/moonshot-icon.svg",
+    contextTokens: 262000,
+    maxOutputTokens: 128000,
   },
   {
     id: "accounts/fireworks/models/qwen3p6-plus",
-    label: "Qwen3 6 Plus",
+    label: "Qwen3.6 Plus",
     providerId: "fireworks",
     logoUrl: "https://app.fireworks.ai/images/logos/qwen-icon.svg",
+    contextTokens: 262000,
+    maxOutputTokens: 128000,
   },
   {
     id: "accounts/fireworks/models/minimax-m2p7",
-    label: "MiniMax M2",
+    label: "MiniMax M2.7",
     providerId: "fireworks",
     logoUrl: "https://app.fireworks.ai/images/logos/minimax-icon.svg",
+    contextTokens: 196000,
+    maxOutputTokens: 98000,
   },
   {
     id: "accounts/fireworks/models/glm-5p1",
     label: "GLM 5.1",
     providerId: "fireworks",
     logoUrl: "https://app.fireworks.ai/images/logos/z-ai.svg",
+    contextTokens: 202000,
+    maxOutputTokens: 101000,
   },
 ];
-
-const LANDING_MODEL_IDS = new Set(LANDING_LLM_MODELS.map((model) => model.id));
 
 export function shortModelTitle(raw: string): string {
   const tail = raw.includes("/") ? (raw.split("/").pop() ?? raw) : raw;
@@ -78,26 +88,14 @@ function parseFireworksModels(data: ChatModelsResponse): LandingLlmModel[] {
     ? fireworksBlock.entries
     : (fireworksBlock.models ?? []).map((id) => ({ id }));
 
-  return entries
-    .filter((row) => LANDING_MODEL_IDS.has(row.id))
-    .map((row) => ({
-      id: row.id,
-      label: (row.label || "").trim() || shortModelTitle(row.id),
-      providerId: "fireworks",
-      logoUrl: row.logo_url,
-    }));
-}
-
-function mergeWithStaticDefaults(live: LandingLlmModel[]): LandingLlmModel[] {
-  return LANDING_LLM_MODELS.map((model) => {
-    const match = live.find((item) => item.id === model.id);
-    if (!match) return model;
-    return {
-      ...model,
-      label: match.label || model.label,
-      logoUrl: match.logoUrl || model.logoUrl,
-    };
-  });
+  return entries.map((row) => ({
+    id: row.id,
+    label: (row.label || "").trim() || shortModelTitle(row.id),
+    providerId: "fireworks",
+    logoUrl: row.logo_url,
+    contextTokens: row.context_tokens,
+    maxOutputTokens: row.max_output_tokens,
+  }));
 }
 
 export async function fetchLandingLlmModels(): Promise<LandingLlmModel[]> {
@@ -106,7 +104,7 @@ export async function fetchLandingLlmModels(): Promise<LandingLlmModel[]> {
     if (!response.ok) return LANDING_LLM_MODELS;
     const data = (await response.json()) as ChatModelsResponse;
     const live = parseFireworksModels(data);
-    return live.length ? mergeWithStaticDefaults(live) : LANDING_LLM_MODELS;
+    return live.length ? live : LANDING_LLM_MODELS;
   } catch {
     return LANDING_LLM_MODELS;
   }

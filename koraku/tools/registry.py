@@ -290,7 +290,9 @@ async def _bash(command: str, timeout: int = 30) -> str:
     output = stdout.decode("utf-8", errors="replace")
     if stderr:
         output += "\n[stderr]\n" + stderr.decode("utf-8", errors="replace")
-    cap = int(settings.tool_bash_output_max_chars)
+    from koraku.llm.model_profiles import active_tool_bash_output_max_chars
+
+    cap = active_tool_bash_output_max_chars()
     if len(output) > cap:
         return output[:cap] + f"\n...[truncated: bash output exceeded {cap} chars]"
     return output
@@ -523,7 +525,9 @@ def _jina_reader_url(page_url: str) -> str:
 
 
 def _web_fetch_max_chars(max_chars: int | None) -> int:
-    return int(max_chars if max_chars is not None else settings.tool_web_fetch_max_chars)
+    from koraku.llm.model_profiles import active_tool_web_fetch_max_chars
+
+    return int(max_chars if max_chars is not None else active_tool_web_fetch_max_chars())
 
 
 async def _web_search(
@@ -766,7 +770,9 @@ async def _firecrawl_fetch_page(
 
     md = (result.get("markdown") or "").strip()
     if "markdown" in result:
-        md_cap = int(settings.tool_web_fetch_max_chars)
+        from koraku.llm.model_profiles import active_tool_web_fetch_max_chars
+
+        md_cap = active_tool_web_fetch_max_chars()
         parts.append(f"\n--- Content ---\n{result['markdown'][:md_cap]}")
     
     if "html" in result:

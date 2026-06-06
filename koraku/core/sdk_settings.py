@@ -109,7 +109,7 @@ class SdkSettings(BaseSettings):
 
     llm_max_retries: int = 5
     llm_retry_base_seconds: float = 1.5
-    # Target model context window; related caps are sized for this tier (Kimi K2.6 = 262k).
+    # Fallback context window when the active model is not in koraku/llm/models.json.
     llm_context_tokens: int = Field(
         default=262_000,
         validation_alias=AliasChoices("LLM_CONTEXT_TOKENS", "llm_context_tokens"),

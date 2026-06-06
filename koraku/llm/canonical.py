@@ -17,6 +17,7 @@ from typing import Any
 
 from koraku.core.config import settings
 from koraku.core.models import AgentMessage
+from koraku.llm.model_profiles import resolve_limits
 
 
 def anthropic_tool_definitions(tool_schemas: list[Any]) -> list[dict[str, Any]]:
@@ -226,12 +227,13 @@ class CanonicalChatRequest:
         tool_schemas: list[Any],
         system_prompt: str | None,
     ) -> CanonicalChatRequest:
+        limits = resolve_limits(model_id)
         return cls(
             model_id=model_id,
             messages=list(messages),
             tool_schemas=list(tool_schemas or []),
             system_prompt=system_prompt,
-            max_tokens=settings.max_tokens,
+            max_tokens=limits.max_output_tokens,
             temperature=settings.temperature,
             top_p=settings.top_p,
             top_k=settings.top_k,
