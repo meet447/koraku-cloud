@@ -37,3 +37,43 @@ def test_run_startup_checks_propagates_errors(mocker: MockerFixture) -> None:
         run_startup_checks()
 
     m_resolve.assert_not_called()
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from koraku.server_core import attach_index_route
+
+def test_attach_index_route_cloud(monkeypatch):
+    monkeypatch.setattr("koraku.server_core.settings.agent_name", "test_agent")
+    monkeypatch.setattr("koraku.server_core.settings.version", "1.0.0")
+    monkeypatch.setattr("koraku.server_core.runtime_mode_label", lambda: "cloud")
+
+    app = FastAPI()
+    attach_index_route(app, variant="cloud")
+    client = TestClient(app)
+
+    response = client.get("/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["service"] == "test_agent"
+    assert data["version"] == "1.0.0"
+    assert data["runtime"] == "cloud"
+    assert data["health"] == "/health"
+    assert data["ui"] == "Run the Next.js app from the web/ directory for the browser UI."
+
+def test_attach_index_route_sdk(monkeypatch):
+    monkeypatch.setattr("koraku.server_core.settings.agent_name", "test_agent")
+    monkeypatch.setattr("koraku.server_core.settings.version", "1.0.0")
+    monkeypatch.setattr("koraku.server_core.runtime_mode_label", lambda: "sdk")
+
+    app = FastAPI()
+    attach_index_route(app, variant="sdk")
+    client = TestClient(app)
+
+    response = client.get("/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["service"] == "test_agent"
+    assert data["version"] == "1.0.0"
+    assert data["runtime"] == "sdk"
+    assert data["health"] == "/health"
+    assert data["ui"] == "Embed via Koraku Python SDK or POST /stream from your own UI."
