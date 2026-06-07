@@ -76,6 +76,21 @@ def test_koraku_accepts_settings_instance() -> None:
     assert agent.settings.llm_provider == "fireworks"
 
 
+def test_koraku_configure_process() -> None:
+    baseline = get_settings()
+    try:
+        custom_config = KorakuConfig(llm_provider="anthropic", anthropic_api_key="configure_process_test")
+        agent = Koraku(custom_config)
+
+        agent.configure_process()
+
+        current_settings = get_settings()
+        assert current_settings.llm_provider == "anthropic"
+        assert current_settings.anthropic_api_key == "configure_process_test"
+    finally:
+        configure(baseline)
+
+
 @pytest.mark.asyncio
 async def test_koraku_stream_with_custom_tool(monkeypatch: pytest.MonkeyPatch) -> None:
     """Custom tools passed to Koraku are available on the active tool list."""
