@@ -27,6 +27,7 @@ def test_supermemory_not_configured_without_key() -> None:
     configure(Settings(supermemory_api_key=""))
     assert sm.supermemory_configured() is False
     assert sm.fetch_learned_context_sync("u1") == ""
+    assert sm.search_memories_sync("u1", "query") == "Error: Supermemory is not configured (set SUPERMEMORY_API_KEY)."
 
 
 def test_fetch_learned_context_formats_profile() -> None:
@@ -41,6 +42,73 @@ def test_fetch_learned_context_formats_profile() -> None:
     assert "Learned memory" in out
     assert "dark mode" in out
     mock_client.profile.assert_called_once()
+
+
+def test_search_memories_sync_missing_query_or_uid() -> None:
+    configure(Settings(supermemory_api_key="test-key"))
+    assert sm.search_memories_sync("", "query") == "Error: query required."
+    assert sm.search_memories_sync("u1", "") == "Error: query required."
+
+
+def test_search_memories_sync_dict_results() -> None:
+    configure(Settings(supermemory_api_key="test-key"))
+    mock_client = MagicMock()
+    mock_client.search.memories.return_value = SimpleNamespace(
+        results=[
+            {"memory": "I like pizza", "score": 0.95},
+            {"content": "I like pasta", "score": 0.82},
+            {"memory": "", "score": 0.1},
+        ]
+    )
+    with patch.object(sm, "_client", return_value=mock_client):
+        out = sm.search_memories_sync("user-1", "food", limit=2)
+
+    assert "1. I like pizza (score 0.95)" in out
+    assert "2. I like pasta (score 0.82)" in out
+    # Only limit=2 is returned
+    assert "score 0.1" not in out
+    mock_client.search.memories.assert_called_once_with(
+        q="food",
+        container_tag="koraku-user-1",
+        limit=2,
+        search_mode="hybrid",
+        threshold=0.5,
+    )
+
+
+def test_search_memories_sync_object_results() -> None:
+    configure(Settings(supermemory_api_key="test-key"))
+    mock_client = MagicMock()
+    mock_client.search.memories.return_value = SimpleNamespace(
+        results=[
+            SimpleNamespace(memory="My dog is max", score=0.99),
+            SimpleNamespace(content="Max is a good boy", score=0.88),
+            SimpleNamespace(memory="", score=0.5),
+        ]
+    )
+    with patch.object(sm, "_client", return_value=mock_client):
+        out = sm.search_memories_sync("user-1", "dog")
+
+    assert "1. My dog is max (score 0.99)" in out
+    assert "2. Max is a good boy (score 0.88)" in out
+
+
+def test_search_memories_sync_no_results() -> None:
+    configure(Settings(supermemory_api_key="test-key"))
+    mock_client = MagicMock()
+    mock_client.search.memories.return_value = SimpleNamespace(results=[])
+    with patch.object(sm, "_client", return_value=mock_client):
+        out = sm.search_memories_sync("user-1", "alien")
+    assert out == "No matching memories found."
+
+
+def test_search_memories_sync_exception() -> None:
+    configure(Settings(supermemory_api_key="test-key"))
+    mock_client = MagicMock()
+    mock_client.search.memories.side_effect = Exception("API error")
+    with patch.object(sm, "_client", return_value=mock_client):
+        out = sm.search_memories_sync("user-1", "alien")
+    assert "Error searching memory: API error" in out
 
 
 def test_extract_last_assistant_text() -> None:
