@@ -21,7 +21,7 @@ def test_load_skill_catalog_reuses_cache_until_mtime_changes(tmp_path: Path) -> 
     assert second == first
 
     skill_file.write_text("version two", encoding="utf-8")
-    os.utime(skill_file, None)
+    import time; time.sleep(0.01); os.utime(skill_file, None)
     third = skills.load_skill_catalog(str(tmp_path))
     assert "version two" in third
     assert "version one" not in third
