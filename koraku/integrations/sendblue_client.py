@@ -1,6 +1,7 @@
 """SendBlue REST client for iMessage / SMS outbound and typing indicators."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -157,9 +158,9 @@ async def send_message(
     if media and not plain:
         plain = " "
     parts = chunk_text(plain) if plain.strip() else [" "]
-    ok = True
     async with httpx.AsyncClient(timeout=30.0) as client:
-        for i, part in enumerate(parts):
+
+        async def _send_part(i: int, part: str) -> bool:
             payload: dict[str, str] = {
                 "number": to,
                 "content": part,
@@ -175,8 +176,7 @@ async def send_message(
                 )
             except httpx.HTTPError as e:
                 log.warning("sendblue send failed: %s", e)
-                ok = False
-                continue
+                return False
             if not res.is_success:
                 detail = res.text[:400]
                 log.warning("sendblue send %s: %s", res.status_code, detail)
@@ -187,7 +187,12 @@ async def send_message(
                         to,
                         to,
                     )
-                ok = False
+                return False
+            return True
+
+        results = await asyncio.gather(*[_send_part(i, part) for i, part in enumerate(parts)])
+        ok = all(results)
+
     return ok
 
 
