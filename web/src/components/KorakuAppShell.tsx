@@ -1,6 +1,14 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { KorakuChatProviderWithState } from "@/components/KorakuChatProviderWithState";
 import { useKorakuChatShell } from "@/context/KorakuChatContext";
@@ -21,15 +29,16 @@ import { AppChrome } from "@/components/AppChrome";
 import { ChatConversation } from "@/components/ChatApp";
 import { SetupStatusBanner } from "@/components/SetupStatusBanner";
 
-function readInitialOnboardingComplete(): boolean | null {
-  if (typeof window === "undefined") return null;
-  return isOnboardingComplete() ? true : null;
-}
-
 function OnboardingGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
   const router = useRouter();
-  const [complete, setComplete] = useState<boolean | null>(readInitialOnboardingComplete);
+  const [complete, setComplete] = useState<boolean | null>(null);
+
+  useLayoutEffect(() => {
+    if (isOnboardingComplete()) {
+      setComplete(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (complete !== null) return;
