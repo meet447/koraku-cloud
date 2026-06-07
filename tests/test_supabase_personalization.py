@@ -40,7 +40,7 @@ def test_working_memory_context_is_bounded_and_recent(monkeypatch) -> None:
 
     memory = [
         {"type": "content", "summary": f"finding {i} " + ("x" * 500)}
-        for i in range(20)
+        for i in range(12)
     ]
 
     msg = format_working_memory_context(memory)
@@ -51,4 +51,4 @@ def test_working_memory_context_is_bounded_and_recent(monkeypatch) -> None:
     assert "## Transient Operational Insights (Current Turn)" in msg.content
     assert "finding 11" in msg.content
     assert "finding 0" not in msg.content
-    assert len(msg.content) <= 8_500
+    assert len(msg.content) <= 2_100
