@@ -90,3 +90,33 @@ def test_body_size_limit_get_method(app_client: TestClient) -> None:
     response = app_client.get("/test", headers=headers)
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+from fastapi import FastAPI, Request
+
+def test_request_id_middleware():
+    app = FastAPI()
+    attach_common_middleware(app)
+
+    @app.get("/")
+    async def root(request: Request):
+        return {"rid": getattr(request.state, "request_id", None)}
+
+    client = TestClient(app)
+
+    # Test without an existing request ID header
+    response = client.get("/")
+    assert response.status_code == 200
+    res_json = response.json()
+    assert "rid" in res_json
+    rid = res_json["rid"]
+    assert rid is not None
+    assert len(rid) > 0
+    assert response.headers.get("x-request-id") == rid
+
+    # Test with an existing request ID header
+    custom_rid = "test-custom-id-123"
+    response2 = client.get("/", headers={"x-request-id": custom_rid})
+    assert response2.status_code == 200
+    res_json2 = response2.json()
+    assert res_json2.get("rid") == custom_rid
+    assert response2.headers.get("x-request-id") == custom_rid
