@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any, AsyncIterator
 
 from anthropic import APIStatusError, AsyncAnthropic
@@ -10,6 +11,8 @@ from anthropic import APIStatusError, AsyncAnthropic
 from koraku.core.config import settings
 from koraku.llm.canonical import CanonicalChatRequest
 from koraku.llm.openai_delta import _retryable_http_status
+
+log = logging.getLogger(__name__)
 
 
 class AnthropicMessagesBackend:
@@ -71,7 +74,7 @@ class AnthropicMessagesBackend:
                                     if assistant_content and assistant_content[-1]["type"] == "tool_use":
                                         assistant_content[-1]["input"] = parsed
                                 except json.JSONDecodeError:
-                                    pass
+                                    log.warning("Failed to parse tool use JSON: %s", current_json)
                             yield {"type": "content_block_stop", "index": event.index}
                             current_block_type = None
                             current_json = ""
