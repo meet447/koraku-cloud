@@ -6,6 +6,7 @@ import clsx from "clsx";
 import { errorMessage } from "@/lib/error-message";
 import { korakuFetchJson } from "@/lib/koraku-fetch";
 import { toolkitIconUrl } from "@/lib/toolkit-icons";
+import { isToolkitEnabled } from "@/lib/connections";
 import { KorakuAppPage } from "@/components/KorakuAppPage";
 import { KorakuPageHeader } from "@/components/KorakuPageHeader";
 import { KorakuAlert } from "@/components/KorakuAlert";
@@ -40,16 +41,6 @@ const CATEGORIES: { id: CategoryId; label: string }[] = [
   { id: "collab", label: "Collaboration" },
   { id: "docs", label: "Docs & files" },
 ];
-
-function isToolkitEnabled(overview: Overview | null, toolkitSlug: string): boolean {
-  if (!overview?.configured) {
-    return false;
-  }
-  const u = toolkitSlug.toUpperCase();
-  return overview.connections.some(
-    (c) => c.toolkit_slug.toUpperCase() === u && c.status === "ACTIVE" && !c.is_disabled,
-  );
-}
 
 export function ConnectionsPageClient() {
   const [overview, setOverview] = useState<Overview | null>(null);

@@ -7,6 +7,7 @@ import { errorMessage } from "@/lib/error-message";
 import { korakuFetchJson } from "@/lib/koraku-fetch";
 import { ONBOARDING_CONNECTION_SLUGS } from "@/lib/onboarding";
 import { toolkitIconUrl } from "@/lib/toolkit-icons";
+import { isToolkitEnabled } from "@/lib/connections";
 import { KorakuAlert } from "@/components/KorakuAlert";
 
 type Overview = {
@@ -24,14 +25,6 @@ type CatalogRow = {
   description: string;
   icon_slug: string;
 };
-
-function isToolkitEnabled(overview: Overview | null, toolkitSlug: string): boolean {
-  if (!overview?.configured) return false;
-  const u = toolkitSlug.toUpperCase();
-  return overview.connections.some(
-    (c) => c.toolkit_slug.toUpperCase() === u && c.status === "ACTIVE" && !c.is_disabled,
-  );
-}
 
 export function OnboardingConnectionsStep() {
   const [overview, setOverview] = useState<Overview | null>(null);
