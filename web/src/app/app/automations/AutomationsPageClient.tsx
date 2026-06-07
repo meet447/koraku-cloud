@@ -885,8 +885,8 @@ export function AutomationsPageClient() {
           </aside>
 
           <section className={clsx(
-            "min-h-0 min-w-0 flex-1 overflow-y-auto bg-white px-4 py-6 md:px-6",
-            mobileShowDetail ? "flex flex-col" : "hidden md:flex"
+            "min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-white px-4 py-6 md:px-6",
+            mobileShowDetail ? "flex" : "hidden md:flex",
           )}>
             {!selected ? (
               <p className="mt-20 text-center text-sm font-medium text-neutral-500">Select an automation</p>

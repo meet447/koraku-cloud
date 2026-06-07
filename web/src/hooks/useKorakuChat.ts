@@ -89,6 +89,8 @@ export function useKorakuChat() {
   const newChatInFlightRef = useRef(false);
   /** UI-only chats until the user sends the first message (no ``chat_thread`` row yet). */
   const draftSessionIdsRef = useRef<Set<string>>(new Set());
+  /** In-flight ``POST /api/chat/threads`` for draft sessions (deduped per id). */
+  const threadCreatePromisesRef = useRef<Map<string, Promise<boolean>>>(new Map());
   /** Dedupe detached-run resume side-effects (Strict Mode / re-renders). */
   const detachResumeStartedRef = useRef<Set<string>>(new Set());
   const persistDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -256,31 +258,70 @@ export function useKorakuChat() {
     [],
   );
 
-  const persistThreadToServer = useCallback(async (threadId: string) => {
-    if (!persistenceEnabledRef.current) return;
-    const msgs = messagesReadyToPersist(messagesBySessionRef.current[threadId] ?? []);
-    if (msgs.length === 0) return;
-    const title =
-      sessionsRef.current.find((s) => s.id === threadId)?.title?.trim() || "New chat";
-    try {
-      await fetch(`/api/chat/threads/${threadId}/messages`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: msgs.map(chatMessageToApiRow),
-          title,
-        }),
-      });
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  const ensureDraftThreadSaved = useCallback(
+    async (threadId: string, title: string): Promise<boolean> => {
+      if (!persistenceEnabledRef.current) return false;
+      if (!draftSessionIdsRef.current.has(threadId)) return true;
+
+      const existing = threadCreatePromisesRef.current.get(threadId);
+      if (existing) return existing;
+
+      const promise = (async () => {
+        try {
+          const res = await fetch("/api/chat/threads", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: threadId, title }),
+          });
+          if (!res.ok) return false;
+          draftSessionIdsRef.current.delete(threadId);
+          serverChatSessionRef.current[threadId] = threadId;
+          setServerChatSessionByUi((prev) =>
+            prev[threadId] === threadId ? prev : { ...prev, [threadId]: threadId },
+          );
+          return true;
+        } catch {
+          return false;
+        } finally {
+          threadCreatePromisesRef.current.delete(threadId);
+        }
+      })();
+
+      threadCreatePromisesRef.current.set(threadId, promise);
+      return promise;
+    },
+    [],
+  );
+
+  const persistThreadToServer = useCallback(
+    async (threadId: string) => {
+      if (!persistenceEnabledRef.current) return;
+      const title =
+        sessionsRef.current.find((s) => s.id === threadId)?.title?.trim() || "New chat";
+      if (!(await ensureDraftThreadSaved(threadId, title))) return;
+      const msgs = messagesReadyToPersist(messagesBySessionRef.current[threadId] ?? []);
+      if (msgs.length === 0) return;
+      try {
+        await fetch(`/api/chat/threads/${threadId}/messages`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: msgs.map(chatMessageToApiRow),
+            title,
+          }),
+        });
+      } catch {
+        /* ignore */
+      }
+    },
+    [ensureDraftThreadSaved],
+  );
 
   const schedulePersistThread = useCallback(
     (threadId: string, delayMs = 400) => {
       if (!persistenceEnabledRef.current) return;
-      if (draftSessionIdsRef.current.has(threadId)) return;
       const prev = persistDebounceRef.current[threadId];
       if (prev) clearTimeout(prev);
       persistDebounceRef.current[threadId] = setTimeout(() => {
@@ -404,7 +445,7 @@ export function useKorakuChat() {
         const turnId = uid();
         const assistantMsgId = turnId;
         if (persistenceEnabledRef.current && detachedChatMode() === "default") {
-          await refreshDetachedRunsCapability();
+          void refreshDetachedRunsCapability();
         }
         const useDetached = shouldUseDetachedStreamingForPayload(
           trimmed.length,
@@ -426,24 +467,6 @@ export function useKorakuChat() {
           : imgs.length > 1
             ? "Images"
             : "Image";
-
-        if (persistenceEnabledRef.current && draftSessionIdsRef.current.has(sid)) {
-          try {
-            const res = await fetch("/api/chat/threads", {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ id: sid, title: nextTitle }),
-            });
-            if (res.ok) {
-              draftSessionIdsRef.current.delete(sid);
-              serverChatSessionRef.current[sid] = sid;
-              setServerChatSessionByUi((prev) => ({ ...prev, [sid]: sid }));
-            }
-          } catch {
-            /* stream may still proceed; persist will retry later */
-          }
-        }
 
         markStreamStart(sid);
 
@@ -478,10 +501,19 @@ export function useKorakuChat() {
           ),
         );
 
+        if (persistenceEnabledRef.current) {
+          serverChatSessionRef.current[sid] = sid;
+          setServerChatSessionByUi((prev) =>
+            prev[sid] === sid ? prev : { ...prev, [sid]: sid },
+          );
+          if (draftSessionIdsRef.current.has(sid)) {
+            void ensureDraftThreadSaved(sid, nextTitle);
+          }
+        }
+
         const controller = new AbortController();
         abortBySessionRef.current[sid] = controller;
-
-        const serverSid = (serverChatSessionRef.current[sid] ?? "").trim();
+        const authHeadersPromise = supabaseAuthHeaders();
 
         let clientTz = "";
         let clientLocale = "";
@@ -506,19 +538,24 @@ export function useKorakuChat() {
         };
         const clientHistory = chatMessagesToClientHistory(priorMessages);
         if (clientHistory.length > 0) body.client_history = clientHistory;
-        if (serverSid) body.session_id = serverSid;
+        if (persistenceEnabledRef.current) {
+          body.session_id = sid;
+        } else {
+          const serverSid = (serverChatSessionRef.current[sid] ?? "").trim();
+          if (serverSid) body.session_id = serverSid;
+        }
         if (useDetached) body.turn_id = turnId;
 
         let detachedRunId: string | null = useDetached ? turnId : null;
         let sawDone = false;
         try {
-          if (persistenceEnabledRef.current && !draftSessionIdsRef.current.has(sid)) {
+          if (persistenceEnabledRef.current) {
             setTimeout(() => {
               void persistThreadToServer(sid);
             }, 0);
           }
 
-          const authHeaders = await supabaseAuthHeaders();
+          const authHeaders = await authHeadersPromise;
 
           let streamRes: Response;
           if (useDetached) {
@@ -679,7 +716,7 @@ export function useKorakuChat() {
           markStreamEnd(sid);
           const aborted = controller.signal.aborted;
           setTimeout(() => {
-            if (!draftSessionIdsRef.current.has(sid)) {
+            if (persistenceEnabledRef.current) {
               void persistThreadToServer(sid);
             }
             if (aborted) tryDrainGlobalQueueRef.current();
@@ -697,6 +734,7 @@ export function useKorakuChat() {
       })();
     },
     [
+      ensureDraftThreadSaved,
       markStreamEnd,
       markStreamStart,
       persistThreadToServer,

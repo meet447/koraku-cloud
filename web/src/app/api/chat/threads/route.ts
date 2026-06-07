@@ -70,7 +70,10 @@ export async function POST(req: Request) {
 
   const { data, error } = await supabase
     .from("chat_thread")
-    .insert({ id, user_id: userId, org_id: orgId, title })
+    .upsert(
+      { id, user_id: userId, org_id: orgId, title },
+      { onConflict: "id" },
+    )
     .select("id, title")
     .single();
 
