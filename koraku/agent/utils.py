@@ -10,7 +10,7 @@ from koraku.agent.budget import resolve_turn_limits
 
 _WORKING_MEMORY_MAX_ITEMS = 16
 _WORKING_MEMORY_ITEM_CHARS = 720
-_WORKING_MEMORY_TOTAL_CHARS = 2_100
+_WORKING_MEMORY_TOTAL_CHARS = 2_000
 
 
 def build_user_message_blocks(
