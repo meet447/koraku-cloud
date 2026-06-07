@@ -1,6 +1,9 @@
 """SendBlue client helpers."""
 from __future__ import annotations
 
+import httpx
+import pytest
+
 from koraku.integrations.sendblue_client import (
     api_base,
     chunk_text,
@@ -9,6 +12,7 @@ from koraku.integrations.sendblue_client import (
     resolve_inbound_sender,
     strip_markdown_for_imessage,
     verify_webhook_secret,
+    send_typing_indicator,
 )
 
 
@@ -88,3 +92,78 @@ def test_verify_webhook_secret_accepts_matching_header(monkeypatch) -> None:
     monkeypatch.setattr(settings, "sendblue_from_number", "+15551234567")
     monkeypatch.setattr(settings, "sendblue_webhook_secret", "whsec-test")
     assert verify_webhook_secret({"x-webhook-secret": "whsec-test"}) is True
+
+
+@pytest.mark.asyncio
+async def test_send_typing_indicator_success(monkeypatch, mocker) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "sendblue_api_key", "key")
+    monkeypatch.setattr(settings, "sendblue_api_secret", "secret")
+    monkeypatch.setattr(settings, "sendblue_from_number", "+15551234567")
+
+    mock_post = mocker.patch("httpx.AsyncClient.post")
+    mock_post.return_value.is_success = True
+
+    await send_typing_indicator("+15559876543")
+
+    mock_post.assert_called_once_with(
+        "https://api.sendblue.co/api/send-typing-indicator",
+        headers={
+            "Content-Type": "application/json",
+            "sb-api-key-id": "key",
+            "sb-api-secret-key": "secret",
+        },
+        json={"number": "+15559876543", "from_number": "+15551234567"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_send_typing_indicator_missing_config(monkeypatch, mocker) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "sendblue_api_key", "")
+
+    mock_post = mocker.patch("httpx.AsyncClient.post")
+
+    await send_typing_indicator("+15559876543")
+
+    mock_post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_send_typing_indicator_http_error(monkeypatch, mocker) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "sendblue_api_key", "key")
+    monkeypatch.setattr(settings, "sendblue_api_secret", "secret")
+    monkeypatch.setattr(settings, "sendblue_from_number", "+15551234567")
+
+    mock_post = mocker.patch("httpx.AsyncClient.post", side_effect=httpx.HTTPError("Network error"))
+    mock_log = mocker.patch("koraku.integrations.sendblue_client.log")
+
+    await send_typing_indicator("+15559876543")
+
+    mock_post.assert_called_once()
+    mock_log.debug.assert_called_with("sendblue typing failed: %s", mocker.ANY)
+
+
+@pytest.mark.asyncio
+async def test_send_typing_indicator_not_success(monkeypatch, mocker) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "sendblue_api_key", "key")
+    monkeypatch.setattr(settings, "sendblue_api_secret", "secret")
+    monkeypatch.setattr(settings, "sendblue_from_number", "+15551234567")
+
+    mock_post = mocker.patch("httpx.AsyncClient.post")
+    mock_post.return_value.is_success = False
+    mock_post.return_value.status_code = 400
+    mock_post.return_value.text = "Bad Request"
+
+    mock_log = mocker.patch("koraku.integrations.sendblue_client.log")
+
+    await send_typing_indicator("+15559876543")
+
+    mock_post.assert_called_once()
+    mock_log.debug.assert_called_with("sendblue typing %s: %s", 400, "Bad Request")
