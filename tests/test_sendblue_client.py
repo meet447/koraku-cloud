@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from koraku.integrations.sendblue_client import (
+    api_base,
     chunk_text,
     configured,
     normalize_e164,
@@ -9,6 +10,34 @@ from koraku.integrations.sendblue_client import (
     strip_markdown_for_imessage,
     verify_webhook_secret,
 )
+
+
+def test_api_base_default(monkeypatch) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "sendblue_api_base", None)
+    assert api_base() == "https://api.sendblue.co/api"
+
+
+def test_api_base_custom(monkeypatch) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "sendblue_api_base", "https://custom.sendblue.co")
+    assert api_base() == "https://custom.sendblue.co"
+
+
+def test_api_base_strip_trailing_slash(monkeypatch) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "sendblue_api_base", "https://custom.sendblue.co/api/  ")
+    assert api_base() == "https://custom.sendblue.co/api"
+
+
+def test_api_base_fallback_empty(monkeypatch) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "sendblue_api_base", "   /  ")
+    assert api_base() == "https://api.sendblue.co/api"
 
 
 def test_resolve_inbound_sender_prefers_number(monkeypatch) -> None:
