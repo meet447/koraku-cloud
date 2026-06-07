@@ -38,3 +38,55 @@ def test_run_startup_checks_propagates_errors(mocker: MockerFixture) -> None:
 
     # ensure subsequent functions are not called
     m_resolve.assert_not_called()
+
+from typing import Any
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from koraku.server_core import attach_common_middleware
+from koraku.core.config import settings
+
+def test_post() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/test")
+    async def test_get() -> dict[str, str]:
+        return {"status": "ok"}
+
+    attach_common_middleware(app)
+    return TestClient(app)
+
+def test_body_size_limit_valid_size(app_client: TestClient) -> None:
+    # Within limits, should pass through and return 200
+    headers = {"Content-Length": str(settings.max_request_body_bytes - 1)}
+    response = app_client.post("/test", headers=headers, json={"a": "b"})
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+def test_body_size_limit_invalid_size(app_client: TestClient) -> None:
+    # Invalid Content-Length, should return 400
+    headers = {"Content-Length": "not-an-int"}
+    response = app_client.post("/test", headers=headers)
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Invalid Content-Length"}
+
+def test_body_size_limit_exceeds_size(app_client: TestClient) -> None:
+    # Exceeds max_request_body_bytes, should return 413
+    headers = {"Content-Length": str(settings.max_request_body_bytes + 1)}
+    response = app_client.post("/test", headers=headers)
+    assert response.status_code == 413
+    assert response.json() == {
+        "detail": f"Request body exceeds {settings.max_request_body_bytes} bytes."
+    }
+
+def test_body_size_limit_no_content_length(app_client: TestClient) -> None:
+    # No Content-Length provided, should pass through and return 200
+    response = app_client.post("/test")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+def test_body_size_limit_get_method(app_client: TestClient) -> None:
+    # Middleware only checks POST/PUT/PATCH, GET should pass even with big content length
+    headers = {"Content-Length": str(settings.max_request_body_bytes + 1)}
+    response = app_client.get("/test", headers=headers)
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
