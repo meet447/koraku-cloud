@@ -37,3 +37,48 @@ def test_run_startup_checks_propagates_errors(mocker: MockerFixture) -> None:
         run_startup_checks()
 
     m_resolve.assert_not_called()
+
+import logging
+from koraku.core.config import use_settings
+from koraku.core.sdk_settings import SdkSettings
+from koraku.server_core import assert_cors_safe
+
+def test_assert_cors_safe_not_live(caplog: pytest.LogCaptureFixture) -> None:
+    """It does nothing if mode is not 'live', even if origin is *."""
+    with use_settings(SdkSettings(cors_allowed_origins="*")):
+        with caplog.at_level(logging.WARNING):
+            assert_cors_safe("unconfigured")
+        assert not caplog.records
+
+def test_assert_cors_safe_empty_origins(caplog: pytest.LogCaptureFixture) -> None:
+    """It logs a warning if mode is 'live' and no origins are specified."""
+    with use_settings(SdkSettings(cors_allowed_origins="")):
+        with caplog.at_level(logging.WARNING):
+            assert_cors_safe("live")
+        assert len(caplog.records) == 1
+        assert "CORS_ALLOWED_ORIGINS is empty" in caplog.records[0].message
+
+def test_assert_cors_safe_valid_origins(caplog: pytest.LogCaptureFixture) -> None:
+    """It does nothing if mode is 'live' and origins are explicit."""
+    with use_settings(SdkSettings(cors_allowed_origins="https://app.example.com")):
+        with caplog.at_level(logging.WARNING):
+            assert_cors_safe("live")
+        assert not caplog.records
+
+def test_assert_cors_safe_star_origin() -> None:
+    """It raises RuntimeError if mode is 'live' and origin is *."""
+    with use_settings(SdkSettings(cors_allowed_origins="*")):
+        with pytest.raises(RuntimeError, match="Refusing to start in live mode with CORS_ALLOWED_ORIGINS='*'"):
+            assert_cors_safe("live")
+
+def test_assert_cors_safe_star_origin_with_spaces() -> None:
+    """It raises RuntimeError if mode is 'live' and origin is * with spaces."""
+    with use_settings(SdkSettings(cors_allowed_origins=" * ")):
+        with pytest.raises(RuntimeError, match="Refusing to start in live mode with CORS_ALLOWED_ORIGINS='*'"):
+            assert_cors_safe("live")
+
+def test_assert_cors_safe_multiple_with_star_origin() -> None:
+    """It raises RuntimeError if mode is 'live' and any origin is *."""
+    with use_settings(SdkSettings(cors_allowed_origins="https://app.example.com,*")):
+        with pytest.raises(RuntimeError, match="Refusing to start in live mode with CORS_ALLOWED_ORIGINS='*'"):
+            assert_cors_safe("live")
