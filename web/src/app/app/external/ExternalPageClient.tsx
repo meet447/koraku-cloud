@@ -258,11 +258,6 @@ export function ExternalPageClient() {
           ) : null}
         </section>
       ) : null}
-
-      <p className="text-xs font-medium leading-relaxed text-koraku-muted">
-        Message the Koraku number first, then verify the same line you texted from. Your
-        administrator must route inbound messaging webhooks to this server.
-      </p>
     </SettingsPageShell>
   );
 }

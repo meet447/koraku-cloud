@@ -73,7 +73,7 @@ export function OnboardingConnectionsStep() {
 
   async function connectToolkit(slug: string) {
     if (!overview?.configured) {
-      setError("Connections are not enabled for this workspace yet. You can skip and connect later.");
+      setError("Connections aren’t available yet. You can skip and connect later.");
       return;
     }
     setConnecting(slug);
@@ -104,8 +104,7 @@ export function OnboardingConnectionsStep() {
 
       {overview && !overview.configured ? (
         <KorakuAlert variant="warning">
-          Connections are not enabled on this server yet. Skip for now and set them up later from
-          Connections in the app.
+          Connections aren’t available yet. Skip for now and connect later from Connections in the app.
         </KorakuAlert>
       ) : null}
 

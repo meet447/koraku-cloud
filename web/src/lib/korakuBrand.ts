@@ -44,11 +44,8 @@ export const KORAKU_COPY = {
   workspaceTitle: "Workspace",
   connectedAppsWorker: "Connected apps",
   integrationsDisabled:
-    "Connections are not enabled for this workspace yet. You can still browse options below; linking will work once setup is complete.",
-  authNotConfigured:
-    "Sign-in is not configured on this server. Ask your administrator to enable Google or GitHub sign-in.",
-  localDevNoAuth:
-    "Running locally without sign-in?",
+    "Connections aren’t available on your workspace yet. You can still browse options below.",
+  authNotConfigured: "Sign-in is temporarily unavailable. Please try again later.",
   dataStoredInKoraku:
     "stored in your Koraku account",
   deleteDataNote:
@@ -61,12 +58,10 @@ export const KORAKU_COPY = {
     "This export includes Koraku data available to your account. Data held by connected services or model providers may be governed by their own policies.",
   deleteApiNote:
     "Koraku app data was deleted. Removing your sign-in account or disconnecting linked apps may require additional steps.",
-  setupLlm:
-    "No language model is configured yet. Add your model API key in the server environment, then restart the API.",
+  setupLlm: "Koraku is temporarily unavailable. Please try again later.",
   externalIntro:
     "Text or send voice notes from iMessage or SMS after you verify your number. Linked threads appear in chat like any other conversation.",
-  externalNotConfigured:
-    "Phone messaging is not enabled on this server yet. Ask your administrator to complete messaging setup.",
+  externalNotConfigured: "Phone messaging isn’t available yet. Check back soon.",
   externalLinkedHint:
     "Open your linked thread in Koraku to continue the conversation on the web.",
 } as const;

@@ -11,6 +11,7 @@ import { KorakuAppPage } from "@/components/KorakuAppPage";
 import { KorakuPageHeader } from "@/components/KorakuPageHeader";
 import { KorakuAlert } from "@/components/KorakuAlert";
 import { KorakuSearchInput } from "@/components/KorakuSearchInput";
+import { IntegrationsSkeleton } from "@/components/IntegrationsSkeleton";
 
 type Overview = {
   configured: boolean;
@@ -168,13 +169,12 @@ export function ConnectionsPageClient() {
       </div>
 
       {pageLoading ? (
-        <p className="mt-12 text-center text-sm font-medium text-neutral-500">Loading integrations…</p>
+        <IntegrationsSkeleton />
       ) : (
         <>
           {overview && !overview.configured ? (
             <p className="mt-6 rounded-2xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm font-medium text-amber-950">
-              Integrations aren’t enabled for this workspace yet. You can still browse popular options below;
-              connecting will turn on once your administrator completes setup.
+              Integrations aren’t available on your workspace yet. You can still browse popular options below.
             </p>
           ) : null}
 
