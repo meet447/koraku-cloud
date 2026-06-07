@@ -1,25 +1,43 @@
 """Transcribe inbound iMessage voice notes (Whisper-compatible APIs)."""
+
 from __future__ import annotations
 
 import logging
 import os
 from pathlib import PurePosixPath
-from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
 
 from koraku.core.config import settings
-from koraku.integrations.inbound_media_url import validate_inbound_media_url, validate_redirect_url
+from koraku.integrations.inbound_media_url import (
+    validate_inbound_media_url,
+    validate_redirect_url,
+)
 
 log = logging.getLogger(__name__)
 
 MAX_AUDIO_BYTES = 15 * 1024 * 1024
 
 AUDIO_EXTENSIONS = frozenset(
-    {".caf", ".m4a", ".mp4", ".aac", ".mp3", ".wav", ".ogg", ".opus", ".amr", ".mpeg", ".mpga"}
+    {
+        ".caf",
+        ".m4a",
+        ".mp4",
+        ".aac",
+        ".mp3",
+        ".wav",
+        ".ogg",
+        ".opus",
+        ".amr",
+        ".mpeg",
+        ".mpga",
+    }
 )
-IMAGE_EXTENSIONS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp", ".bmp"})
+IMAGE_EXTENSIONS = frozenset(
+    {".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp", ".bmp"}
+)
+OTHER_EXTENSIONS = frozenset({".pdf", ".doc", ".docx", ".txt", ".vcf"})
 
 
 def transcription_configured() -> bool:
@@ -32,14 +50,17 @@ def _credentials() -> tuple[str, str, str] | None:
         return None
     fw = (settings.fireworks_api_key or "").strip()
     if fw:
-        base = (settings.voice_transcription_base_url or "https://audio-prod.api.fireworks.ai/v1").rstrip(
-            "/"
-        )
+        base = (
+            settings.voice_transcription_base_url
+            or "https://audio-prod.api.fireworks.ai/v1"
+        ).rstrip("/")
         model = (settings.voice_transcription_model or "whisper-large-v3").strip()
         return base, fw, model
     oai = (os.environ.get("OPENAI_API_KEY") or "").strip()
     if oai:
-        base = (os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
+        base = (
+            os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1"
+        ).rstrip("/")
         return base, oai, "whisper-1"
     return None
 
@@ -56,7 +77,7 @@ def classify_media_url(url: str) -> str:
         return "audio"
     if ext in IMAGE_EXTENSIONS:
         return "image"
-    if ext in (".pdf", ".doc", ".docx", ".txt", ".vcf"):
+    if ext in OTHER_EXTENSIONS:
         return "other"
     return "other"
 
@@ -114,7 +135,9 @@ async def download_media(url: str) -> tuple[bytes, str | None] | None:
     return data, res.headers.get("content-type")
 
 
-async def transcribe_audio_bytes(data: bytes, *, filename: str = "voice.caf") -> str | None:
+async def transcribe_audio_bytes(
+    data: bytes, *, filename: str = "voice.caf"
+) -> str | None:
     creds = _credentials()
     if not creds:
         return None
@@ -152,7 +175,11 @@ def is_voice_media_url(url: str) -> bool:
     if classify_media_url(url) == "audio":
         return True
     lower = url.lower()
-    return any(ext in lower for ext in AUDIO_EXTENSIONS) or "audio" in lower or "voice" in lower
+    return (
+        any(ext in lower for ext in AUDIO_EXTENSIONS)
+        or "audio" in lower
+        or "voice" in lower
+    )
 
 
 async def transcribe_media_url(url: str) -> str | None:
