@@ -34,7 +34,10 @@ def test_build_system_prompt_daily_driver_contract() -> None:
     assert "## Strict Behavioral Protocols" in s
 
 
-def test_working_memory_context_is_bounded_and_recent() -> None:
+def test_working_memory_context_is_bounded_and_recent(monkeypatch) -> None:
+    from koraku.agent import utils
+    monkeypatch.setattr(utils, "_WORKING_MEMORY_TOTAL_CHARS", 2100)
+
     memory = [
         {"type": "content", "summary": f"finding {i} " + ("x" * 500)}
         for i in range(12)
