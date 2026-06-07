@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from koraku.core.config import Settings, configure_sdk, is_cloud_configured, reset_cloud_binding
 from koraku.plugins.memory import get_memory_backend, reset_memory_backend_cache
+from koraku.core.product_hooks import clear_product_hooks
+from koraku.profiles import is_cloud_profile
 from koraku.sdk import KorakuConfig
 from koraku_cloud.bootstrap import bootstrap_cloud
 
@@ -47,3 +49,14 @@ def test_cloud_layer_construct() -> None:
     )
     assert s.default_execution_target == "cloud"
     assert is_cloud_configured()
+
+
+def test_is_cloud_profile_false_by_default() -> None:
+    clear_product_hooks()
+    assert is_cloud_profile() is False
+
+
+def test_is_cloud_profile_true_after_bootstrap() -> None:
+    clear_product_hooks()
+    bootstrap_cloud()
+    assert is_cloud_profile() is True
