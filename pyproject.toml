@@ -54,7 +54,7 @@ artifacts = [
 # Marker: Cloud product code ships from this monorepo (`koraku_cloud/`), not PyPI.
 cloud = []
 all = ["koraku[server,composio,blaxel,supermemory,artifacts]"]
-dev = ["pytest>=8.0", "pytest-mock>=3.14", "pytest-asyncio>=0.23"]
+dev = ["pytest>=8.0", "pytest-mock>=3.14", "pytest-asyncio>=0.23", "respx>=0.21.0"]
 
 [project.urls]
 Homepage = "https://github.com/meet447/koraku-cloud"
