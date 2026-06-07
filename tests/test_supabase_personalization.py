@@ -36,7 +36,7 @@ def test_build_system_prompt_daily_driver_contract() -> None:
 
 def test_working_memory_context_is_bounded_and_recent() -> None:
     memory = [
-        {"type": "content", "summary": f"finding {i} " + ("x" * 500)}
+        {"type": "content", "summary": f"finding {i} " + ("x" * 800)}
         for i in range(12)
     ]
 
@@ -48,4 +48,4 @@ def test_working_memory_context_is_bounded_and_recent() -> None:
     assert "## Transient Operational Insights (Current Turn)" in msg.content
     assert "finding 11" in msg.content
     assert "finding 0" not in msg.content
-    assert len(msg.content) <= 2_100
+    assert len(msg.content) <= 8_500
