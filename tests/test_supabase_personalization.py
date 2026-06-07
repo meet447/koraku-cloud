@@ -47,5 +47,5 @@ def test_working_memory_context_is_bounded_and_recent() -> None:
     assert isinstance(msg.content, str)
     assert "## Transient Operational Insights (Current Turn)" in msg.content
     assert "finding 11" in msg.content
-    assert "finding 0" in msg.content
-    assert len(msg.content) <= 8_000
+    assert "finding 0" not in msg.content
+    assert len(msg.content) <= 2_100
