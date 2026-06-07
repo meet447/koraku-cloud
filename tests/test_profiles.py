@@ -47,3 +47,13 @@ def test_cloud_layer_construct() -> None:
     )
     assert s.default_execution_target == "cloud"
     assert is_cloud_configured()
+
+
+def test_is_cloud_profile(mocker) -> None:
+    from koraku.profiles import is_cloud_profile
+
+    mocker.patch("koraku.profiles.product_hooks_active", return_value=True)
+    assert is_cloud_profile() is True
+
+    mocker.patch("koraku.profiles.product_hooks_active", return_value=False)
+    assert is_cloud_profile() is False
