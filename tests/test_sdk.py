@@ -5,6 +5,8 @@ import asyncio
 
 import pytest
 
+from typing import Any
+
 from koraku import Koraku, KorakuConfig, Tool, configure, get_settings, use_settings
 from koraku.core.config import Settings
 from koraku.core.models import SessionState
@@ -74,6 +76,23 @@ def test_configure_and_use_settings_are_isolated() -> None:
 def test_koraku_accepts_settings_instance() -> None:
     agent = Koraku(Settings(llm_provider="fireworks"))
     assert agent.settings.llm_provider == "fireworks"
+
+
+def test_configure_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    called_with = []
+
+    def fake_configure_sdk(sdk_settings: Any) -> None:
+        called_with.append(sdk_settings)
+
+    import koraku.sdk
+
+    monkeypatch.setattr(koraku.sdk, "configure_sdk", fake_configure_sdk)
+
+    agent = Koraku(KorakuConfig(llm_provider="test_provider"))
+    agent.configure_process()
+
+    assert len(called_with) == 1
+    assert called_with[0] is agent.settings.sdk
 
 
 @pytest.mark.asyncio
