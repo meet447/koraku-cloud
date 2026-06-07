@@ -5,15 +5,14 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import PurePosixPath
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import httpx
 
 from koraku.core.config import settings
-from koraku.integrations.inbound_media_url import (
-    validate_inbound_media_url,
-    validate_redirect_url,
-)
+from koraku.integrations.inbound_media_url import (validate_inbound_media_url,
+                                                   validate_redirect_url)
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +36,6 @@ AUDIO_EXTENSIONS = frozenset(
 IMAGE_EXTENSIONS = frozenset(
     {".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp", ".bmp"}
 )
-OTHER_EXTENSIONS = frozenset({".pdf", ".doc", ".docx", ".txt", ".vcf"})
 
 
 def transcription_configured() -> bool:
@@ -77,7 +75,7 @@ def classify_media_url(url: str) -> str:
         return "audio"
     if ext in IMAGE_EXTENSIONS:
         return "image"
-    if ext in OTHER_EXTENSIONS:
+    if ext in (".pdf", ".doc", ".docx", ".txt", ".vcf"):
         return "other"
     return "other"
 
@@ -105,27 +103,26 @@ async def download_media(url: str) -> tuple[bytes, str | None] | None:
     current = validate_inbound_media_url(url)
     if not current:
         return None
+
+    async def validate_url_hook(request: httpx.Request) -> None:
+        if not validate_redirect_url(str(request.url)):
+            raise httpx.RequestError(
+                f"Invalid redirect URL: {request.url}", request=request
+            )
+
     try:
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
-            res: httpx.Response | None = None
-            for _ in range(_MAX_REDIRECTS + 1):
-                res = await client.get(current)
-                if res.status_code in _REDIRECT_STATUS:
-                    location = (res.headers.get("location") or "").strip()
-                    if not location:
-                        log.warning("inbound media redirect missing Location header")
-                        return None
-                    nxt = validate_redirect_url(urljoin(current, location))
-                    if not nxt:
-                        return None
-                    current = nxt
-                    continue
-                break
+        async with httpx.AsyncClient(
+            timeout=60.0,
+            follow_redirects=True,
+            max_redirects=_MAX_REDIRECTS,
+            event_hooks={"request": [validate_url_hook]},
+        ) as client:
+            res = await client.get(current)
     except httpx.HTTPError as e:
         log.warning("voice media download failed: %s", e)
         return None
-    if res is None or not res.is_success:
-        code = res.status_code if res is not None else "?"
+    if not res.is_success:
+        code = res.status_code
         log.warning("voice media download %s: %s", code, url[:120])
         return None
     data = res.content
