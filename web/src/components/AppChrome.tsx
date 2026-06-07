@@ -61,7 +61,7 @@ export function AppChrome({
       <div
         className={clsx(
           "box-border h-full shrink-0 bg-transparent md:bg-white p-2 pr-1 transition-transform duration-300 ease-out",
-          // Layout mode: fixed on mobile, relative/flex on desktop
+          // Layout mode: 'fixed' positioning on mobile, relative/flex on desktop
           "fixed inset-y-0 left-0 z-50 md:relative md:z-auto md:flex",
           // Visibility translation: slide out of screen on mobile when closed
           mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
