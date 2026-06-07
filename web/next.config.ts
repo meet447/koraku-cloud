@@ -39,6 +39,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   transpilePackages: ["@koraku/client"],
   output: "standalone",
+  experimental: {
+    optimizePackageImports: ["lucide-react"],
+  },
   async headers() {
     return [
       {

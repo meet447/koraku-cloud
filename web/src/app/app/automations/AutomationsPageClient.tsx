@@ -311,11 +311,27 @@ export function AutomationsPageClient() {
   }, []);
 
   useEffect(() => {
-    if (selectedId) {
-      void loadRuns(selectedId);
-    } else {
+    if (!selectedId) {
       setRuns([]);
+      return;
     }
+    let cancelled = false;
+    const load = () => {
+      if (cancelled) return;
+      void loadRuns(selectedId);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const idleId = window.requestIdleCallback(load, { timeout: 1200 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback(idleId);
+      };
+    }
+    const timeoutId = globalThis.setTimeout(load, 0);
+    return () => {
+      cancelled = true;
+      globalThis.clearTimeout(timeoutId);
+    };
   }, [selectedId, loadRuns]);
 
   const pollActiveRun = selected?.current_run_id || activeRunId;

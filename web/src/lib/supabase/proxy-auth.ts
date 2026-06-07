@@ -33,20 +33,14 @@ export async function applySupabaseBearerFromCookies(headers: Headers): Promise<
   });
 
   const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-  if (error || !user) {
-    return false;
-  }
-  const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (session?.access_token) {
-    headers.set("Authorization", `Bearer ${session.access_token}`);
+  if (!session?.access_token) {
+    return false;
   }
+  headers.set("Authorization", `Bearer ${session.access_token}`);
   await applyTenantHeadersFromCookies(headers);
-  return Boolean(session?.access_token);
+  return true;
 }
 
 /** JSON 401 when Supabase is configured but the caller has no valid session. */

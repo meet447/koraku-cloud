@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { modelProviderDisplayName } from "@/lib/korakuBrand";
+import { fetchChatModelsCatalog } from "@/lib/chat-models-cache";
 
 const STORAGE_KEY = "koraku_provider_model";
 
@@ -28,13 +29,6 @@ type Block = {
   models: string[];
   /** When set (e.g. Fireworks), drives order/labels/logos for the composer picker. */
   entries?: ModelCatalogEntry[];
-};
-
-type ChatModelsResponse = {
-  providers?: Block[];
-  models?: string[];
-  active_provider?: string;
-  default_model?: string;
 };
 
 export type ModelOption = {
@@ -141,9 +135,11 @@ export function ModelSelect({
     let cancelled = false;
     (async () => {
       try {
-        const { korakuFetch } = await import("@/lib/koraku-fetch");
-        const r = await korakuFetch("/koraku-api/api/chat-models", { method: "GET" });
-        const d = (await r.json()) as ChatModelsResponse;
+        const d = await fetchChatModelsCatalog();
+        if (!d) {
+          if (!cancelled) setLoaded(true);
+          return;
+        }
         const next: ModelOption[] = [];
         const blocks = d.providers || [];
         if (blocks.length) {

@@ -126,6 +126,34 @@ export async function ingestKorakuSseFromReader(
     onSseAfter,
   } = opts;
 
+  let pendingPayloads: Record<string, unknown>[] = [];
+  let flushScheduled = false;
+
+  const flushPendingPayloads = () => {
+    flushScheduled = false;
+    if (pendingPayloads.length === 0) return;
+    const batch = pendingPayloads;
+    pendingPayloads = [];
+    for (const payload of batch) {
+      rememberServerChatSession(sid, payload, serverChatSessionRef);
+    }
+    const mapped = serverChatSessionRef.current[sid]?.trim();
+    if (mapped) {
+      setServerChatSessionByUi((prev) =>
+        prev[sid] === mapped ? prev : { ...prev, [sid]: mapped },
+      );
+    }
+    updateAssistantRun(sid, assistantMsgId, (r) =>
+      batch.reduce<RunState>((acc, p) => applyKorakuSseEvent(acc, p), r),
+    );
+  };
+
+  const scheduleFlush = () => {
+    if (flushScheduled) return;
+    flushScheduled = true;
+    requestAnimationFrame(flushPendingPayloads);
+  };
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -165,25 +193,14 @@ export async function ingestKorakuSseFromReader(
       }
     }
     if (payloads.length > 0) {
-      for (const payload of payloads) {
-        rememberServerChatSession(sid, payload, serverChatSessionRef);
-      }
-      const mapped = serverChatSessionRef.current[sid]?.trim();
-      if (mapped) {
-        setServerChatSessionByUi((prev) =>
-          prev[sid] === mapped ? prev : { ...prev, [sid]: mapped },
-        );
-      }
-      updateAssistantRun(sid, assistantMsgId, (r) =>
-        payloads.reduce<RunState>(
-          (acc, p) => applyKorakuSseEvent(acc, p),
-          r,
-        ),
-      );
+      pendingPayloads.push(...payloads);
+      scheduleFlush();
     }
     if (sawStreamDone) {
+      flushPendingPayloads();
       return true;
     }
   }
+  flushPendingPayloads();
   return sawDoneEvent;
 }

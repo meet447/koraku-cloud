@@ -1,9 +1,9 @@
 "use client";
 
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { KorakuChatProvider } from "@/context/KorakuChatContext";
-import { useKorakuChat } from "@/hooks/useKorakuChat";
+import { KorakuChatProviderWithState } from "@/components/KorakuChatProviderWithState";
+import { useKorakuChatShell } from "@/context/KorakuChatContext";
 import {
   APP_BASE,
   isAppChatRoute,
@@ -21,20 +21,19 @@ import { AppChrome } from "@/components/AppChrome";
 import { ChatConversation } from "@/components/ChatApp";
 import { SetupStatusBanner } from "@/components/SetupStatusBanner";
 
+function readInitialOnboardingComplete(): boolean | null {
+  if (typeof window === "undefined") return null;
+  return isOnboardingComplete() ? true : null;
+}
+
 function OnboardingGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
   const router = useRouter();
-  const [complete, setComplete] = useState<boolean | null>(null);
+  const [complete, setComplete] = useState<boolean | null>(readInitialOnboardingComplete);
 
   useEffect(() => {
     if (complete !== null) return;
     let cancelled = false;
-    if (isOnboardingComplete()) {
-      setComplete(true);
-      return () => {
-        cancelled = true;
-      };
-    }
     void loadPersonalization()
       .then((data) => {
         if (cancelled) return;
@@ -99,41 +98,52 @@ function OnboardingGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function ProductShell({ children }: { children: ReactNode }) {
-  const chat = useKorakuChat();
+const RouteOutlet = memo(function RouteOutlet({ children }: { children: ReactNode }) {
+  return children;
+});
+
+const ProductShellFrame = memo(function ProductShellFrame({
+  routeChildren,
+}: {
+  routeChildren: ReactNode;
+}) {
+  const shell = useKorakuChatShell();
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname() || "";
   const router = useRouter();
 
   const onSelectSession = useCallback(
     (id: string) => {
-      chat.shell.selectSession(id);
+      shell.selectSession(id);
       if (!isAppChatRoute(pathname)) {
         router.push(APP_BASE);
       }
     },
-    [chat, pathname, router],
+    [shell, pathname, router],
   );
 
   const onNewChat = useCallback(async () => {
-    await chat.shell.newChat();
+    await shell.newChat();
     if (!isAppChatRoute(pathname)) {
       router.push(APP_BASE);
     }
-  }, [chat, pathname, router]);
+  }, [shell, pathname, router]);
 
-  const onDeleteChat = useCallback(async (id: string) => {
-    await chat.shell.deleteSession(id);
-  }, [chat]);
+  const onDeleteChat = useCallback(
+    async (id: string) => {
+      await shell.deleteSession(id);
+    },
+    [shell],
+  );
 
   const onRefreshChat = useCallback(
     async (id: string) => {
-      await chat.shell.refreshSession(id);
-      if (chat.shell.activeId === id && !isAppChatRoute(pathname)) {
+      await shell.refreshSession(id);
+      if (shell.activeId === id && !isAppChatRoute(pathname)) {
         router.push(APP_BASE);
       }
     },
-    [chat, pathname, router],
+    [shell, pathname, router],
   );
 
   const prevPathRef = useRef(pathname);
@@ -141,30 +151,32 @@ function ProductShell({ children }: { children: ReactNode }) {
     const prev = prevPathRef.current;
     prevPathRef.current = pathname;
     if (isAppChatRoute(prev) && !isAppChatRoute(pathname)) {
-      void chat.shell.discardEmptyActiveSession();
+      void shell.discardEmptyActiveSession();
     }
-  }, [pathname, chat.shell]);
+  }, [pathname, shell]);
 
   return (
-    <KorakuChatProvider shell={chat.shell} thread={chat.thread}>
+    <>
       <SetupStatusBanner />
       <AppChrome
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((c) => !c)}
-        chatsLoading={!chat.shell.hydrated}
-        sessions={chat.shell.sessions}
-        activeId={chat.shell.activeId}
-        streamingSessionIds={chat.shell.streamingSessionIds}
-        deletingSessionIds={chat.shell.deletingSessionIds}
-        refreshingSessionIds={chat.shell.refreshingSessionIds}
         onSelectSession={onSelectSession}
         onNewChat={onNewChat}
         onDeleteChat={onDeleteChat}
         onRefreshChat={onRefreshChat}
       >
-        {isAppChatRoute(pathname) ? <ChatConversation /> : children}
+        {isAppChatRoute(pathname) ? <ChatConversation /> : <RouteOutlet>{routeChildren}</RouteOutlet>}
       </AppChrome>
-    </KorakuChatProvider>
+    </>
+  );
+});
+
+function ProductShell({ children }: { children: ReactNode }) {
+  return (
+    <KorakuChatProviderWithState>
+      <ProductShellFrame routeChildren={children} />
+    </KorakuChatProviderWithState>
   );
 }
 

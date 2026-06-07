@@ -5,18 +5,11 @@ import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import clsx from "clsx";
 import { Sidebar } from "./Sidebar";
-import type { ChatSession } from "@/hooks/useKorakuChat";
-import { EMPTY_CHAT_SESSIONS, EMPTY_STRING_ARRAY } from "@/lib/empty-arrays";
+import { useKorakuChatShell } from "@/context/KorakuChatContext";
 
 export function AppChrome({
   collapsed,
   onToggleCollapse,
-  chatsLoading = false,
-  sessions,
-  activeId,
-  streamingSessionIds = EMPTY_STRING_ARRAY,
-  deletingSessionIds = EMPTY_STRING_ARRAY,
-  refreshingSessionIds = EMPTY_STRING_ARRAY,
   onSelectSession,
   onNewChat,
   onDeleteChat,
@@ -25,22 +18,16 @@ export function AppChrome({
 }: {
   collapsed: boolean;
   onToggleCollapse: () => void;
-  chatsLoading?: boolean;
-  sessions: ChatSession[];
-  activeId: string;
-  streamingSessionIds?: string[];
-  deletingSessionIds?: string[];
-  refreshingSessionIds?: string[];
   onSelectSession: (id: string) => void;
   onNewChat: () => void | Promise<void>;
   onDeleteChat: (id: string) => void | Promise<void>;
   onRefreshChat: (id: string) => void | Promise<void>;
   children: React.ReactNode;
 }) {
+  const shell = useKorakuChatShell();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname() || "";
 
-  // Automatically close sidebar on route changes on mobile
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
@@ -56,26 +43,23 @@ export function AppChrome({
   };
 
   return (
-    <div className="flex h-[100dvh] w-full overflow-hidden bg-white text-koraku-ink relative">
-      {/* Sidebar container */}
+    <div className="relative flex h-[100dvh] w-full overflow-hidden bg-white text-koraku-ink">
       <div
         className={clsx(
-          "box-border h-full shrink-0 bg-transparent md:bg-white p-2 pr-1 transition-transform duration-300 ease-out",
-          // Layout mode: 'fixed' positioning on mobile, relative/flex on desktop
-          "fixed inset-y-0 left-0 z-50 md:relative md:z-auto md:flex",
-          // Visibility translation: slide out of screen on mobile when closed
-          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          "box-border h-full shrink-0 bg-transparent p-2 pr-1 transition-transform duration-300 ease-out md:relative md:z-auto md:flex md:bg-white",
+          "fixed inset-y-0 left-0 z-50",
+          mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
         )}
       >
         <Sidebar
           collapsed={collapsed}
           onToggleCollapse={onToggleCollapse}
-          chatsLoading={chatsLoading}
-          sessions={sessions}
-          activeId={activeId}
-          streamingSessionIds={streamingSessionIds}
-          deletingSessionIds={deletingSessionIds}
-          refreshingSessionIds={refreshingSessionIds}
+          chatsLoading={!shell.hydrated}
+          sessions={shell.sessions}
+          activeId={shell.activeId}
+          streamingSessionIds={shell.streamingSessionIds}
+          deletingSessionIds={shell.deletingSessionIds}
+          refreshingSessionIds={shell.refreshingSessionIds}
           onSelectSession={handleSelectSessionMobile}
           onNewChat={handleNewChatMobile}
           onDeleteChat={onDeleteChat}
@@ -84,17 +68,14 @@ export function AppChrome({
         />
       </div>
 
-      {/* Mobile Sidebar backdrop */}
-      {mobileOpen && (
+      {mobileOpen ? (
         <div
           onClick={() => setMobileOpen(false)}
           className="fixed inset-0 z-40 bg-neutral-950/20 backdrop-blur-[2px] transition-opacity duration-300 md:hidden"
         />
-      )}
+      ) : null}
 
-      {/* Main Content Area */}
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white">
-        {/* Mobile Header Bar */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-100 bg-white px-4 md:hidden">
           <div className="flex items-center gap-2.5">
             <button

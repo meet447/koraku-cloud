@@ -44,6 +44,7 @@ import {
 import { safeError } from "@/lib/safe-log";
 import { supabaseAuthHeaders } from "@/lib/supabase/fetch-auth";
 import { sortChatSessions } from "@/lib/chat-sessions";
+import { rememberLastActiveThreadId, readLastActiveThreadId } from "@/lib/last-active-thread";
 import type { ComposerImage } from "@/lib/composer-images";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
@@ -95,6 +96,9 @@ export function useKorakuChat() {
   const detachResumeStartedRef = useRef<Set<string>>(new Set());
   const persistDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const resumeStreamingTurnsRef = useRef<() => void>(() => {});
+  const fetchThreadMessagesRef = useRef<(id: string, options?: { force?: boolean }) => Promise<boolean>>(
+    async () => false,
+  );
 
   const messages = messagesBySession[activeId] ?? EMPTY_THREAD_MESSAGES;
   const busy = streamingSessionIds.includes(activeId);
@@ -128,9 +132,12 @@ export function useKorakuChat() {
     (async () => {
       try {
         const supabase = createBrowserSupabaseClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const threadsPromise = fetch("/api/chat/threads", { credentials: "include" });
+        const sessionPromise = supabase.auth.getSession();
+        const [{ data: { session } }, tr] = await Promise.all([
+          sessionPromise,
+          threadsPromise,
+        ]);
         if (cancelled) return;
         if (!session) {
           const id = uid();
@@ -142,8 +149,6 @@ export function useKorakuChat() {
           setHydrated(true);
           return;
         }
-        const tr = await fetch("/api/chat/threads", { credentials: "include" });
-        if (cancelled) return;
         if (!tr.ok) {
           safeError("[useKorakuChat] thread list failed", tr.status);
           const id = uid();
@@ -188,6 +193,9 @@ export function useKorakuChat() {
         }));
         const newId = uid();
         draftSessionIdsRef.current.add(newId);
+        const lastActive = readLastActiveThreadId();
+        const activeThreadId =
+          lastActive && sessList.some((s) => s.id === lastActive) ? lastActive : newId;
         const sessionsWithNew = sortChatSessions([
           { id: newId, title: "New chat" },
           ...sessList,
@@ -202,9 +210,14 @@ export function useKorakuChat() {
 
         messagesLoadedForThreadRef.current.add(newId);
         setSessions(sessionsWithNew);
-        setActiveId(newId);
+        setActiveId(activeThreadId);
         setMessagesBySession(msgMap);
         setHydrated(true);
+        if (activeThreadId !== newId) {
+          queueMicrotask(() => {
+            void fetchThreadMessagesRef.current(activeThreadId);
+          });
+        }
       } catch {
         if (cancelled) return;
         const id = uid();
@@ -277,6 +290,7 @@ export function useKorakuChat() {
           if (!res.ok) return false;
           draftSessionIdsRef.current.delete(threadId);
           serverChatSessionRef.current[threadId] = threadId;
+          rememberLastActiveThreadId(threadId);
           setServerChatSessionByUi((prev) =>
             prev[threadId] === threadId ? prev : { ...prev, [threadId]: threadId },
           );
@@ -508,6 +522,8 @@ export function useKorakuChat() {
           );
           if (draftSessionIdsRef.current.has(sid)) {
             void ensureDraftThreadSaved(sid, nextTitle);
+          } else {
+            rememberLastActiveThreadId(sid);
           }
         }
 
@@ -899,12 +915,13 @@ export function useKorakuChat() {
   resumeStreamingTurnsRef.current = resumeStreamingTurns;
 
   useEffect(() => {
+    if (!hydrated) return;
     resumeStreamingTurns();
     const started = detachResumeStartedRef.current;
     return () => {
       started.clear();
     };
-  }, [hydrated, sessions, resumeStreamingTurns]);
+  }, [hydrated, resumeStreamingTurns]);
 
   const send = useCallback(
     (
@@ -1021,6 +1038,8 @@ export function useKorakuChat() {
     [],
   );
 
+  fetchThreadMessagesRef.current = fetchThreadMessages;
+
   const selectSession = useCallback(
     (id: string) => {
       const prev = activeIdRef.current;
@@ -1028,6 +1047,9 @@ export function useKorakuChat() {
         void discardEmptySession(prev);
       }
       setActiveId(id);
+      if (!draftSessionIdsRef.current.has(id)) {
+        rememberLastActiveThreadId(id);
+      }
       const q = queuesRef.current[id] ?? [];
       setQueuedMessages(q.map((j) => ({ id: j.id, text: jobPreviewText(j) })));
 

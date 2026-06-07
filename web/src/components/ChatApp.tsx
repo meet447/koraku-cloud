@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { PanelRight } from "lucide-react";
 import { useKorakuChatThread } from "@/context/KorakuChatContext";
@@ -32,19 +32,50 @@ import { ChatMessagesSkeleton } from "@/components/ChatMessagesSkeleton";
 /** Use windowed rendering when a thread has at least this many rows. */
 const VIRTUALIZE_MESSAGE_COUNT = 10;
 
-function ChatMessageRow({
-  m,
-  busy,
-  lastAssistant,
-  serverChatSessionId,
-  onRetry,
-}: {
+type ChatMessageRowProps = {
   m: ChatMessage;
   busy: boolean;
   lastAssistant: Extract<ChatMessage, { role: "assistant" }> | undefined;
   serverChatSessionId: string | null;
   onRetry?: () => void;
-}) {
+};
+
+function chatMessageRowPropsEqual(prev: ChatMessageRowProps, next: ChatMessageRowProps): boolean {
+  if (prev.m.id !== next.m.id) return false;
+  if (prev.busy !== next.busy) return false;
+  if (prev.serverChatSessionId !== next.serverChatSessionId) return false;
+  if (prev.onRetry !== next.onRetry) return false;
+  if (prev.lastAssistant?.id !== next.lastAssistant?.id) return false;
+  if (prev.m === next.m) return true;
+  if (prev.m.role === "user" && next.m.role === "user") {
+    return prev.m.text === next.m.text && prev.m.images?.length === next.m.images?.length;
+  }
+  if (prev.m.role !== "assistant" || next.m.role !== "assistant") return false;
+  const isStreamingRow = next.lastAssistant?.id === next.m.id && next.busy;
+  if (!isStreamingRow && prev.m.role === "assistant" && next.m.role === "assistant") {
+    return prev.m === next.m;
+  }
+  const prevRun = prev.m.run;
+  const nextRun = next.m.run;
+  return (
+    prevRun.assistantMarkdown === nextRun.assistantMarkdown &&
+    prevRun.timeline.length === nextRun.timeline.length &&
+    prevRun.activeThought === nextRun.activeThought &&
+    prevRun.error === nextRun.error &&
+    prevRun.statusText === nextRun.statusText &&
+    prevRun.streamStatus === nextRun.streamStatus &&
+    prevRun.toolInvocations === nextRun.toolInvocations &&
+    prevRun.stepCaption === nextRun.stepCaption
+  );
+}
+
+const ChatMessageRow = memo(function ChatMessageRow({
+  m,
+  busy,
+  lastAssistant,
+  serverChatSessionId,
+  onRetry,
+}: ChatMessageRowProps) {
   if (m.role === "user") {
     return (
       <div className="mb-6 flex justify-end">
@@ -166,7 +197,7 @@ function ChatMessageRow({
       ) : null}
     </div>
   );
-}
+}, chatMessageRowPropsEqual);
 
 /** Main chat column; must render inside ``KorakuAppShell`` (provides chat context + chrome). */
 export function ChatConversation() {

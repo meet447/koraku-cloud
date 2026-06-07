@@ -1,4 +1,5 @@
 import { korakuFetchJson, korakuFetchOk } from "@/lib/koraku-fetch";
+import { getClientCache, invalidateClientCache, setClientCache } from "@/lib/client-cache";
 
 export type PersonalizationPayload = {
   agent_name: string;
@@ -6,13 +7,24 @@ export type PersonalizationPayload = {
   soul: string;
 };
 
-export async function loadPersonalization(): Promise<PersonalizationPayload> {
+const CACHE_KEY = "koraku:personalization";
+const CACHE_TTL_MS = 60_000;
+
+export async function loadPersonalization(options?: {
+  force?: boolean;
+}): Promise<PersonalizationPayload> {
+  if (!options?.force) {
+    const cached = getClientCache<PersonalizationPayload>(CACHE_KEY, CACHE_TTL_MS);
+    if (cached) return cached;
+  }
   const data = await korakuFetchJson<PersonalizationPayload>("/koraku-api/api/personalization");
-  return {
+  const payload = {
     agent_name: data.agent_name ?? "",
     memory: data.memory ?? "",
     soul: data.soul ?? "",
   };
+  setClientCache(CACHE_KEY, payload);
+  return payload;
 }
 
 export async function savePersonalization(payload: PersonalizationPayload): Promise<void> {
@@ -20,4 +32,9 @@ export async function savePersonalization(payload: PersonalizationPayload): Prom
     method: "PUT",
     json: payload,
   });
+  setClientCache(CACHE_KEY, payload);
+}
+
+export function invalidatePersonalizationCache(): void {
+  invalidateClientCache(CACHE_KEY);
 }

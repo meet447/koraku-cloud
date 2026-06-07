@@ -12,6 +12,7 @@ import { KorakuPageHeader } from "@/components/KorakuPageHeader";
 import { KorakuAlert } from "@/components/KorakuAlert";
 import { KorakuSearchInput } from "@/components/KorakuSearchInput";
 import { IntegrationsSkeleton } from "@/components/IntegrationsSkeleton";
+import { getClientCache, setClientCache } from "@/lib/client-cache";
 
 type Overview = {
   configured: boolean;
@@ -43,6 +44,9 @@ const CATEGORIES: { id: CategoryId; label: string }[] = [
   { id: "docs", label: "Docs & files" },
 ];
 
+const TOOLKITS_CACHE_KEY = "koraku:composio-toolkits";
+const TOOLKITS_CACHE_TTL_MS = 5 * 60 * 1000;
+
 export function ConnectionsPageClient() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [catalogItems, setCatalogItems] = useState<CatalogRow[]>([]);
@@ -66,14 +70,23 @@ export function ConnectionsPageClient() {
   const loadCatalog = useCallback(async () => {
     setCatalogLoading(true);
     setCatalogError(null);
+    const cached = getClientCache<{ items: CatalogRow[] }>(TOOLKITS_CACHE_KEY, TOOLKITS_CACHE_TTL_MS);
+    if (cached?.items?.length) {
+      setCatalogItems(cached.items);
+      setCatalogLoading(false);
+    }
     try {
       const data = await korakuFetchJson<{ items: CatalogRow[] }>(
         "/koraku-api/api/composio/toolkits",
       );
-      setCatalogItems(Array.isArray(data.items) ? data.items : []);
+      const items = Array.isArray(data.items) ? data.items : [];
+      setCatalogItems(items);
+      setClientCache(TOOLKITS_CACHE_KEY, { items });
     } catch (e) {
-      setCatalogError(errorMessage(e, "Catalog load failed"));
-      setCatalogItems([]);
+      if (!cached?.items?.length) {
+        setCatalogError(errorMessage(e, "Catalog load failed"));
+        setCatalogItems([]);
+      }
     } finally {
       setCatalogLoading(false);
     }
