@@ -22,7 +22,7 @@ def _uvicorn_reload() -> bool:
     if _uvicorn_workers() > 1:
         return False
     v = (os.environ.get("UVICORN_RELOAD") or "true").strip().lower()
-    return v in ("1", "true", "yes", "on")
+    return v in {"1", "true", "yes", "on"}
 
 
 def main() -> None:
