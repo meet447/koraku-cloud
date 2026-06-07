@@ -1,8 +1,41 @@
-import { invalidateUserThreadList } from "@/lib/koraku-redis";
+import {
+  getCachedJson,
+  invalidateThreadMessages,
+  invalidateUserThreadList,
+  setCachedJson,
+  threadMessagesCacheKey,
+} from "@/lib/koraku-redis";
 import { safeError } from "@/lib/safe-log";
 import { requireAuthedOrg } from "@/lib/supabase/route-auth";
 
 export const runtime = "nodejs";
+
+const THREAD_MESSAGES_TTL_SEC = 45;
+
+type ThreadMessagesPayload = {
+  messages: Array<{
+    id: string;
+    role: string;
+    contentJson: unknown;
+    createdAt: string | null;
+  }>;
+};
+
+function mapMessages(
+  rows: Array<{
+    id: string;
+    role: string;
+    content_json: unknown;
+    created_at: string | null;
+  }>,
+): ThreadMessagesPayload["messages"] {
+  return rows.map((m) => ({
+    id: m.id,
+    role: m.role,
+    contentJson: m.content_json,
+    createdAt: m.created_at == null ? null : String(m.created_at),
+  }));
+}
 
 export async function GET(
   _req: Request,
@@ -12,17 +45,13 @@ export async function GET(
   if (!auth.ok) {
     return auth.response;
   }
-  const { supabase } = auth.ctx;
+  const { supabase, userId, orgId } = auth.ctx;
   const { threadId } = await ctx.params;
 
-  const { data: thread, error: threadErr } = await supabase
-    .from("chat_thread")
-    .select("id")
-    .eq("id", threadId)
-    .maybeSingle();
-
-  if (threadErr || !thread) {
-    return Response.json({ error: "Not found" }, { status: 404 });
+  const cacheKey = threadMessagesCacheKey(orgId, userId, threadId);
+  const cached = await getCachedJson<ThreadMessagesPayload>(cacheKey);
+  if (cached) {
+    return Response.json(cached);
   }
 
   const { data: messages, error } = await supabase
@@ -36,14 +65,11 @@ export async function GET(
     return Response.json({ error: "Database error" }, { status: 500 });
   }
 
-  return Response.json({
-    messages: (messages ?? []).map((m) => ({
-      id: m.id,
-      role: m.role,
-      contentJson: m.content_json,
-      createdAt: m.created_at == null ? null : String(m.created_at),
-    })),
-  });
+  const payload: ThreadMessagesPayload = {
+    messages: mapMessages(messages ?? []),
+  };
+  await setCachedJson(cacheKey, payload, THREAD_MESSAGES_TTL_SEC);
+  return Response.json(payload);
 }
 
 export async function POST(
@@ -119,6 +145,9 @@ export async function POST(
     return Response.json({ error: "Database error" }, { status: 500 });
   }
 
-  await invalidateUserThreadList(userId, orgId);
+  await Promise.all([
+    invalidateUserThreadList(userId, orgId),
+    invalidateThreadMessages(userId, orgId, threadId),
+  ]);
   return Response.json({ ok: true });
 }

@@ -1,4 +1,4 @@
-import { invalidateUserThreadList } from "@/lib/koraku-redis";
+import { invalidateThreadMessages, invalidateUserThreadList } from "@/lib/koraku-redis";
 import { safeError } from "@/lib/safe-log";
 import { requireAuthedOrg } from "@/lib/supabase/route-auth";
 
@@ -32,6 +32,9 @@ export async function DELETE(
     return Response.json({ error: "Database error" }, { status: 500 });
   }
 
-  await invalidateUserThreadList(userId, orgId);
+  await Promise.all([
+    invalidateUserThreadList(userId, orgId),
+    invalidateThreadMessages(userId, orgId, threadId),
+  ]);
   return Response.json({ ok: true });
 }

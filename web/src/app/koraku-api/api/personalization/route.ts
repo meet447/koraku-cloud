@@ -1,7 +1,10 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { personalization } from "@/lib/koraku-api-routes";
+import {
+  korakuPersonalizationGetCached,
+  korakuPersonalizationPut,
+} from "@/lib/koraku-bff-cache";
 
-export const GET = personalization.GET;
-export const PUT = personalization.PUT;
+export const GET = korakuPersonalizationGetCached;
+export const PUT = korakuPersonalizationPut;

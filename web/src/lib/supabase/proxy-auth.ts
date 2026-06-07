@@ -2,20 +2,15 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { applyTenantHeadersFromCookies } from "@/lib/tenant/server";
 
-/**
- * Sets ``Authorization: Bearer <access_token>`` from the Supabase cookie session when present.
- * Use in Route Handlers that proxy to the Python API so the backend can verify the user
- * even when the browser request omits ``Authorization``.
- */
-export async function applySupabaseBearerFromCookies(headers: Headers): Promise<boolean> {
+async function createCookieSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) {
-    return false;
+    return null;
   }
 
   const cookieStore = await cookies();
-  const supabase = createServerClient(url, key, {
+  return createServerClient(url, key, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -31,6 +26,31 @@ export async function applySupabaseBearerFromCookies(headers: Headers): Promise<
       },
     },
   });
+}
+
+export async function getSessionUserIdFromCookies(): Promise<string | null> {
+  try {
+    const supabase = await createCookieSupabaseClient();
+    if (!supabase) return null;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Sets ``Authorization: Bearer <access_token>`` from the Supabase cookie session when present.
+ * Use in Route Handlers that proxy to the Python API so the backend can verify the user
+ * even when the browser request omits ``Authorization``.
+ */
+export async function applySupabaseBearerFromCookies(headers: Headers): Promise<boolean> {
+  const supabase = await createCookieSupabaseClient();
+  if (!supabase) {
+    return false;
+  }
 
   const {
     data: { session },

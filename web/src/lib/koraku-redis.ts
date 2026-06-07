@@ -36,22 +36,48 @@ export async function setCachedJson(
   await r.set(key, JSON.stringify(value), "EX", ttlSec);
 }
 
+export async function deleteCachedKeys(...keys: string[]): Promise<void> {
+  const r = client();
+  if (!r || keys.length === 0) return;
+  await r.del(...keys);
+}
+
 /** Drop sidebar thread-list cache for one org scope (matches GET ``threads:${orgId}:${userId}``). */
 export async function invalidateUserThreadList(
   userId: string,
   orgId?: string | null,
 ): Promise<void> {
-  const r = client();
-  if (!r) return;
   const uid = userId.trim();
   const keys = new Set<string>([`threads:${uid}`]);
   const oid = (orgId ?? "").trim();
   if (oid) {
     keys.add(`threads:${oid}:${uid}`);
   }
-  if (keys.size > 0) {
-    await r.del(...keys);
-  }
+  await deleteCachedKeys(...keys);
+}
+
+export function threadMessagesCacheKey(
+  orgId: string,
+  userId: string,
+  threadId: string,
+): string {
+  return `thread-messages:${orgId}:${userId}:${threadId}`;
+}
+
+export async function invalidateThreadMessages(
+  userId: string,
+  orgId: string,
+  threadId: string,
+): Promise<void> {
+  await deleteCachedKeys(threadMessagesCacheKey(orgId, userId, threadId));
+}
+
+export function userBffCacheKey(scope: string, userId: string): string {
+  return `bff:${scope}:${userId}`;
+}
+
+export async function invalidateUserBffCache(scope: string, userId: string): Promise<void> {
+  await deleteCachedKeys(userBffCacheKey(scope, userId));
 }
 
 /** Clear all org-scoped thread list keys for a user (account delete, etc.). */
