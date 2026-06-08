@@ -47,11 +47,62 @@ def preset_to_cron(preset: dict[str, Any]) -> str:
     )
 
 
+def cron_human_label(cron: str | None) -> str:
+    """Turn common 5-field cron strings into short labels (fallback for custom cron)."""
+    raw = (cron or "").strip()
+    if not raw:
+        return "—"
+    parts = raw.split()
+    if len(parts) != 5:
+        return raw
+    minute, hour, dom, month, dow = parts
+    days = ("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+
+    if (
+        minute.startswith("*/")
+        and hour == "*"
+        and dom == "*"
+        and month == "*"
+        and dow == "*"
+    ):
+        step = minute[2:]
+        if step.isdigit():
+            n = int(step)
+            return f"Every {n} minute" if n == 1 else f"Every {n} minutes"
+
+    if (
+        minute == "0"
+        and hour.startswith("*/")
+        and dom == "*"
+        and month == "*"
+        and dow == "*"
+    ):
+        step = hour[2:]
+        if step.isdigit():
+            n = int(step)
+            return f"Every {n} hour" if n == 1 else f"Every {n} hours"
+
+    if dom == "*" and month == "*" and minute.isdigit() and hour.isdigit():
+        h, m = int(hour), int(minute)
+        time_str = f"{h:02d}:{m:02d}"
+        if dow == "*":
+            return f"Daily at {time_str}"
+        if dow == "1-5":
+            return f"Weekdays at {time_str}"
+        if dow.isdigit():
+            d = int(dow)
+            if 0 <= d <= 6:
+                return f"Weekly {days[d]} {time_str}"
+
+    return raw
+
+
 def schedule_label(preset: dict[str, Any] | None, cron: str | None) -> str:
     if isinstance(preset, dict) and preset.get("kind"):
         kind = str(preset["kind"])
         if kind == "every_n_minutes":
-            return f"Every {preset.get('every_n_minutes', 30)} minutes"
+            n = int(preset.get("every_n_minutes") or 30)
+            return f"Every {n} minute" if n == 1 else f"Every {n} minutes"
         if kind == "daily":
             h, m = int(preset.get("hour") or 9), int(preset.get("minute") or 0)
             return f"Daily at {h:02d}:{m:02d}"
@@ -64,5 +115,7 @@ def schedule_label(preset: dict[str, Any] | None, cron: str | None) -> str:
             h, m = int(preset.get("hour") or 9), int(preset.get("minute") or 0)
             return f"Weekly {days[d]} {h:02d}:{m:02d}"
         if kind == "custom" and cron:
-            return f"Custom ({cron})"
-    return cron or "—"
+            return cron_human_label(str(cron))
+    if cron:
+        return cron_human_label(str(cron))
+    return "—"

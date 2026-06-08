@@ -17,6 +17,7 @@ import {
 import { KorakuAlert } from "@/components/KorakuAlert";
 import { KorakuButton, korakuButtonClass } from "@/components/KorakuButton";
 import { KorakuSearchInput } from "@/components/KorakuSearchInput";
+import { formatAutomationScheduleLabel } from "@/lib/automation-schedule";
 
 type ConfirmKind = "create" | "delete" | "run";
 
@@ -152,9 +153,9 @@ function triggerSubtitle(a: Automation): string {
     }
     return a.event_display || "Webhook event";
   }
-  const label = a.schedule_label || a.cron_expression || "—";
+  const label = formatAutomationScheduleLabel(a);
   const tz = a.timezone || "UTC";
-  return `${label} (${tz})`;
+  return `${label} · ${tz}`;
 }
 
 function runStatusBadge(run: RunRow): string | null {
