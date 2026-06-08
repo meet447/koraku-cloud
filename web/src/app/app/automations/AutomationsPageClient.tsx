@@ -10,6 +10,10 @@ import { errorMessage } from "@/lib/error-message";
 import { korakuFetch, korakuFetchJson, korakuFetchOk } from "@/lib/koraku-fetch";
 import { automationToolkitIconUrl } from "@/lib/toolkit-icons";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import {
+  AutomationsPageSkeleton,
+  AutomationsRunHistorySkeleton,
+} from "@/components/AutomationsSkeleton";
 import { KorakuAlert } from "@/components/KorakuAlert";
 import { KorakuButton, korakuButtonClass } from "@/components/KorakuButton";
 import { KorakuSearchInput } from "@/components/KorakuSearchInput";
@@ -334,7 +338,8 @@ export function AutomationsPageClient() {
     };
   }, [selectedId, loadRuns]);
 
-  const pollActiveRun = selected?.current_run_id || activeRunId;
+  const pollActiveRun =
+    selected?.status === "active" ? selected.current_run_id || activeRunId : null;
   useEffect(() => {
     if (!selectedId || !pollActiveRun) return;
     const tick = () => {
@@ -455,6 +460,10 @@ export function AutomationsPageClient() {
           ...(paused ? {} : { reset_failure_count: true }),
         },
       });
+      if (paused) {
+        setActiveRunId(null);
+        setRunning(false);
+      }
       await loadList();
       setMenuOpen(false);
     } catch (e) {
@@ -820,6 +829,10 @@ export function AutomationsPageClient() {
         ) : null}
 
         <div className="flex min-h-0 flex-1">
+          {loading ? (
+            <AutomationsPageSkeleton />
+          ) : (
+          <>
           <aside className={clsx(
             "w-full max-w-sm shrink-0 flex-col border-r border-neutral-200/80 bg-neutral-50/50",
             mobileShowDetail ? "hidden md:flex" : "flex"
@@ -833,9 +846,7 @@ export function AutomationsPageClient() {
               />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
-              {loading ? (
-                <p className="px-2 py-6 text-center text-sm text-neutral-500">Loading…</p>
-              ) : filtered.length === 0 ? (
+              {filtered.length === 0 ? (
                 <div className="px-3 py-6 text-center">
                   <p className="text-sm font-semibold text-neutral-700">
                     No automations yet.
@@ -949,7 +960,7 @@ export function AutomationsPageClient() {
                         </span>
                       </p>
                     ) : null}
-                    {pollActiveRun ? (
+                    {pollActiveRun && selected.status === "active" ? (
                       <p className="mt-2 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80">
                         Run in progress…{" "}
                         {runs.find((r) => r.id === pollActiveRun)?.progress_detail || "Working"}
@@ -1033,7 +1044,7 @@ export function AutomationsPageClient() {
 
                 <h3 className="mt-8 text-sm font-bold uppercase tracking-wide text-neutral-400">Run history</h3>
                 {runsLoading ? (
-                  <p className="mt-4 text-sm text-neutral-500">Loading history…</p>
+                  <AutomationsRunHistorySkeleton />
                 ) : runs.length === 0 ? (
                   <p className="mt-4 text-sm text-neutral-500">
                     No runs yet. Use <span className="font-semibold">Run now</span> or wait for the schedule.
@@ -1090,6 +1101,8 @@ export function AutomationsPageClient() {
               </>
             )}
           </section>
+          </>
+          )}
         </div>
         <ConfirmDialog
           open={pendingConfirm === "create"}
