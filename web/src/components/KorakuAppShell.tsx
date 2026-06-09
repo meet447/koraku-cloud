@@ -28,15 +28,14 @@ import {
 } from "@/lib/onboarding";
 import { AppChrome } from "@/components/AppChrome";
 import { ChatConversation } from "@/components/ChatApp";
+import { KorakuAppLoading } from "@/components/KorakuAppLoading";
 import { SetupStatusBanner } from "@/components/SetupStatusBanner";
 
 function OnboardingGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
   const router = useRouter();
-  const [complete, setComplete] = useState<boolean | null>(() => {
-    if (typeof window === "undefined") return null;
-    return isOnboardingComplete() ? true : null;
-  });
+  // Start unresolved on server and client so hydration matches; sync from storage after mount.
+  const [complete, setComplete] = useState<boolean | null>(null);
 
   // Re-sync before paint on navigation so finishing onboarding cannot bounce back to step 1.
   useLayoutEffect(() => {
@@ -80,28 +79,16 @@ function OnboardingGate({ children }: { children: ReactNode }) {
   if (!resolving) {
     if (onOnboarding && complete) {
       router.replace(APP_BASE);
-      return (
-        <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
-          Loading…
-        </div>
-      );
+      return <KorakuAppLoading />;
     }
     if (inApp && !onOnboarding && !complete) {
       router.replace(ONBOARDING_PATH);
-      return (
-        <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
-          Loading…
-        </div>
-      );
+      return <KorakuAppLoading />;
     }
   }
 
   if (resolving) {
-    return (
-      <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
-        Loading…
-      </div>
-    );
+    return <KorakuAppLoading />;
   }
 
   if (onOnboarding) {
@@ -112,11 +99,7 @@ function OnboardingGate({ children }: { children: ReactNode }) {
   }
 
   if (inApp && !complete) {
-    return (
-      <div className="flex h-[100dvh] items-center justify-center bg-white text-sm font-medium text-neutral-500">
-        Loading…
-      </div>
-    );
+    return <KorakuAppLoading />;
   }
 
   return <>{children}</>;
