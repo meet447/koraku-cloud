@@ -17,6 +17,17 @@ from koraku.credits.store import (
 )
 
 
+class OrgSuspendedError(HTTPException):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=403,
+            detail={
+                "code": "org_suspended",
+                "message": "This workspace is suspended. Contact support.",
+            },
+        )
+
+
 class CreditsExhaustedError(HTTPException):
     def __init__(self, summary: UsageSummary | None) -> None:
         detail: dict[str, Any] = {
@@ -37,6 +48,10 @@ async def pre_check_org(org_id: str | None) -> UsageSummary | None:
         return None
     allowed, summary = await asyncio.to_thread(pre_check_sync, oid)
     if not allowed:
+        from koraku.credits.store import _org_suspended_sync
+
+        if await asyncio.to_thread(_org_suspended_sync, oid):
+            raise OrgSuspendedError()
         raise CreditsExhaustedError(summary)
     return summary
 

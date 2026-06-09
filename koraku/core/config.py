@@ -33,6 +33,7 @@ _CLOUD_OVERRIDE_FIELDS = frozenset(
         "chat_history_supabase_limit",
         "credits_free_monthly_limit",
         "credits_min_reserve",
+        "platform_admin_user_ids",
         "automation_rate_limit_per_minute",
         "automation_manual_run_concurrency_per_user",
         "supabase_jwt_secret",

@@ -108,6 +108,14 @@ class CloudSettings(BaseSettings):
         default=500,
         validation_alias=AliasChoices("CREDITS_MIN_RESERVE", "credits_min_reserve"),
     )
+    platform_admin_user_ids: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "PLATFORM_ADMIN_USER_IDS",
+            "KORAKU_PLATFORM_ADMIN_USER_IDS",
+            "platform_admin_user_ids",
+        ),
+    )
     automation_rate_limit_per_minute: int = Field(
         default=6,
         validation_alias=AliasChoices("AUTOMATION_RATE_LIMIT_PER_MINUTE", "automation_rate_limit_per_minute"),

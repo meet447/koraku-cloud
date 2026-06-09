@@ -9,6 +9,7 @@ export async function middleware(request: NextRequest) {
   // Only run Supabase auth verification for protected routes (e.g. starting with /app or /api or /koraku-api)
   const isProtectedRoute =
     pathname.startsWith("/app") ||
+    pathname.startsWith("/admin") ||
     pathname.startsWith("/api") ||
     pathname.startsWith("/koraku-api");
 
@@ -25,7 +26,7 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  if (pathname.startsWith("/app") && !userId) {
+  if ((pathname.startsWith("/app") || pathname.startsWith("/admin")) && !userId) {
     const signIn = new URL("/sign-in", request.url);
     signIn.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(signIn);

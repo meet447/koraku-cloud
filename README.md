@@ -119,10 +119,15 @@ koraku-cloud/
 | `/runs` | POST | Start detached run |
 | `/api/automations` | CRUD | Scheduled / event automations |
 | `/api/personalization` | GET/PUT | Memory / soul per org |
+| `/api/admin/*` | … | Platform admin (credits, orgs) — operators only |
 | `/api/composio/*` | … | Connected apps |
 | `/sendblue/webhook` | POST | iMessage inbound |
 
 Browser clients use **`/koraku-api/...`** on the Next.js host. See [docs/DATA_LIFECYCLE.md](docs/DATA_LIFECYCLE.md).
+
+### Platform admin (`/admin`)
+
+Operators manage org credits, limits, and suspensions at **`/admin`** (Dashboard, Organizations). Grant access by setting **`PLATFORM_ADMIN_USER_IDS`** on the Python API (comma-separated Supabase user UUIDs) or inserting a row into **`koraku_platform_admin`**. All mutations are written to **`koraku_admin_audit_log`**.
 
 ## Configuration
 

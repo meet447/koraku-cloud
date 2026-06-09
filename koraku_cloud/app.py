@@ -5,6 +5,7 @@ from koraku_cloud.bootstrap import bootstrap_cloud
 
 bootstrap_cloud()
 
+from koraku_cloud.api.admin_routes import router as admin_router
 from koraku_cloud.api.automation_events_routes import router as automation_events_router
 from koraku_cloud.api.composio_trigger_events_routes import router as composio_trigger_events_router
 from koraku_cloud.api.automations_routes import router as automations_router
@@ -29,6 +30,7 @@ def create_cloud_app():
         enable_automation_scheduler=True,
         index_variant="cloud",
     )
+    app.include_router(admin_router)
     app.include_router(detached_runs_router)
     app.include_router(personalization_router)
     app.include_router(profile_router)

@@ -115,6 +115,11 @@ export const skills = createKorakuCatchAllProxy({
   methods: ["GET", "PUT", "DELETE"] as const,
 });
 
+export const admin = createKorakuCatchAllProxy({
+  upstreamPath: "/api/admin",
+  methods: ["GET", "POST", "PATCH"] as const,
+});
+
 export const sendblue = createKorakuCatchAllProxy({
   upstreamPath: "/sendblue",
   methods: ["GET", "POST"] as const,

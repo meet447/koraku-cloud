@@ -113,10 +113,29 @@ def _parse_ts(value: Any) -> datetime | None:
         return None
 
 
+def _org_suspended_sync(org_id: str) -> bool:
+    oid = (org_id or "").strip()
+    if not oid or not credits_configured():
+        return False
+    get_http_client, rest_headers, rest_url, _ = _rest()
+    try:
+        q = f"/koraku_org_admin_state?org_id=eq.{oid}&select=suspended&limit=1"
+        r = get_http_client().get(rest_url(q), headers=rest_headers())
+        r.raise_for_status()
+        rows = r.json()
+        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+            return bool(rows[0].get("suspended"))
+    except Exception:
+        log.debug("org suspend check failed org_id=%s", oid, exc_info=True)
+    return False
+
+
 def pre_check_sync(org_id: str, reserve: int | None = None) -> tuple[bool, UsageSummary | None]:
     """Return (allowed, summary). When credits are not configured, always allowed."""
     if not credits_configured():
         return True, None
+    if _org_suspended_sync(org_id):
+        return False, fetch_summary_sync(org_id)
     summary = fetch_summary_sync(org_id)
     if summary is None:
         return True, None
