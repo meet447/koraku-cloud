@@ -74,6 +74,25 @@ sudo systemctl reload caddy
 
 ## Deploy / update
 
+### GitHub Actions (auto-deploy on `main`)
+
+After CI passes on a push to `main`, the **Deploy VPS** workflow rsyncs the repo and runs `docker compose up -d --build` on the server (same as `./scripts/deploy-vps.sh`).
+
+**One-time setup** — add repository secrets (**Settings → Secrets and variables → Actions**):
+
+| Secret | Required | Example |
+|--------|----------|---------|
+| `KORAKU_VPS_HOST` | yes | VPS IP or hostname |
+| `KORAKU_VPS_SSH_PRIVATE_KEY` | yes | Full PEM private key (same key you use for `ssh -i …`) |
+| `KORAKU_VPS_USER` | no | `ubuntu` (default) |
+| `KORAKU_VPS_DIR` | no | `/opt/koraku/koraku-cloud` (default) |
+
+The VPS must already have Docker, `.env` with production secrets, and Caddy configured (see above). Actions never overwrite `.env` on the host.
+
+Manual deploy from GitHub: **Actions → Deploy VPS → Run workflow**.
+
+### Local deploy
+
 One-time local config:
 
 ```bash

@@ -11,7 +11,7 @@
 | `verify-sdk-wheel.sh` | Assert PyPI wheel excludes `koraku_cloud` |
 | `check_cloud_imports.py` | Guard: no eager `koraku_cloud` imports in `koraku/` |
 | `ngrok-sendblue.sh` | Tunnel for SendBlue webhooks (dev) |
-| `deploy-vps.sh` | Rsync to VPS and redeploy Docker Compose (see `deploy/vps/`) |
+| `deploy-vps.sh` | Rsync to VPS and redeploy Docker Compose (see `deploy/vps/`; also used by GitHub Actions) |
 
 ## Run the API
 

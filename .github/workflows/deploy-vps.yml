@@ -1,0 +1,53 @@
+name: Deploy VPS
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.KORAKU_VPS_SSH_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$SSH_PRIVATE_KEY" ]]; then
+            echo "Missing GitHub secret KORAKU_VPS_SSH_PRIVATE_KEY." >&2
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/koraku_vps
+          chmod 600 ~/.ssh/koraku_vps
+
+      - name: Deploy API to VPS
+        env:
+          KORAKU_VPS_HOST: ${{ secrets.KORAKU_VPS_HOST }}
+          KORAKU_VPS_USER: ${{ secrets.KORAKU_VPS_USER }}
+          KORAKU_VPS_DIR: ${{ secrets.KORAKU_VPS_DIR }}
+        run: |
+          if [[ -z "$KORAKU_VPS_HOST" ]]; then
+            echo "Missing GitHub secret KORAKU_VPS_HOST." >&2
+            exit 1
+          fi
+          export KORAKU_VPS_USER="${KORAKU_VPS_USER:-ubuntu}"
+          export KORAKU_VPS_DIR="${KORAKU_VPS_DIR:-/opt/koraku/koraku-cloud}"
+          export KORAKU_VPS_SSH_KEY="$HOME/.ssh/koraku_vps"
+          ./scripts/deploy-vps.sh
