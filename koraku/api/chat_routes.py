@@ -48,6 +48,7 @@ from koraku.integrations.cloud_user import (
 from koraku.api.chat_hydration import (
     after_turn_memory_ingest,
     fetch_account_personalization,
+    fetch_org_skills,
     hydrate_session_for_turn,
 )
 from koraku.core.product_hooks import product_hooks_active
@@ -252,10 +253,13 @@ async def _stream_agent_sse(
     await asyncio.sleep(0)
 
     personalization_task: asyncio.Task | None = None
+    skills_task: asyncio.Task | None = None
     if auth_sub:
         personalization_task = asyncio.create_task(
             fetch_account_personalization(auth_sub, auth_org_id)
         )
+        if product_hooks_active():
+            skills_task = asyncio.create_task(fetch_org_skills(auth_sub, auth_org_id))
     hydration_task = asyncio.create_task(
         hydrate_session_for_turn(
             session,
@@ -269,6 +273,8 @@ async def _stream_agent_sse(
     pending: list[asyncio.Task] = [hydration_task]
     if personalization_task is not None:
         pending.append(personalization_task)
+    if skills_task is not None:
+        pending.append(skills_task)
     core_results = await asyncio.gather(*pending, return_exceptions=True)
 
     idx = 0
@@ -292,10 +298,25 @@ async def _stream_agent_sse(
     account_p: dict[str, str] | None = None
     if personalization_task is not None:
         fetched = core_results[idx]
+        idx += 1
         if not isinstance(fetched, BaseException):
             account_p = fetched if fetched is not None else {"agent_name": "", "memory": "", "soul": ""}
         else:
             log.warning("personalization fetch failed: %s", fetched)
+            if product_hooks_active():
+                log.warning(
+                    "cloud chat missing personalization for authed user %s — using empty profile, not local .koraku files",
+                    auth_sub,
+                )
+
+    org_skills: list[dict[str, str]] | None = None
+    if skills_task is not None:
+        fetched_skills = core_results[idx]
+        if not isinstance(fetched_skills, BaseException):
+            org_skills = list(fetched_skills or [])
+        else:
+            log.warning("org skills fetch failed: %s", fetched_skills)
+            org_skills = []
 
     mode_hint, max_steps_hint = _step_budget(budget)
     tz = _normalize_client_hint(client_tz)
@@ -374,6 +395,7 @@ async def _stream_agent_sse(
                     run_context=AgentRunContext(execution_target=exec_target),
                     cloud_sandbox=None,
                     account_personalization=account_p,
+                    org_skills=org_skills,
                     run_id=stream_state.run_id,
                     cancel_event=eff_cancel,
                 )

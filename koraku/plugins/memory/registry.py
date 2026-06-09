@@ -55,9 +55,7 @@ def _resolve_backend_name(settings: Settings) -> str:
     if raw != "auto":
         return raw
     if is_cloud_configured():
-        if SupermemoryBackend().supports_agent_tools():
-            return "composite"
-        return "filesystem"
+        return "supermemory"
     return "filesystem"
 
 

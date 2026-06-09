@@ -92,7 +92,7 @@ def format_binary_read_response(file_path: str, size_bytes: int | None) -> str:
         f"Path: {file_path}\n"
         f"Type: {ext_note}\n"
         f"{size_line}\n\n"
-        "Use **Bash** with an appropriate tool for this format, or follow a workspace **SKILL.md** under `.koraku/skills/`.\n"
+        "Use **Bash** with an appropriate tool for this format, or follow a matching **org/bundled skill** from the system prompt.\n"
         "- **PDF**: e.g. `pdftotext <path> -` if installed, or a short Python script using `pypdf`.\n"
         "- **Office (.docx etc.)**: Python `python-docx` or unpack XML from the zip container.\n"
         "- **Images**: `file` for type; for visual understanding, ask the user to attach the image in chat.\n"

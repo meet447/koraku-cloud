@@ -7,6 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from koraku.core.config import settings
+from koraku.core.product_hooks import product_hooks_active
 from koraku.workspace.context import (
     load_agent_display_name,
     load_memory_snippet,
@@ -87,6 +88,10 @@ def load_personalization_snippets(
             "\n\n[... Soul truncated ...]",
         )
         raw_display = (account_personalization.get("agent_name") or "").strip() or None
+    elif product_hooks_active():
+        mem = ""
+        soul = ""
+        raw_display = None
     else:
         mem = load_memory_snippet(workspace, snippet_cap)
         soul = load_soul_snippet(workspace, snippet_cap)
@@ -110,6 +115,11 @@ def format_memory_section(mem: str, account_personalization: dict[str, str] | No
                 "No saved preferences yet — the user can add them under **Personalization** in the app.\n"
             )
         )
+    if product_hooks_active():
+        return (
+            "## Explicit preferences (Personalization)\n"
+            "No saved preferences yet — the user can add them under **Personalization** in the app.\n"
+        )
     return (
         f"## User memory (from `{memory_path(workspace)}`)\n{mem}\n"
         if mem
@@ -127,6 +137,8 @@ def format_soul_section(soul: str, account_personalization: dict[str, str] | Non
             if soul.strip()
             else "## Persona\nNo saved persona text — optional tone under **Personalization**.\n"
         )
+    if product_hooks_active():
+        return "## Persona\nNo saved persona text — optional tone under **Personalization**.\n"
     return (
         f"## Persona / soul (from `{soul_path(workspace)}`)\n{soul}\n"
         if soul
@@ -141,11 +153,17 @@ def format_workspace_section(
 ) -> str:
     if cloud_tool_root:
         ctr = cloud_tool_root.rstrip("/")
-        host_hint = (
-            "skills below are loaded from this path; **Memory** and **Soul** come from the user's **Koraku account**"
-            if account_personalization is not None
-            else "skills/memory below are loaded from here"
-        )
+        if product_hooks_active():
+            host_hint = (
+                "**Memory**, **Soul**, and **org skills** come from the user's **Koraku account** (Supabase); "
+                "bundled platform skills apply by default"
+            )
+        elif account_personalization is not None:
+            host_hint = (
+                "skills below are loaded from this path; **Memory** and **Soul** come from the user's **Koraku account**"
+            )
+        else:
+            host_hint = "skills/memory below are loaded from here"
         return (
             f"## Workspace\n"
             f"- **Tool-visible directory**: `{ctr}`\n"

@@ -17,7 +17,7 @@ from koraku.integrations import composio as composio_runtime
 from koraku.integrations.artifact_prompt import artifact_dispatcher_prompt_section
 from koraku.integrations.supermemory_client import supermemory_configured
 from koraku.plugins.memory import prefetch_learned_memory_volatile as _prefetch_learned
-from koraku.tools.skills import load_skill_catalog
+from koraku.tools.skills import CloudSkill, load_skill_catalog, skills_empty_message
 
 log = logging.getLogger(__name__)
 
@@ -101,6 +101,7 @@ def build_context_tier(
     account_personalization: dict[str, str] | None,
     cloud_tool_root: str | None,
     composio_section: str | None,
+    org_skills: list[CloudSkill] | None = None,
 ) -> str:
     import os
 
@@ -111,12 +112,8 @@ def build_context_tier(
         format_soul_section(soul, account_personalization, ws),
         format_memory_section(mem, account_personalization, ws),
     ]
-    skills = load_skill_catalog(ws)
-    parts.append(
-        "## Workspace skills\n" + skills
-        if skills
-        else "## Workspace skills\nNo SKILL.md under `.koraku/skills/` yet.\n"
-    )
+    skills = load_skill_catalog(ws, cloud_skills=org_skills)
+    parts.append(skills if skills else skills_empty_message())
     comp = (
         composio_runtime.composio_system_prompt_section()
         if composio_section is None
@@ -155,6 +152,7 @@ def build_tiered_system_prompt(
     account_personalization: dict[str, str] | None = None,
     composio_section: str | None = None,
     learned_memory_prefetch: str | None = None,
+    org_skills: list[CloudSkill] | None = None,
 ) -> str:
     import os
 
@@ -166,6 +164,7 @@ def build_tiered_system_prompt(
         account_personalization=account_personalization,
         cloud_tool_root=cloud_tool_root,
         composio_section=composio_section,
+        org_skills=org_skills,
     )
     volatile = build_volatile_tier(
         client_timezone=client_timezone,

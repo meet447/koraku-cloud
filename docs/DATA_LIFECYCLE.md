@@ -9,7 +9,8 @@ Engineering map of what the backend stores, processes, and depends on. Use for s
 | Chat (`POST /stream`) | Session store (memory or Redis); optional Supabase chat history; SSE to browser | LLM; optional Exa/Firecrawl; Composio; Blaxel when `execution_target=cloud` |
 | Detached runs (`POST /runs`) | In-process or Redis buffer + replay | Same as chat |
 | Automations | Supabase `koraku_automation*` (scoped by `org_id`) | LLM; tools as configured |
-| Personalization | Supabase `koraku_personalization` **per `(user_id, org_id)`**; optional workspace files | Supabase |
+| Personalization | Supabase `koraku_personalization` **per `(user_id, org_id)`** | Supabase |
+| Agent skills | Supabase `koraku_skill` **per `org_id`** + bundled defaults in the API image | Supabase |
 | iMessage | SendBlue webhook → agent; optional voice transcription | SendBlue; Whisper (Fireworks/OpenAI) |
 
 ## Components

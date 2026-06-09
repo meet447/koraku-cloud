@@ -110,6 +110,11 @@ export const workspace = createKorakuCatchAllProxy({
   methods: ["GET", "POST"] as const,
 });
 
+export const skills = createKorakuCatchAllProxy({
+  upstreamPath: "/api/skills",
+  methods: ["GET", "PUT", "DELETE"] as const,
+});
+
 export const sendblue = createKorakuCatchAllProxy({
   upstreamPath: "/sendblue",
   methods: ["GET", "POST"] as const,

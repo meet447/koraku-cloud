@@ -21,9 +21,9 @@ async def prepare_automation_agent_context(
     *,
     org_id: str | None = None,
     spec_query: str | None = None,
-) -> tuple[str | None, dict[str, str] | None, Any | None]:
+) -> tuple[str | None, dict[str, str] | None, list[dict[str, str]] | None, Any | None]:
     """
-    Returns ``(org_id, account_personalization, tenant_token)``.
+    Returns ``(org_id, account_personalization, org_skills, tenant_token)``.
 
     Uses the automation row's ``org_id`` when provided; otherwise falls back to the
     user's personal org (legacy / non-automation callers).
@@ -43,7 +43,17 @@ async def prepare_automation_agent_context(
         fetched = await fetch_personalization_async(user_id, org_id=resolved_org)
         account_p = fetched if fetched is not None else empty_personalization()
 
-    return resolved_org, account_p, tenant_token
+    org_skills: list[dict[str, str]] | None = None
+    try:
+        from koraku_cloud.integrations.supabase_skills import fetch_org_skills_async
+
+        rows = await fetch_org_skills_async(user_id, org_id=resolved_org, enabled_only=True)
+        org_skills = [dict(row) for row in (rows or [])]
+    except Exception:
+        log.debug("automation org skills fetch skipped", exc_info=True)
+        org_skills = []
+
+    return resolved_org, account_p, org_skills, tenant_token
 
 
 def reset_automation_tenant(tenant_token: Any | None) -> None:

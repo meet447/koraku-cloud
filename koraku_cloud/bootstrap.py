@@ -18,6 +18,7 @@ def bootstrap_cloud() -> tuple[SdkSettings, CloudSettings]:
         ProductHooks(
             hydrate_session_for_turn=cloud_product_hooks.hydrate_session_for_turn,
             fetch_account_personalization=cloud_product_hooks.fetch_account_personalization,
+            fetch_org_skills=cloud_product_hooks.fetch_org_skills,
             after_turn_memory_ingest=cloud_product_hooks.after_turn_memory_ingest,
             resolve_tenant_org=cloud_product_hooks.resolve_tenant_org,
             health_detail_extras=cloud_product_hooks.health_detail_extras,

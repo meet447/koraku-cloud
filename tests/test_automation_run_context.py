@@ -26,10 +26,11 @@ async def test_prepare_automation_context_uses_row_org_id(
         lambda: False,
     )
 
-    org_id, _account_p, tenant_tok = await prepare_automation_agent_context(
+    org_id, _account_p, org_skills, tenant_tok = await prepare_automation_agent_context(
         "user-1",
         org_id="21ccb3a7-6567-49ea-9885-094673275af2",
     )
+    assert org_skills == []
     try:
         assert org_id == "21ccb3a7-6567-49ea-9885-094673275af2"
         assert effective_tenant_org_id() == "21ccb3a7-6567-49ea-9885-094673275af2"

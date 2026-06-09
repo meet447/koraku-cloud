@@ -55,8 +55,8 @@ const nextConfig: NextConfig = {
       { source: "/automations", destination: "/app/automations", permanent: false },
       { source: "/connections", destination: "/app/connections", permanent: false },
       { source: "/personalization", destination: "/app/settings/agent", permanent: false },
-      { source: "/skills", destination: "/app/connections", permanent: false },
-      { source: "/app/skills", destination: "/app/connections", permanent: false },
+      { source: "/skills", destination: "/app/settings/skills", permanent: false },
+      { source: "/app/skills", destination: "/app/settings/skills", permanent: false },
     ];
   },
   async rewrites() {

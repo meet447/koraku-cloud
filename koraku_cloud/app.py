@@ -12,6 +12,7 @@ from koraku_cloud.api.detached_runs import router as detached_runs_router
 from koraku_cloud.api.memory_routes import router as memory_router
 from koraku_cloud.api.personalization_routes import router as personalization_router
 from koraku_cloud.api.profile_routes import router as profile_router
+from koraku_cloud.api.skills_routes import router as skills_router
 from koraku_cloud.api.sendblue_routes import router as sendblue_router
 from koraku_cloud.api.workspace_routes import router as workspace_router
 from koraku.api.usage_routes import router as usage_router
@@ -31,6 +32,7 @@ def create_cloud_app():
     app.include_router(detached_runs_router)
     app.include_router(personalization_router)
     app.include_router(profile_router)
+    app.include_router(skills_router)
     app.include_router(memory_router)
     app.include_router(automations_router)
     app.include_router(automation_events_router)

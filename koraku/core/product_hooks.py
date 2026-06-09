@@ -6,6 +6,7 @@ from typing import Any, Awaitable, Callable
 
 HydrateSessionFn = Callable[..., Awaitable[Any]]
 FetchPersonalizationFn = Callable[..., Awaitable[dict[str, str] | None]]
+FetchOrgSkillsFn = Callable[..., Awaitable[list[dict[str, str]] | None]]
 AfterTurnMemoryFn = Callable[..., Awaitable[None]]
 ResolveTenantOrgFn = Callable[[Any, str], tuple[str | None, str | None]]
 HealthDetailExtrasFn = Callable[[], dict[str, object]]
@@ -21,6 +22,7 @@ _registered: ProductHooks | None = None
 class ProductHooks:
     hydrate_session_for_turn: HydrateSessionFn | None = None
     fetch_account_personalization: FetchPersonalizationFn | None = None
+    fetch_org_skills: FetchOrgSkillsFn | None = None
     after_turn_memory_ingest: AfterTurnMemoryFn | None = None
     resolve_tenant_org: ResolveTenantOrgFn | None = None
     health_detail_extras: HealthDetailExtrasFn | None = None
@@ -78,6 +80,12 @@ async def hydrate_session_for_turn(*args: Any, **kwargs: Any) -> Any:
 async def fetch_account_personalization(*args: Any, **kwargs: Any) -> dict[str, str] | None:
     if _registered is not None and _registered.fetch_account_personalization is not None:
         return await _registered.fetch_account_personalization(*args, **kwargs)
+    return None
+
+
+async def fetch_org_skills(*args: Any, **kwargs: Any) -> list[dict[str, str]] | None:
+    if _registered is not None and _registered.fetch_org_skills is not None:
+        return await _registered.fetch_org_skills(*args, **kwargs)
     return None
 
 

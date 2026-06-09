@@ -49,7 +49,7 @@ class CloudSettings(BaseSettings):
         validation_alias=AliasChoices("DEFAULT_EXECUTION_TARGET", "default_execution_target"),
     )
     memory_backend: str = Field(
-        default="composite",
+        default="supermemory",
         validation_alias=AliasChoices("MEMORY_BACKEND", "memory_backend"),
     )
     auth_backend: str = Field(
@@ -157,6 +157,13 @@ class CloudSettings(BaseSettings):
         validation_alias=AliasChoices(
             "PERSONALIZATION_CACHE_TTL_SECONDS",
             "personalization_cache_ttl_seconds",
+        ),
+    )
+    skills_cache_ttl_seconds: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices(
+            "SKILLS_CACHE_TTL_SECONDS",
+            "skills_cache_ttl_seconds",
         ),
     )
     learned_memory_cache_ttl_seconds: float = Field(

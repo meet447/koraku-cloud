@@ -96,6 +96,7 @@ def build_system_prompt(
     account_personalization: dict[str, str] | None = None,
     composio_section: str | None = None,
     learned_memory_prefetch: str | None = None,
+    org_skills: list[dict[str, str]] | None = None,
 ) -> str:
     return build_tiered_system_prompt(
         workspace,
@@ -106,6 +107,7 @@ def build_system_prompt(
         account_personalization=account_personalization,
         composio_section=composio_section,
         learned_memory_prefetch=learned_memory_prefetch,
+        org_skills=org_skills,  # type: ignore[arg-type]
     )
 
 
@@ -197,6 +199,7 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
         run_context: AgentRunContext | None = None,
         cloud_sandbox: Any | None = None,
         account_personalization: dict[str, str] | None = None,
+        org_skills: list[dict[str, str]] | None = None,
         *,
         run_id: str | None = None,
         cancel_event: asyncio.Event | None = None,
@@ -219,6 +222,7 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                     run_context=run_context,
                     cloud_sandbox=cloud_sandbox,
                     account_personalization=account_personalization,
+                    org_skills=org_skills,
                     run_id=run_id,
                     cancel_event=cancel_event,
                 ):
@@ -242,6 +246,7 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
         run_context: AgentRunContext | None = None,
         cloud_sandbox: Any | None = None,
         account_personalization: dict[str, str] | None = None,
+        org_skills: list[dict[str, str]] | None = None,
         *,
         run_id: str | None = None,
         cancel_event: asyncio.Event | None = None,
@@ -382,6 +387,7 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                         account_personalization=account_personalization,
                         composio_section=composio_sec,
                         learned_memory_prefetch=learned_prefetch,
+                        org_skills=org_skills,
                     )
                     dispatch_appendix = dispatcher_system_appendix(turn_limits.task_class)
                     if dispatch_appendix:

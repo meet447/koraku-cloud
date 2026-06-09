@@ -37,6 +37,20 @@ async def fetch_account_personalization(
     return await fetch_personalization_async(auth_sub, org_id=auth_org_id)
 
 
+async def fetch_org_skills(
+    auth_sub: str | None,
+    auth_org_id: str | None,
+) -> list[dict[str, str]] | None:
+    if not auth_sub:
+        return None
+    from koraku_cloud.integrations.supabase_skills import fetch_org_skills_async
+
+    rows = await fetch_org_skills_async(auth_sub, org_id=auth_org_id, enabled_only=True)
+    if rows is None:
+        return None
+    return [dict(row) for row in rows]
+
+
 async def after_turn_memory_ingest(
     *,
     auth_sub: str | None,
@@ -88,6 +102,7 @@ def health_detail_extras() -> dict[str, object]:
     from koraku_cloud.integrations.supabase_personalization import (
         supabase_personalization_configured,
     )
+    from koraku_cloud.integrations.supabase_skills import supabase_skills_configured
 
     return {
         "automation_scheduler_running": automation_scheduler.is_running(),
@@ -98,6 +113,7 @@ def health_detail_extras() -> dict[str, object]:
         "automations_supabase_configured": supabase_automations_configured(),
         "chat_history_supabase_configured": supabase_chat_history_configured(),
         "personalization_supabase_configured": supabase_personalization_configured(),
+        "skills_supabase_configured": supabase_skills_configured(),
         "supermemory_configured": supermemory_configured(),
     }
 

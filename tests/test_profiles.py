@@ -12,7 +12,7 @@ def test_cloud_settings_defaults() -> None:
     bootstrap_cloud()
     s = Settings()
     assert s.default_execution_target == "cloud"
-    assert s.memory_backend == "composite"
+    assert s.memory_backend == "supermemory"
     assert s.require_auth_for_chat is True
     assert s.session_store_backend == "redis"
     assert is_cloud_configured()

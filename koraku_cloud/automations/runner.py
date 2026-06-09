@@ -88,6 +88,7 @@ async def _run_agent_session_with_timeout(
     auto: dict[str, Any],
     *,
     account_personalization: dict[str, str] | None = None,
+    org_skills: list[dict[str, str]] | None = None,
     user_id: str = "",
     org_id: str | None = None,
     run_id: str = "",
@@ -108,6 +109,7 @@ async def _run_agent_session_with_timeout(
             run_context=AgentRunContext(),
             cloud_sandbox=None,
             account_personalization=account_personalization,
+            org_skills=org_skills,
             run_id=run_id or None,
         ):
             if ev.get("type") == "agent.error":
@@ -397,7 +399,7 @@ async def execute_automation(
                 or None,
             )
 
-            _, account_p, tenant_tok = await prepare_automation_agent_context(
+            _, account_p, org_skills, tenant_tok = await prepare_automation_agent_context(
                 user_id,
                 org_id=oid,
                 spec_query=auto.get("natural_language_spec"),
@@ -440,6 +442,7 @@ async def execute_automation(
                     workspace_dir(),
                     auto,
                     account_personalization=account_p,
+                    org_skills=org_skills,
                     user_id=user_id,
                     org_id=oid,
                     run_id=run_id,

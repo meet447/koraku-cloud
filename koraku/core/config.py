@@ -41,6 +41,7 @@ _CLOUD_OVERRIDE_FIELDS = frozenset(
         "supermemory_api_key",
         "supermemory_context_max_chars",
         "personalization_cache_ttl_seconds",
+        "skills_cache_ttl_seconds",
         "learned_memory_cache_ttl_seconds",
         "chat_learned_memory_timeout_seconds",
         "tenant_org_membership_cache_ttl_seconds",

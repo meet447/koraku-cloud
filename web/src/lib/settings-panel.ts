@@ -1,14 +1,15 @@
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, Bot, Shield, UserRound } from "lucide-react";
+import { BarChart3, Bot, Shield, Sparkles, UserRound } from "lucide-react";
 import { APP_BASE } from "@/lib/app-path";
 
-const SETTINGS_PANELS = ["profile", "agent", "account", "usage"] as const;
+const SETTINGS_PANELS = ["profile", "agent", "skills", "account", "usage"] as const;
 
 type SettingsPanel = (typeof SETTINGS_PANELS)[number];
 
 const SETTINGS_PANEL_LABELS: Record<SettingsPanel, string> = {
   profile: "Personal info",
   agent: "Agent info",
+  skills: "Skills",
   account: "Account & data",
   usage: "Usage",
 };
@@ -16,6 +17,7 @@ const SETTINGS_PANEL_LABELS: Record<SettingsPanel, string> = {
 export const SETTINGS_PANEL_HREF: Record<SettingsPanel, string> = {
   profile: `${APP_BASE}/settings/profile`,
   agent: `${APP_BASE}/settings/agent`,
+  skills: `${APP_BASE}/settings/skills`,
   account: `${APP_BASE}/settings/account`,
   usage: `${APP_BASE}/settings/usage`,
 };
@@ -37,6 +39,12 @@ export const SETTINGS_MENU_ITEMS: {
     label: SETTINGS_PANEL_LABELS.agent,
     icon: Bot,
     href: SETTINGS_PANEL_HREF.agent,
+  },
+  {
+    id: "skills",
+    label: SETTINGS_PANEL_LABELS.skills,
+    icon: Sparkles,
+    href: SETTINGS_PANEL_HREF.skills,
   },
   {
     id: "account",

@@ -55,7 +55,7 @@ supabase link --project-ref <your-ref>
 npm run db:migrate
 ```
 
-Without Supabase, Koraku can run in demo mode with local files under `.koraku/`.
+Koraku Cloud requires Supabase for signed-in users (personalization, chat history, skills). SDK-only mode (`KORAKU_SERVER_APP=sdk`) may still use local `.koraku/` files — see [docs/SDK.md](docs/SDK.md).
 
 ## What Koraku Cloud includes
 
