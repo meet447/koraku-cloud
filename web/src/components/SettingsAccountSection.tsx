@@ -8,6 +8,8 @@ import { KorakuButton } from "@/components/KorakuButton";
 import { errorMessage } from "@/lib/error-message";
 import { korakuUi } from "@/lib/koraku-ui";
 import { KORAKU_COPY } from "@/lib/korakuBrand";
+import { resetOnboardingClientState } from "@/lib/onboarding";
+import { invalidatePersonalizationCache } from "@/lib/koraku-personalization";
 
 export function SettingsAccountSection({
   embedded = false,
@@ -55,7 +57,9 @@ export function SettingsAccountSection({
       const r = await fetch("/api/account/delete-data", { method: "POST" });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || `Delete failed (${r.status})`);
-      setMessage(data?.note || "Koraku app data deleted.");
+      invalidatePersonalizationCache();
+      resetOnboardingClientState();
+      setMessage(data?.note || "Koraku app data deleted. Reload to start onboarding again.");
     } catch (e) {
       setError(errorMessage(e, "Delete failed"));
     } finally {

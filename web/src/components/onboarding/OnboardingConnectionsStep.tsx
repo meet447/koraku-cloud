@@ -9,6 +9,7 @@ import { ONBOARDING_CONNECTION_SLUGS } from "@/lib/onboarding";
 import { toolkitIconUrl } from "@/lib/toolkit-icons";
 import { isToolkitEnabled } from "@/lib/connections";
 import { KorakuAlert } from "@/components/KorakuAlert";
+import { OnboardingConnectionsSkeleton } from "@/components/onboarding/OnboardingSkeleton";
 
 type Overview = {
   configured: boolean;
@@ -26,7 +27,7 @@ type CatalogRow = {
   icon_slug: string;
 };
 
-export function OnboardingConnectionsStep() {
+export function OnboardingConnectionsStep({ disabled = false }: { disabled?: boolean }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [catalogItems, setCatalogItems] = useState<CatalogRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,11 +96,11 @@ export function OnboardingConnectionsStep() {
   }
 
   if (loading) {
-    return <p className="text-sm font-medium text-koraku-muted">Loading integrations…</p>;
+    return <OnboardingConnectionsSkeleton count={ONBOARDING_CONNECTION_SLUGS.length} />;
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {error ? <KorakuAlert variant="error">{error}</KorakuAlert> : null}
 
       {overview && !overview.configured ? (
@@ -108,7 +109,7 @@ export function OnboardingConnectionsStep() {
         </KorakuAlert>
       ) : null}
 
-      <ul className="grid gap-3 sm:grid-cols-2">
+      <ul className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
         {suggested.map((toolkit) => {
           const enabled = isToolkitEnabled(overview, toolkit.slug);
           const busted = iconBroken[toolkit.slug];
@@ -143,7 +144,7 @@ export function OnboardingConnectionsStep() {
               ) : (
                 <button
                   type="button"
-                  disabled={!overview?.configured || connecting === toolkit.slug}
+                  disabled={disabled || !overview?.configured || connecting === toolkit.slug}
                   onClick={() => void connectToolkit(toolkit.slug)}
                   className={clsx(
                     "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition",

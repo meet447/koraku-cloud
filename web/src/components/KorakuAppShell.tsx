@@ -4,7 +4,6 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -19,12 +18,17 @@ import {
   isOnboardingRoute,
   ONBOARDING_PATH,
 } from "@/lib/app-path";
-import { loadPersonalization } from "@/lib/koraku-personalization";
 import {
+  invalidatePersonalizationCache,
+  loadPersonalization,
+} from "@/lib/koraku-personalization";
+import {
+  clearOnboardingClientState,
   hasPersonalizationOnboardingProfile,
   isOnboardingComplete,
   markOnboardingComplete,
   ONBOARDING_COMPLETE_EVENT,
+  ONBOARDING_RESET_EVENT,
 } from "@/lib/onboarding";
 import { AppChrome } from "@/components/AppChrome";
 import { ChatConversation } from "@/components/ChatApp";
@@ -34,72 +38,82 @@ import { SetupStatusBanner } from "@/components/SetupStatusBanner";
 function OnboardingGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
   const router = useRouter();
-  // Start unresolved on server and client so hydration matches; sync from storage after mount.
   const [complete, setComplete] = useState<boolean | null>(null);
-
-  // Re-sync before paint on navigation so finishing onboarding cannot bounce back to step 1.
-  useLayoutEffect(() => {
-    if (isOnboardingComplete()) {
-      setComplete(true);
-    }
-  }, [pathname]);
+  const [checkNonce, setCheckNonce] = useState(0);
+  const gateResolvedRef = useRef(false);
 
   useEffect(() => {
-    const onDone = () => setComplete(true);
+    const onDone = () => {
+      gateResolvedRef.current = true;
+      setComplete(true);
+    };
+    const onReset = () => {
+      gateResolvedRef.current = false;
+      invalidatePersonalizationCache();
+      setComplete(null);
+      setCheckNonce((n) => n + 1);
+    };
     window.addEventListener(ONBOARDING_COMPLETE_EVENT, onDone);
-    return () => window.removeEventListener(ONBOARDING_COMPLETE_EVENT, onDone);
+    window.addEventListener(ONBOARDING_RESET_EVENT, onReset);
+    return () => {
+      window.removeEventListener(ONBOARDING_COMPLETE_EVENT, onDone);
+      window.removeEventListener(ONBOARDING_RESET_EVENT, onReset);
+    };
   }, []);
 
   useEffect(() => {
-    if (isOnboardingComplete()) {
+    if (gateResolvedRef.current && isOnboardingComplete()) {
       setComplete(true);
       return;
     }
 
     let cancelled = false;
-    void loadPersonalization()
+    void loadPersonalization({ force: !gateResolvedRef.current })
       .then((data) => {
         if (cancelled) return;
+        gateResolvedRef.current = true;
         const profileComplete = hasPersonalizationOnboardingProfile(data.memory);
-        if (profileComplete) markOnboardingComplete();
-        setComplete(profileComplete);
+        if (profileComplete) {
+          markOnboardingComplete();
+          setComplete(true);
+          return;
+        }
+        clearOnboardingClientState();
+        setComplete(false);
       })
       .catch(() => {
-        if (!cancelled) setComplete(false);
+        if (cancelled) return;
+        gateResolvedRef.current = true;
+        clearOnboardingClientState();
+        setComplete(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [pathname]);
+  }, [pathname, checkNonce]);
 
   const onOnboarding = isOnboardingRoute(pathname);
   const inApp = isAppRoute(pathname);
   const resolving = complete === null;
+  const redirectToApp = !resolving && onOnboarding && complete;
+  const redirectToOnboarding = !resolving && inApp && !onOnboarding && !complete;
 
-  if (!resolving) {
-    if (onOnboarding && complete) {
+  useEffect(() => {
+    if (redirectToApp) {
       router.replace(APP_BASE);
-      return <KorakuAppLoading />;
+      return;
     }
-    if (inApp && !onOnboarding && !complete) {
+    if (redirectToOnboarding) {
       router.replace(ONBOARDING_PATH);
-      return <KorakuAppLoading />;
     }
-  }
+  }, [redirectToApp, redirectToOnboarding, router]);
 
-  if (resolving) {
+  if (resolving || redirectToApp || redirectToOnboarding) {
     return <KorakuAppLoading />;
   }
 
   if (onOnboarding) {
-    if (complete) {
-      return null;
-    }
     return <div className="h-[100dvh] overflow-y-auto bg-white text-koraku-ink">{children}</div>;
-  }
-
-  if (inApp && !complete) {
-    return <KorakuAppLoading />;
   }
 
   return <>{children}</>;

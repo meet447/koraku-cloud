@@ -6,16 +6,31 @@ const PREFERENCES_SECTION_HEADER = "## Preferences";
 const PROFILE_SAFETY_LINE =
   "- When suggesting external actions, verify the target app/account and ask for confirmation before sending or changing data.";
 
+export type ProfileLinkField = {
+  kind: "linkedin" | "x" | "custom";
+  url: string;
+  label?: string;
+};
+
+export type ProfileLinkSummaryField = {
+  label: string;
+  summary: string;
+};
+
 export type UserProfileFields = {
   userName: string;
   about: string;
   helpWith: string[];
+  profileLinks: ProfileLinkField[];
+  linkSummaries: ProfileLinkSummaryField[];
 };
 
 export const emptyUserProfile = (): UserProfileFields => ({
   userName: "",
   about: "",
   helpWith: [],
+  profileLinks: [],
+  linkSummaries: [],
 });
 
 export function parseMemorySections(memory: string): {
@@ -49,9 +64,24 @@ function parseProfileChunk(chunk: string): UserProfileFields {
   let userName = "";
   let about = "";
   let helpWith: string[] = [];
+  const profileLinks: ProfileLinkField[] = [];
+  const linkSummaries: ProfileLinkSummaryField[] = [];
+  let inLinkSummaries = false;
 
   for (const line of chunk.split("\n")) {
     const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (trimmed === "- Link summaries:") {
+      inLinkSummaries = true;
+      continue;
+    }
+    if (inLinkSummaries) {
+      const match = trimmed.match(/^- (.+):\s*(.+)$/);
+      if (match) {
+        linkSummaries.push({ label: match[1].trim(), summary: match[2].trim() });
+      }
+      continue;
+    }
     if (trimmed.startsWith("- User name:")) {
       userName = trimmed.slice("- User name:".length).trim();
     } else if (trimmed.startsWith("- About:")) {
@@ -62,10 +92,39 @@ function parseProfileChunk(chunk: string): UserProfileFields {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
+    } else if (trimmed.startsWith("- Public links:")) {
+      const payload = trimmed.slice("- Public links:".length).trim();
+      for (const part of payload.split(";")) {
+        const piece = part.trim();
+        if (!piece) continue;
+        const idx = piece.indexOf(":");
+        if (idx < 0) continue;
+        const label = piece.slice(0, idx).trim();
+        const url = piece.slice(idx + 1).trim();
+        if (!url) continue;
+        const lower = label.toLowerCase();
+        const kind =
+          lower === "linkedin" ? "linkedin" : lower === "x" ? "x" : ("custom" as const);
+        profileLinks.push({
+          kind,
+          url,
+          label: kind === "custom" ? label : undefined,
+        });
+      }
     }
   }
 
-  return { userName, about, helpWith };
+  return { userName, about, helpWith, profileLinks, linkSummaries };
+}
+
+function formatPublicLinks(links: ProfileLinkField[]): string {
+  return links
+    .map((link) => {
+      const label =
+        link.kind === "linkedin" ? "LinkedIn" : link.kind === "x" ? "X" : link.label?.trim() || "Link";
+      return `${label}: ${link.url}`;
+    })
+    .join("; ");
 }
 
 export function buildMemoryFromSections(
@@ -76,6 +135,11 @@ export function buildMemoryFromSections(
     PROFILE_SECTION_HEADER,
     profile.userName.trim() ? `- User name: ${profile.userName.trim()}` : "",
     profile.about.trim() ? `- About: ${profile.about.trim()}` : "",
+    profile.profileLinks.length
+      ? `- Public links: ${formatPublicLinks(profile.profileLinks)}`
+      : "",
+    profile.linkSummaries.length ? "- Link summaries:" : "",
+    ...profile.linkSummaries.map((row) => `- ${row.label}: ${row.summary}`),
     profile.helpWith.length
       ? `- Koraku should help with: ${profile.helpWith.join(", ")}`
       : "",

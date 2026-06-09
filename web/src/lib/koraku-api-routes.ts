@@ -123,6 +123,11 @@ export const personalization = createKorakuFixedProxy({
   methods: ["GET", "PUT"] as const,
 });
 
+export const profileEnrich = createKorakuFixedProxy({
+  upstreamPath: "/api/profile/enrich",
+  methods: ["POST"] as const,
+});
+
 export const memoryGraph = createKorakuFixedProxy({
   upstreamPath: "/api/memory/graph",
   methods: ["GET"] as const,

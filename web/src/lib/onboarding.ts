@@ -3,7 +3,15 @@ import {
   buildMemoryFromSections,
   parseMemorySections,
   PROFILE_SECTION_HEADER,
+  type ProfileLinkSummaryField,
 } from "@/lib/personalization-memory";
+import {
+  collectProfileLinks,
+  defaultLabelForLinkKind,
+  emptyProfileLinkFormState,
+  profileLinksToFormState,
+  type ProfileLinkFormState,
+} from "@/lib/profile-links";
 
 const ONBOARDING_DONE_KEY = "koraku_onboarding_done";
 const ONBOARDING_DRAFT_KEY = "koraku_onboarding_draft";
@@ -23,7 +31,12 @@ export type OnboardingStepId = (typeof ONBOARDING_STEP_IDS)[number];
 export type OnboardingFormData = {
   userName: string;
   about: string;
+  additionalInfo: string;
   helpWith: string[];
+  profileLinksForm: ProfileLinkFormState;
+  linkSummaries: ProfileLinkSummaryField[];
+  /** True after Describe yourself was generated; shows read-only profile until Start over. */
+  aboutProfileReady: boolean;
   agentName: string;
   preferences: string;
   persona: string;
@@ -77,7 +90,8 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
   {
     id: "about",
     title: "What do you do?",
-    description: "A short intro helps Koraku tailor research, planning, and automations.",
+    description:
+      "Add links and anything else we should know — Koraku drafts your About in your voice when you continue.",
   },
   {
     id: "agent-name",
@@ -104,7 +118,11 @@ export const ONBOARDING_STEPS: ReadonlyArray<{
 export const defaultOnboardingFormData = (): OnboardingFormData => ({
   userName: "",
   about: "",
+  additionalInfo: "",
   helpWith: [ONBOARDING_HELP_OPTIONS[0]],
+  profileLinksForm: emptyProfileLinkFormState(),
+  linkSummaries: [],
+  aboutProfileReady: false,
   agentName: "Koraku",
   preferences: ONBOARDING_PREFERENCE_SUGGESTIONS[0],
   persona: ONBOARDING_PERSONA_SUGGESTIONS[0],
@@ -120,6 +138,7 @@ export function isOnboardingComplete(): boolean {
 }
 
 export const ONBOARDING_COMPLETE_EVENT = "koraku-onboarding-complete";
+export const ONBOARDING_RESET_EVENT = "koraku-onboarding-reset";
 
 export function markOnboardingComplete(): void {
   try {
@@ -137,6 +156,16 @@ export function clearOnboardingClientState(): void {
     window.localStorage.removeItem(ONBOARDING_DONE_KEY);
     window.localStorage.removeItem(STARTER_PROMPTS_KEY);
     window.sessionStorage.removeItem(ONBOARDING_DRAFT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Clear local onboarding flags and notify the app shell to re-check server profile. */
+export function resetOnboardingClientState(): void {
+  clearOnboardingClientState();
+  try {
+    window.dispatchEvent(new Event(ONBOARDING_RESET_EVENT));
   } catch {
     /* ignore */
   }
@@ -166,7 +195,44 @@ export function loadOnboardingDraft(): OnboardingDraft | null {
     return {
       userName: typeof parsed.userName === "string" ? parsed.userName : base.userName,
       about: typeof parsed.about === "string" ? parsed.about : base.about,
+      additionalInfo:
+        typeof parsed.additionalInfo === "string" ? parsed.additionalInfo : base.additionalInfo,
       helpWith: Array.isArray(parsed.helpWith) ? parsed.helpWith.map(String) : base.helpWith,
+      profileLinksForm:
+        parsed.profileLinksForm && typeof parsed.profileLinksForm === "object"
+          ? {
+              linkedinUrl:
+                typeof (parsed.profileLinksForm as ProfileLinkFormState).linkedinUrl === "string"
+                  ? (parsed.profileLinksForm as ProfileLinkFormState).linkedinUrl
+                  : base.profileLinksForm.linkedinUrl,
+              xUrl:
+                typeof (parsed.profileLinksForm as ProfileLinkFormState).xUrl === "string"
+                  ? (parsed.profileLinksForm as ProfileLinkFormState).xUrl
+                  : base.profileLinksForm.xUrl,
+              customLinks: Array.isArray((parsed.profileLinksForm as ProfileLinkFormState).customLinks)
+                ? (parsed.profileLinksForm as ProfileLinkFormState).customLinks
+                    .slice(0, 3)
+                    .map((row) => ({
+                      label: typeof row?.label === "string" ? row.label : "Link",
+                      url: typeof row?.url === "string" ? row.url : "",
+                    }))
+                : base.profileLinksForm.customLinks,
+            }
+          : base.profileLinksForm,
+      aboutProfileReady:
+        typeof parsed.aboutProfileReady === "boolean"
+          ? parsed.aboutProfileReady
+          : Boolean(typeof parsed.about === "string" && parsed.about.trim()),
+      linkSummaries: Array.isArray(parsed.linkSummaries)
+        ? parsed.linkSummaries
+            .map((row) => {
+              if (!row || typeof row !== "object") return null;
+              const label = typeof row.label === "string" ? row.label : "";
+              const summary = typeof row.summary === "string" ? row.summary : "";
+              return label && summary ? { label, summary } : null;
+            })
+            .filter((row): row is ProfileLinkSummaryField => row !== null)
+        : base.linkSummaries,
       agentName: typeof parsed.agentName === "string" ? parsed.agentName : base.agentName,
       preferences: typeof parsed.preferences === "string" ? parsed.preferences : base.preferences,
       persona: typeof parsed.persona === "string" ? parsed.persona : base.persona,
@@ -198,6 +264,8 @@ export function buildPersonalizationFromOnboarding(
         userName: data.userName,
         about: data.about,
         helpWith: data.helpWith,
+        profileLinks: collectProfileLinks(data.profileLinksForm),
+        linkSummaries: data.linkSummaries,
       },
       data.preferences,
     ),
@@ -222,6 +290,51 @@ export function buildStarterPrompts(data: OnboardingFormData): string[] {
   return prompts;
 }
 
+export function hasAboutGenerationContext(data: OnboardingFormData): boolean {
+  return (
+    collectProfileLinks(data.profileLinksForm).length > 0 ||
+    Boolean(data.additionalInfo.trim()) ||
+    data.helpWith.length > 0
+  );
+}
+
+export function isAboutProfileReady(data: OnboardingFormData): boolean {
+  return data.aboutProfileReady && Boolean(data.about.trim());
+}
+
+export function shouldAutoGenerateAboutOnNext(data: OnboardingFormData): boolean {
+  return !isAboutProfileReady(data) && hasAboutGenerationContext(data);
+}
+
+export function resetAboutProfileFields(): Pick<
+  OnboardingFormData,
+  "about" | "linkSummaries" | "aboutProfileReady"
+> {
+  return {
+    about: "",
+    linkSummaries: [],
+    aboutProfileReady: false,
+  };
+}
+
+export function pendingProfileLinksForDisplay(data: OnboardingFormData) {
+  return collectProfileLinks(data.profileLinksForm).map((link) => ({
+    label: defaultLabelForLinkKind(link.kind, link.label),
+    url: link.url,
+  }));
+}
+
+export function linkSummariesFromResults(
+  linkResults: Array<{ label: string; summary: string | null }>,
+): ProfileLinkSummaryField[] {
+  return linkResults
+    .map((row) => {
+      const text = row.summary?.trim();
+      return text ? { label: row.label, summary: text } : null;
+    })
+    .filter((row): row is ProfileLinkSummaryField => row !== null);
+}
+
 export function validateOnboardingStep(
   stepId: OnboardingStepId,
   data: OnboardingFormData,
@@ -230,11 +343,17 @@ export function validateOnboardingStep(
     case "name":
       if (!data.userName.trim()) return "Please enter your name.";
       return null;
-    case "about":
-      if (!data.about.trim()) return "Tell us a little about what you do.";
-      if (data.about.trim().length < 8) return "Add at least a short sentence.";
+    case "about": {
+      if (isAboutProfileReady(data)) {
+        if (data.helpWith.length === 0) return "Pick at least one way Koraku should help.";
+        return null;
+      }
+      if (!hasAboutGenerationContext(data)) {
+        return "Add links, additional context, or pick how Koraku should help.";
+      }
       if (data.helpWith.length === 0) return "Pick at least one way Koraku should help.";
       return null;
+    }
     case "agent-name":
       if (!data.agentName.trim()) return "Give your agent a name.";
       return null;
