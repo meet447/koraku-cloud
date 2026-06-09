@@ -6,6 +6,7 @@ Supports:
 - **ES256 / RS256 / ES384 / PS256** via the project JWKS URL derived from the token ``iss``
   (asymmetric signing; no shared secret required on the backend).
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,7 +26,9 @@ _ASYMMETRIC_ALGS = frozenset({"ES256", "RS256", "ES384", "PS256"})
 
 
 def supabase_jwt_secret() -> str:
-    return (settings.supabase_jwt_secret or os.environ.get("SUPABASE_JWT_SECRET", "") or "").strip()
+    return (
+        settings.supabase_jwt_secret or os.environ.get("SUPABASE_JWT_SECRET", "") or ""
+    ).strip()
 
 
 @dataclass(frozen=True)
@@ -67,8 +70,19 @@ def _iss_to_jwks_url(iss: str) -> str | None:
         host = (urlparse(s).hostname or "").lower()
     except ValueError:
         return None
-    if not host.endswith(".supabase.co"):
+
+    expected_url = (settings.supabase_url or "").strip().rstrip("/")
+    if not expected_url:
         return None
+
+    try:
+        expected_host = (urlparse(expected_url).hostname or "").lower()
+    except ValueError:
+        return None
+
+    if host != expected_host:
+        return None
+
     return f"{s}/.well-known/jwks.json"
 
 
