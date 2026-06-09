@@ -389,7 +389,7 @@ def tools_for_artifact_worker(
 
     if kind == "artifact_full" and artifact_type == "document":
         allowed.update({"Read", "WebSearch", "WebFetch"})
-    elif artifact_type in ("spreadsheet", "pdf"):
+    elif artifact_type in {"spreadsheet", "pdf"}:
         allowed.add("Read")
 
     build_by_name = {t.name: t for t in ARTIFACT_BUILD_TOOLS}

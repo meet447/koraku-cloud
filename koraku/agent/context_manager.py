@@ -249,9 +249,9 @@ class ContextManager:
                             name = block.get("name", "")
                             if "Search" in name or "search" in name:
                                 search_count += 1
-                            elif name in ("WebPage", "WebFetch", "Firecrawl", "Fetch"):
+                            elif name in {"WebPage", "WebFetch", "Firecrawl", "Fetch"}:
                                 fetch_count += 1
-                            elif name in ("Read", "Glob", "Grep"):
+                            elif name in {"Read", "Glob", "Grep"}:
                                 file_count += 1
             elif msg.role == "user" and isinstance(msg.content, list):
                 for block in msg.content:

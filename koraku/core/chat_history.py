@@ -37,7 +37,7 @@ def client_history_rows_to_agent_messages(rows: list[dict[str, Any]]) -> list[Ag
     for row in rows:
         role = str(row.get("role") or "").strip()
         text = str(row.get("text") or "").strip()
-        if role not in ("user", "assistant") or not text:
+        if role not in {"user", "assistant"} or not text:
             continue
         out.append(AgentMessage(role=role, content=[{"type": "text", "text": text}]))
     return out

@@ -36,7 +36,7 @@ def bubble_for_tool(tool: str, tool_input: Any) -> str | None:
     if name == "WebSearch":
         q = _s(o.get("query"))
         return _trunc(f"Searching the web{f' for “{q}”' if q else ''}…")
-    if name in ("WebFetch", "WebPage", "Firecrawl"):
+    if name in {"WebFetch", "WebPage", "Firecrawl"}:
         url = _s(o.get("url"))
         return _trunc(f"Opening a page{f' ({url})' if url else ''}…")
     if name == "FirecrawlMap":

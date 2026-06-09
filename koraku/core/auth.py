@@ -31,7 +31,7 @@ class AuthResult:
 
     @property
     def ok(self) -> bool:
-        return self.reason in ("ok", "ok_anonymous")
+        return self.reason in {"ok", "ok_anonymous"}
 
 
 def auth_error_detail(reason: str) -> str:

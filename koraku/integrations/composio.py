@@ -275,7 +275,7 @@ def _normalize_input_schema(raw: dict[str, Any]) -> dict[str, Any]:
     if raw.get("type") == "object":
         return raw
     if "properties" in raw:
-        return {"type": "object", **{k: v for k, v in raw.items() if k in ("properties", "required", "additionalProperties", "description")}}
+        return {"type": "object", **{k: v for k, v in raw.items() if k in {"properties", "required", "additionalProperties", "description"}}}
     return {"type": "object", "properties": dict(raw), "required": []}
 
 

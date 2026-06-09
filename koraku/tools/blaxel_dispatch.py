@@ -106,7 +106,7 @@ def _resolve_grep_target(path: str, include: str) -> tuple[str, str | None]:
     """Map grep path to a directory + optional file pattern (Blaxel fs.grep expects a directory)."""
     base = _to_sandbox_path(path)
     raw = (path or "").strip().replace("\\", "/")
-    file_pat = None if include in ("*", "**/*") else include
+    file_pat = None if include in {"*", "**/*"} else include
     if raw and not raw.endswith("/") and "." in posixpath.basename(base):
         parent = posixpath.dirname(base)
         if parent and parent not in (".", base):
@@ -155,7 +155,7 @@ async def blaxel_write_if_active(
         path = _to_sandbox_path(file_path)
         try:
             parent = posixpath.dirname(path)
-            if parent and parent not in (".", "/"):
+            if parent and parent not in {".", "/"}:
                 await sb.fs.mkdir(parent, permissions="0755")
         except Exception:
             pass

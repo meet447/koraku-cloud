@@ -75,7 +75,7 @@ def classify_media_url(url: str) -> str:
         return "audio"
     if ext in IMAGE_EXTENSIONS:
         return "image"
-    if ext in (".pdf", ".doc", ".docx", ".txt", ".vcf"):
+    if ext in {".pdf", ".doc", ".docx", ".txt", ".vcf"}:
         return "other"
     return "other"
 

@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _retryable_http_status(status_code: int) -> bool:
-    return status_code in (408, 409, 425, 429, 500, 502, 503, 504)
+    return status_code in {408, 409, 425, 429, 500, 502, 503, 504}
 
 
 def openai_delta_content_to_str(raw: Any) -> str:

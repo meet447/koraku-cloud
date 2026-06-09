@@ -28,7 +28,7 @@ def _resolve_lazy_checks() -> tuple[Any, str]:
 
 
 def __getattr__(name: str) -> Any:
-    if name in ("_AGENT", "_MODE"):
+    if name in {"_AGENT", "_MODE"}:
         agent, mode = _resolve_lazy_checks()
         if name == "_AGENT":
             return agent

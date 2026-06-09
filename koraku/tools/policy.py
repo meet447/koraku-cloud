@@ -9,7 +9,7 @@ def tool_stdout_indicates_error(text: str, *, tool_name: str) -> bool:
     s = raw.strip()
     if not s:
         # Empty fetch/search is almost never usable grounding.
-        return tool_name in ("WebSearch", "WebFetch", "WebPage")
+        return tool_name in {"WebSearch", "WebFetch", "WebPage"}
 
     lowered = s.lower()
 

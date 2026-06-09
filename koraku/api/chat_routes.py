@@ -68,7 +68,7 @@ def normalize_stream_execution_target(value: str | None) -> ExecutionTarget:
     if is_cloud_configured():
         return "cloud"
     raw = (value or settings.default_execution_target or "local").strip().lower()
-    if raw in ("local", "server", "cloud"):
+    if raw in {"local", "server", "cloud"}:
         return raw  # type: ignore[return-value]
     return "local"
 

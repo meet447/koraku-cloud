@@ -38,7 +38,7 @@ def _blaxel_error_looks_like_auth_failure(exc: BaseException) -> bool:
     resp = getattr(exc, "response", None)
     if resp is not None:
         sc = getattr(resp, "status_code", None)
-        if sc in (401, 403):
+        if sc in {401, 403}:
             return True
         try:
             txt = getattr(resp, "text", "") or ""
