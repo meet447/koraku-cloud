@@ -119,10 +119,13 @@ export function isOnboardingComplete(): boolean {
   }
 }
 
+export const ONBOARDING_COMPLETE_EVENT = "koraku-onboarding-complete";
+
 export function markOnboardingComplete(): void {
   try {
     window.localStorage.setItem(ONBOARDING_DONE_KEY, "1");
     window.sessionStorage.removeItem(ONBOARDING_DRAFT_KEY);
+    window.dispatchEvent(new Event(ONBOARDING_COMPLETE_EVENT));
   } catch {
     /* ignore */
   }

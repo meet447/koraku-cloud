@@ -43,8 +43,16 @@ export async function supabaseAuthHeaders(): Promise<Record<string, string>> {
   const h: Record<string, string> = {};
   try {
     const supabase = createBrowserSupabaseClient();
-    const { data } = await supabase.auth.getSession();
-    rememberAuthorization(data.session?.access_token);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return h;
+    }
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    rememberAuthorization(session?.access_token);
     if (cachedToken) {
       h.Authorization = `Bearer ${cachedToken}`;
     }

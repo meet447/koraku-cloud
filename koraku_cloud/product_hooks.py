@@ -116,3 +116,21 @@ def extra_agent_tools() -> list[Any]:
 
         tools.append(IMESSAGE_SEND_TOOL)
     return tools
+
+
+def configure_automation_scheduler(agent: Any | None) -> None:
+    from koraku_cloud.automations import scheduler as automation_scheduler
+
+    automation_scheduler.configure_automation_scheduler(agent)
+
+
+def start_automation_scheduler() -> None:
+    from koraku_cloud.automations import scheduler as automation_scheduler
+
+    automation_scheduler.start_automation_scheduler()
+
+
+def shutdown_automation_scheduler() -> None:
+    from koraku_cloud.automations import scheduler as automation_scheduler
+
+    automation_scheduler.shutdown_automation_scheduler()

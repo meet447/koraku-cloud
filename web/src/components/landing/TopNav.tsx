@@ -31,8 +31,10 @@ export function TopNav() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setLoggedIn(Boolean(session?.user));
+    } = supabase.auth.onAuthStateChange(() => {
+      void supabase.auth.getUser().then(({ data }) => {
+        if (!cancelled) setLoggedIn(Boolean(data.user));
+      });
     });
 
     return () => {

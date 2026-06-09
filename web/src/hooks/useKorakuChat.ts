@@ -133,13 +133,13 @@ export function useKorakuChat() {
       try {
         const supabase = createBrowserSupabaseClient();
         const threadsPromise = fetch("/api/chat/threads", { credentials: "include" });
-        const sessionPromise = supabase.auth.getSession();
-        const [{ data: { session } }, tr] = await Promise.all([
-          sessionPromise,
+        const userPromise = supabase.auth.getUser();
+        const [{ data: { user } }, tr] = await Promise.all([
+          userPromise,
           threadsPromise,
         ]);
         if (cancelled) return;
-        if (!session) {
+        if (!user) {
           const id = uid();
           persistenceEnabledRef.current = false;
           setSessions([{ id, title: "New chat" }]);

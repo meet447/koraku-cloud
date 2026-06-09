@@ -24,6 +24,7 @@ import {
   hasPersonalizationOnboardingProfile,
   isOnboardingComplete,
   markOnboardingComplete,
+  ONBOARDING_COMPLETE_EVENT,
 } from "@/lib/onboarding";
 import { AppChrome } from "@/components/AppChrome";
 import { ChatConversation } from "@/components/ChatApp";
@@ -32,16 +33,30 @@ import { SetupStatusBanner } from "@/components/SetupStatusBanner";
 function OnboardingGate({ children }: { children: ReactNode }) {
   const pathname = usePathname() || "";
   const router = useRouter();
-  const [complete, setComplete] = useState<boolean | null>(null);
+  const [complete, setComplete] = useState<boolean | null>(() => {
+    if (typeof window === "undefined") return null;
+    return isOnboardingComplete() ? true : null;
+  });
 
+  // Re-sync before paint on navigation so finishing onboarding cannot bounce back to step 1.
   useLayoutEffect(() => {
     if (isOnboardingComplete()) {
       setComplete(true);
     }
+  }, [pathname]);
+
+  useEffect(() => {
+    const onDone = () => setComplete(true);
+    window.addEventListener(ONBOARDING_COMPLETE_EVENT, onDone);
+    return () => window.removeEventListener(ONBOARDING_COMPLETE_EVENT, onDone);
   }, []);
 
   useEffect(() => {
-    if (complete !== null) return;
+    if (isOnboardingComplete()) {
+      setComplete(true);
+      return;
+    }
+
     let cancelled = false;
     void loadPersonalization()
       .then((data) => {
@@ -56,7 +71,7 @@ function OnboardingGate({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [complete]);
+  }, [pathname]);
 
   const onOnboarding = isOnboardingRoute(pathname);
   const inApp = isAppRoute(pathname);

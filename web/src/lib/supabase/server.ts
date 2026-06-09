@@ -41,9 +41,9 @@ export async function requireSupabaseAuth(): Promise<
 > {
   const supabase = await createServerSupabase();
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const userId = session?.user?.id;
+    data: { user },
+  } = await supabase.auth.getUser();
+  const userId = user?.id;
   if (!userId) return { ok: false };
   return { ok: true, supabase, userId };
 }

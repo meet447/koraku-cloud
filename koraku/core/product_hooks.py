@@ -10,6 +10,9 @@ AfterTurnMemoryFn = Callable[..., Awaitable[None]]
 ResolveTenantOrgFn = Callable[[Any, str], tuple[str | None, str | None]]
 HealthDetailExtrasFn = Callable[[], dict[str, object]]
 ExtraAgentToolsFn = Callable[[], list[Any]]
+ConfigureAutomationSchedulerFn = Callable[[Any | None], None]
+StartAutomationSchedulerFn = Callable[[], None]
+ShutdownAutomationSchedulerFn = Callable[[], None]
 
 _registered: ProductHooks | None = None
 
@@ -22,6 +25,9 @@ class ProductHooks:
     resolve_tenant_org: ResolveTenantOrgFn | None = None
     health_detail_extras: HealthDetailExtrasFn | None = None
     extra_agent_tools: ExtraAgentToolsFn | None = None
+    configure_automation_scheduler: ConfigureAutomationSchedulerFn | None = None
+    start_automation_scheduler: StartAutomationSchedulerFn | None = None
+    shutdown_automation_scheduler: ShutdownAutomationSchedulerFn | None = None
 
 
 def register_product_hooks(hooks: ProductHooks) -> None:

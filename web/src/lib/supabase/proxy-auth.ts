@@ -33,9 +33,9 @@ export async function getSessionUserIdFromCookies(): Promise<string | null> {
     const supabase = await createCookieSupabaseClient();
     if (!supabase) return null;
     const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.user?.id ?? null;
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user?.id ?? null;
   } catch {
     return null;
   }
@@ -53,13 +53,22 @@ export async function applySupabaseBearerFromCookies(headers: Headers): Promise<
   }
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
     return false;
   }
-  headers.set("Authorization", `Bearer ${session.access_token}`);
-  await applyTenantHeadersFromCookies(headers);
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const accessToken = session?.access_token;
+  if (!accessToken) {
+    return false;
+  }
+
+  headers.set("Authorization", `Bearer ${accessToken}`);
+  await applyTenantHeadersFromCookies(headers, supabase, user.id);
   return true;
 }
 

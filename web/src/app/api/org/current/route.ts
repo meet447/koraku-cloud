@@ -1,8 +1,7 @@
-import { cookies } from "next/headers";
-import { ORG_ID_COOKIE } from "@/lib/tenant/constants";
 import {
   ensureDefaultOrgId,
   listUserOrgs,
+  persistOrgIdCookie,
 } from "@/lib/tenant/server";
 import { requireAuthedOrg } from "@/lib/supabase/route-auth";
 import { requireSupabaseAuth } from "@/lib/supabase/server";
@@ -60,14 +59,7 @@ export async function POST(req: Request) {
     if (!data?.org_id) {
       return Response.json({ error: "Forbidden" }, { status: 403 });
     }
-    const jar = await cookies();
-    jar.set(ORG_ID_COOKIE, requested, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-    });
+    await persistOrgIdCookie(requested);
     return Response.json({ orgId: requested });
   }
 
@@ -75,13 +67,6 @@ export async function POST(req: Request) {
   if (!orgId) {
     return Response.json({ error: "Could not create organization" }, { status: 503 });
   }
-  const jar = await cookies();
-  jar.set(ORG_ID_COOKIE, orgId, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  });
+  await persistOrgIdCookie(orgId);
   return Response.json({ orgId });
 }

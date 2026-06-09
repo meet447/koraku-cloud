@@ -22,6 +22,9 @@ def bootstrap_cloud() -> tuple[SdkSettings, CloudSettings]:
             resolve_tenant_org=cloud_product_hooks.resolve_tenant_org,
             health_detail_extras=cloud_product_hooks.health_detail_extras,
             extra_agent_tools=cloud_product_hooks.extra_agent_tools,
+            configure_automation_scheduler=cloud_product_hooks.configure_automation_scheduler,
+            start_automation_scheduler=cloud_product_hooks.start_automation_scheduler,
+            shutdown_automation_scheduler=cloud_product_hooks.shutdown_automation_scheduler,
         )
     )
     return sdk, cloud

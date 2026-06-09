@@ -31,7 +31,7 @@ const nav = [
   { href: `${APP_BASE}/memory`, label: "Memory", icon: Network },
   { href: `${APP_BASE}/connections`, label: "Connections", icon: Plug },
   { href: `${APP_BASE}/external`, label: "External", icon: MessageCircle },
-  { href: `${APP_BASE}/automations`, label: "Automations", icon: Wand2 },
+  { href: `${APP_BASE}/automations`, label: "Habits", icon: Wand2 },
 ];
 
 export function Sidebar({

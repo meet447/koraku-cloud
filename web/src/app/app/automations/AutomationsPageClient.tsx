@@ -3,13 +3,14 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MoreHorizontal, Pause, Play, Plus } from "lucide-react";
+import { MoreHorizontal, Pause, Pencil, Play, Plus } from "lucide-react";
 import clsx from "clsx";
 import { APP_BASE } from "@/lib/app-path";
 import { errorMessage } from "@/lib/error-message";
 import { korakuFetch, korakuFetchJson, korakuFetchOk } from "@/lib/koraku-fetch";
 import { automationToolkitIconUrl } from "@/lib/toolkit-icons";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { HabitFormPanel } from "@/components/HabitFormPanel";
 import {
   AutomationsPageSkeleton,
   AutomationsRunHistorySkeleton,
@@ -18,10 +19,22 @@ import { KorakuAlert } from "@/components/KorakuAlert";
 import { KorakuButton, korakuButtonClass } from "@/components/KorakuButton";
 import { KorakuSearchInput } from "@/components/KorakuSearchInput";
 import { formatAutomationScheduleLabel } from "@/lib/automation-schedule";
+import {
+  buildSchedulePreset,
+  defaultHabitFormState,
+  habitToFormState,
+  type ScheduleKind,
+} from "@/lib/habit-form";
+import {
+  buildHabitsAwaySummary,
+  humanHabitRunBadge,
+  humanHabitTriggerSummary,
+  humanizeHabitProgress,
+} from "@/lib/habit-runs";
 
-type ConfirmKind = "create" | "delete" | "run";
+type ConfirmKind = "create" | "save-edit" | "delete" | "run";
 
-type ScheduleKind = "every_n_minutes" | "daily" | "weekdays" | "weekly" | "custom";
+type FormPanelMode = "create" | "edit" | null;
 
 type Automation = {
   id: string;
@@ -43,6 +56,7 @@ type Automation = {
   consecutive_failures?: number;
   event_source?: "generic" | "composio";
   composio_trigger_slug?: string | null;
+  schedule_preset?: Record<string, unknown> | null;
 };
 
 type ComposioTriggerOption = {
@@ -66,51 +80,6 @@ type RunRow = {
   progress_detail?: string | null;
   outcome_label?: string | null;
 };
-
-function buildSchedulePreset(
-  kind: ScheduleKind,
-  opts: { everyN: number; hour: number; minute: number; dayOfWeek: number; cron: string },
-): Record<string, unknown> {
-  if (kind === "custom") {
-    return { kind: "custom", cron_expression: opts.cron.trim() };
-  }
-  if (kind === "every_n_minutes") {
-    return { kind, every_n_minutes: opts.everyN };
-  }
-  if (kind === "weekly") {
-    return { kind, hour: opts.hour, minute: opts.minute, day_of_week: opts.dayOfWeek };
-  }
-  return { kind, hour: opts.hour, minute: opts.minute };
-}
-
-
-const AUTOMATION_TEMPLATES = [
-  {
-    label: "Daily brief",
-    title: "Daily brief",
-    headline: "Morning calendar and inbox brief",
-    spec: "Every weekday morning, review today's calendar and important inbox items, then summarize priorities, conflicts, and follow-ups. Do not send or modify anything without explicit confirmation.",
-    cron: "0 8 * * 1-5",
-    toolkits: "GMAIL, GOOGLECALENDAR",
-  },
-  {
-    label: "Inbox summary",
-    title: "Inbox summary",
-    headline: "Summarize unread important email",
-    spec: "Summarize unread important emails, group them by action needed, and draft suggested replies without sending them.",
-    cron: "0 17 * * 1-5",
-    toolkits: "GMAIL",
-  },
-  {
-    label: "Weekly review",
-    title: "Weekly review",
-    headline: "Weekly second-brain review",
-    spec: "Every Friday, review recent notes, chats, and tasks. Produce a short review with wins, open loops, decisions, and next-week priorities.",
-    cron: "0 16 * * 5",
-    toolkits: "",
-  },
-] as const;
-
 
 function formatDayLabel(iso: string): string {
   const d = new Date(iso);
@@ -158,15 +127,6 @@ function triggerSubtitle(a: Automation): string {
   return `${label} · ${tz}`;
 }
 
-function runStatusBadge(run: RunRow): string | null {
-  if (run.status === "skipped") return "Skipped";
-  if (run.status === "running") return "Running";
-  if (run.outcome_label === "unchanged") return "Unchanged";
-  if (run.outcome_label === "changed") return "Updated";
-  if (run.outcome_label === "new") return "New result";
-  return null;
-}
-
 export function AutomationsPageClient() {
   const [items, setItems] = useState<Automation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -176,7 +136,8 @@ export function AutomationsPageClient() {
   const [loading, setLoading] = useState(true);
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [runsLoading, setRunsLoading] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
+  const [panelMode, setPanelMode] = useState<FormPanelMode>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -235,7 +196,7 @@ export function AutomationsPageClient() {
   }, [loadList]);
 
   useEffect(() => {
-    if (!showCreate || formTriggerMode !== "event" || formEventSource !== "composio") {
+    if (panelMode !== "create" || formTriggerMode !== "event" || formEventSource !== "composio") {
       return;
     }
     let cancelled = false;
@@ -264,7 +225,7 @@ export function AutomationsPageClient() {
     return () => {
       cancelled = true;
     };
-  }, [showCreate, formTriggerMode, formEventSource, composioTriggerSlug]);
+  }, [panelMode, formTriggerMode, formEventSource, composioTriggerSlug]);
 
   useEffect(() => {
     try {
@@ -294,6 +255,62 @@ export function AutomationsPageClient() {
     () => items.find((a) => a.id === selectedId) ?? null,
     [items, selectedId],
   );
+
+  const awaySummary = useMemo(() => buildHabitsAwaySummary(items), [items]);
+
+  function closeFormPanel() {
+    setPanelMode(null);
+    setEditingId(null);
+  }
+
+  function openCreatePanel() {
+    const defaults = defaultHabitFormState();
+    setFormTitle(defaults.formTitle);
+    setFormHeadline(defaults.formHeadline);
+    setFormSpec(defaults.formSpec);
+    setFormTz(defaults.formTz);
+    setScheduleKind(defaults.scheduleKind);
+    setScheduleEveryN(defaults.scheduleEveryN);
+    setScheduleHour(defaults.scheduleHour);
+    setScheduleMinute(defaults.scheduleMinute);
+    setScheduleDow(defaults.scheduleDow);
+    setFormCron(defaults.formCron);
+    setFormToolkits(defaults.formToolkits);
+    setFormTriggerMode(defaults.formTriggerMode);
+    setFormEventSource(defaults.formEventSource);
+    setComposioTriggerSlug(defaults.composioTriggerSlug);
+    setEditingId(null);
+    setPanelMode("create");
+  }
+
+  function openEditPanel(automation: Automation) {
+    const state = habitToFormState(automation);
+    setFormTitle(state.formTitle);
+    setFormHeadline(state.formHeadline);
+    setFormSpec(state.formSpec);
+    setFormTz(state.formTz);
+    setScheduleKind(state.scheduleKind);
+    setScheduleEveryN(state.scheduleEveryN);
+    setScheduleHour(state.scheduleHour);
+    setScheduleMinute(state.scheduleMinute);
+    setScheduleDow(state.scheduleDow);
+    setFormCron(state.formCron);
+    setFormToolkits(state.formToolkits);
+    setFormTriggerMode(state.formTriggerMode);
+    setFormEventSource(state.formEventSource);
+    setComposioTriggerSlug(state.composioTriggerSlug);
+    setEditingId(automation.id);
+    setPanelMode("edit");
+    setMenuOpen(false);
+  }
+
+  function parseToolkitsInput(): string[] {
+    return formToolkits
+      .split(/[,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => s.toUpperCase());
+  }
 
   useEffect(() => {
     const firstId = filtered[0]?.id;
@@ -372,16 +389,33 @@ export function AutomationsPageClient() {
     setPendingConfirm("create");
   }
 
+  function requestSaveEdit() {
+    setPendingConfirm("save-edit");
+  }
+
   const createSummary = useMemo(
     () =>
       [
-        `Title: ${formTitle.trim() || "Untitled automation"}`,
+        `Title: ${formTitle.trim() || "Untitled habit"}`,
         `Schedule: ${scheduleKind} (${formTz.trim()})`,
         formToolkits.trim() ? `Connected apps: ${formToolkits.trim()}` : "Connected apps: none specified",
         "",
-        "Koraku will run this in the background. The agent can use IMessageSend when a phone is linked in External.",
+        "Koraku will work on this in the background using your memory and connections.",
       ].join("\n"),
     [formTitle, formTz, formToolkits, scheduleKind],
+  );
+
+  const editSummary = useMemo(
+    () =>
+      [
+        `Title: ${formTitle.trim() || "Untitled habit"}`,
+        formTriggerMode === "scheduled"
+          ? `Schedule: ${scheduleKind} (${formTz.trim()})`
+          : "Trigger: event (unchanged)",
+        "",
+        "Saved changes apply to the next scheduled or manual run.",
+      ].join("\n"),
+    [formTitle, formTz, formTriggerMode, scheduleKind],
   );
 
   async function createAutomation() {
@@ -389,13 +423,9 @@ export function AutomationsPageClient() {
     setSaving(true);
     setError(null);
     try {
-      const toolkits = formToolkits
-        .split(/[,]+/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((s) => s.toUpperCase());
+      const toolkits = parseToolkitsInput();
       const body: Record<string, unknown> = {
-        title: formTitle.trim() || "Untitled automation",
+        title: formTitle.trim() || "Untitled habit",
         headline: formHeadline.trim(),
         natural_language_spec: formSpec.trim(),
         trigger_mode: formTriggerMode,
@@ -435,14 +465,49 @@ export function AutomationsPageClient() {
           token: created.webhook_token,
         });
       }
-      setShowCreate(false);
-      setFormTitle("");
-      setFormHeadline("");
-      setFormSpec("");
+      closeFormPanel();
       await loadList();
       setSelectedId(created.id);
     } catch (e) {
       setError(errorMessage(e, "Create failed"));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveHabitEdits() {
+    setPendingConfirm(null);
+    if (!editingId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const body: Record<string, unknown> = {
+        title: formTitle.trim() || "Untitled habit",
+        headline: formHeadline.trim(),
+        natural_language_spec: formSpec.trim(),
+        toolkits: parseToolkitsInput(),
+      };
+      if (formTriggerMode === "scheduled") {
+        body.timezone = formTz.trim();
+        body.schedule_preset = buildSchedulePreset(scheduleKind, {
+          everyN: scheduleEveryN,
+          hour: scheduleHour,
+          minute: scheduleMinute,
+          dayOfWeek: scheduleDow,
+          cron: formCron,
+        });
+      }
+      await korakuFetchJson<Automation>(`/koraku-api/api/automations/${editingId}`, {
+        method: "PATCH",
+        json: body,
+      });
+      closeFormPanel();
+      await loadList();
+      if (selectedId === editingId) {
+        void loadRuns(editingId);
+      }
+    } catch (e) {
+      setError(errorMessage(e, "Save failed"));
     } finally {
       setSaving(false);
     }
@@ -547,280 +612,96 @@ export function AutomationsPageClient() {
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex shrink-0 items-center justify-between border-b border-neutral-200/50 bg-white px-6 py-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-700">Automations</p>
-            <h1 className="mt-1 text-xl font-bold tracking-tight text-koraku-ink">Scheduled workflows</h1>
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-700">Habits</p>
+            <h1 className="mt-1 text-xl font-bold tracking-tight text-koraku-ink">Background work</h1>
           </div>
           <div className="flex items-center gap-2">
             <Link
               href={APP_BASE}
               className={korakuButtonClass({ variant: "secondary", size: "sm" })}
             >
-              Open chat
+              Talk to Koraku
             </Link>
             <KorakuButton
               size="sm"
-              onClick={() => setShowCreate((s) => !s)}
+              onClick={() => (panelMode === "create" ? closeFormPanel() : openCreatePanel())}
               className="inline-flex gap-2"
             >
               <Plus className="h-4 w-4" strokeWidth={2} />
-              New
+              New habit
             </KorakuButton>
           </div>
         </header>
 
-        {showCreate ? (
-          <div className="shrink-0 border-b border-neutral-200/60 bg-neutral-50/80 px-6 py-5">
-            <p className="text-sm font-semibold text-neutral-900">New automation</p>
-            <p className="mt-1 max-w-2xl text-xs font-medium text-neutral-500">
-              Automations run in the background on a schedule you define. Koraku uses your connections where needed.
-            </p>
-            <div className="mt-4 flex max-w-4xl flex-wrap gap-2">
-              {AUTOMATION_TEMPLATES.map((template) => (
-                <button
-                  key={template.label}
-                  type="button"
-                  onClick={() => {
-                    setFormTitle(template.title);
-                    setFormHeadline(template.headline);
-                    setFormSpec(template.spec);
-                    setScheduleKind("weekdays");
-                    setScheduleHour(8);
-                    setScheduleMinute(0);
-                    setFormCron(template.cron);
-                    setFormToolkits(template.toolkits);
-                  }}
-                  className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-bold text-orange-800 transition hover:bg-orange-100"
-                >
-                  Use template: {template.label}
-                </button>
-              ))}
-            </div>
-            <div className="mt-4 grid max-w-3xl gap-3 sm:grid-cols-2">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Title
-                <input
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-200"
-                  placeholder="e.g. Morning summary"
-                />
-              </label>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Headline (optional)
-                <input
-                  value={formHeadline}
-                  onChange={(e) => setFormHeadline(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-200"
-                  placeholder="Short label shown in the list"
-                />
-              </label>
-            </div>
-            <label className="mt-3 block max-w-3xl text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              What should Koraku do?
-              <textarea
-                value={formSpec}
-                onChange={(e) => setFormSpec(e.target.value)}
-                rows={4}
-                className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-200"
-                placeholder="Describe the steps, timing, and what “done” looks like."
-              />
-            </label>
-            <label className="mt-3 block max-w-xs text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              Trigger
-              <select
-                value={formTriggerMode}
-                onChange={(e) => setFormTriggerMode(e.target.value as "scheduled" | "event")}
-                className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-neutral-200"
-              >
-                <option value="scheduled">On a schedule</option>
-                <option value="event">Webhook event</option>
-              </select>
-            </label>
-            {formTriggerMode === "event" ? (
-              <>
-                <label className="mt-3 block max-w-xs text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Event type
-                  <select
-                    value={formEventSource}
-                    onChange={(e) =>
-                      setFormEventSource(e.target.value as "generic" | "composio")
-                    }
-                    className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-neutral-200"
-                  >
-                    <option value="composio">Connected app (Composio)</option>
-                    <option value="generic">Custom webhook URL</option>
-                  </select>
-                </label>
-                {formEventSource === "composio" ? (
-                  <div className="mt-3 max-w-xl">
-                    {composioTriggersLoading ? (
-                      <p className="text-xs font-medium text-neutral-500">Loading triggers…</p>
-                    ) : composioTriggerOptions.length === 0 ? (
-                      <p className="rounded-2xl bg-amber-50 px-4 py-3 text-xs font-medium text-amber-950 ring-1 ring-amber-200/80">
-                        Connect Gmail in{" "}
-                        <Link href={`${APP_BASE}/connections`} className="text-orange-700 underline">
-                          Connections
-                        </Link>{" "}
-                        to use app event triggers. The server also needs{" "}
-                        <code className="font-mono">COMPOSIO_API_KEY</code>.
-                      </p>
-                    ) : (
-                      <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                        When this happens
-                        <select
-                          value={composioTriggerSlug}
-                          onChange={(e) => setComposioTriggerSlug(e.target.value)}
-                          className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-neutral-200"
-                        >
-                          {composioTriggerOptions.map((opt) => (
-                            <option key={opt.slug} value={opt.slug}>
-                              {opt.label}
-                              {opt.polling ? " (may lag a few minutes)" : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    {composioTriggerOptions.find((o) => o.slug === composioTriggerSlug)?.description ? (
-                      <p className="mt-2 text-xs font-medium text-neutral-500">
-                        {composioTriggerOptions.find((o) => o.slug === composioTriggerSlug)?.description}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="mt-2 max-w-2xl text-xs font-medium leading-relaxed text-neutral-600">
-                    After you save, Koraku shows a one-time webhook URL and secret token. POST JSON to that
-                    URL from Zapier or your app.
-                  </p>
-                )}
-              </>
+        {awaySummary && !panelMode ? (
+          <div className="shrink-0 border-b border-neutral-200/50 bg-orange-50/40 px-6 py-3">
+            <p className="text-sm font-semibold text-neutral-900">{awaySummary.headline}</p>
+            {awaySummary.details.length > 0 ? (
+              <ul className="mt-1 space-y-0.5">
+                {awaySummary.details.map((line) => (
+                  <li key={line} className="text-xs font-medium text-neutral-600">
+                    {line}
+                  </li>
+                ))}
+              </ul>
             ) : null}
-            {formTriggerMode === "scheduled" ? (
-            <div className="mt-3 grid max-w-3xl gap-3 sm:grid-cols-2">
-              <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Timezone
-                <input
-                  value={formTz}
-                  onChange={(e) => setFormTz(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-                  placeholder="e.g. America/New_York"
-                />
-              </label>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Schedule
-                <select
-                  value={scheduleKind}
-                  onChange={(e) => setScheduleKind(e.target.value as ScheduleKind)}
-                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-neutral-200"
-                >
-                  <option value="every_n_minutes">Every N minutes</option>
-                  <option value="daily">Every day</option>
-                  <option value="weekdays">Weekdays</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="custom">Custom cron</option>
-                </select>
-              </label>
-            </div>
-            ) : null}
-            {formTriggerMode === "scheduled" && scheduleKind === "every_n_minutes" ? (
-              <label className="mt-3 block max-w-xs text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Interval (minutes)
-                <input
-                  type="number"
-                  min={1}
-                  max={59}
-                  value={scheduleEveryN}
-                  onChange={(e) => setScheduleEveryN(Number(e.target.value) || 30)}
-                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-                />
-              </label>
-            ) : null}
-            {formTriggerMode === "scheduled" && scheduleKind !== "every_n_minutes" && scheduleKind !== "custom" ? (
-              <div className="mt-3 flex max-w-md flex-wrap gap-3">
-                <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Hour
-                  <input
-                    type="number"
-                    min={0}
-                    max={23}
-                    value={scheduleHour}
-                    onChange={(e) => setScheduleHour(Number(e.target.value))}
-                    className="mt-1 w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  Minute
-                  <input
-                    type="number"
-                    min={0}
-                    max={59}
-                    value={scheduleMinute}
-                    onChange={(e) => setScheduleMinute(Number(e.target.value))}
-                    className="mt-1 w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm"
-                  />
-                </label>
-                {scheduleKind === "weekly" ? (
-                  <label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                    Day (0=Sun)
-                    <input
-                      type="number"
-                      min={0}
-                      max={6}
-                      value={scheduleDow}
-                      onChange={(e) => setScheduleDow(Number(e.target.value))}
-                      className="mt-1 w-20 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm"
-                    />
-                  </label>
-                ) : null}
-              </div>
-            ) : null}
-            {formTriggerMode === "scheduled" && scheduleKind === "custom" ? (
-              <label className="mt-3 block max-w-3xl text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                Cron (5 fields)
-                <input
-                  value={formCron}
-                  onChange={(e) => setFormCron(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 font-mono text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-                  placeholder="minute hour day month weekday"
-                />
-              </label>
-            ) : null}
-            <label className="mt-3 block max-w-xl text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              Linked apps (optional)
-              <input
-                value={formToolkits}
-                onChange={(e) => setFormToolkits(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-neutral-200"
-                placeholder="Optional — comma-separated labels"
-              />
-            </label>
-            {formToolkits.trim() ? (
-              <p className="mt-2 max-w-2xl rounded-2xl bg-white px-4 py-3 text-xs font-semibold leading-relaxed text-neutral-600 ring-1 ring-neutral-200/80">
-                Before this automation can act through {formToolkits.trim()}, connect those apps in{" "}
-                <Link href={`${APP_BASE}/connections`} className="text-orange-700 underline">
-                  Connections
-                </Link>
-                . External sends, shares, deletes, and calendar changes should be confirmed in the automation spec.
-              </p>
-            ) : null}
-            <div className="mt-4 flex gap-2">
-              <KorakuButton
-                disabled={
-                  saving ||
-                  !formSpec.trim() ||
-                  (formTriggerMode === "event" &&
-                    formEventSource === "composio" &&
-                    !composioTriggerSlug)
-                }
-                onClick={requestCreate}
-              >
-                {saving ? "Saving…" : "Save automation"}
-              </KorakuButton>
-              <KorakuButton variant="secondary" onClick={() => setShowCreate(false)}>
-                Cancel
-              </KorakuButton>
-            </div>
           </div>
+        ) : null}
+
+        {panelMode ? (
+          <HabitFormPanel
+            mode={panelMode}
+            saving={saving}
+            formTitle={formTitle}
+            setFormTitle={setFormTitle}
+            formHeadline={formHeadline}
+            setFormHeadline={setFormHeadline}
+            formSpec={formSpec}
+            setFormSpec={setFormSpec}
+            formTz={formTz}
+            setFormTz={setFormTz}
+            scheduleKind={scheduleKind}
+            setScheduleKind={setScheduleKind}
+            scheduleEveryN={scheduleEveryN}
+            setScheduleEveryN={setScheduleEveryN}
+            scheduleHour={scheduleHour}
+            setScheduleHour={setScheduleHour}
+            scheduleMinute={scheduleMinute}
+            setScheduleMinute={setScheduleMinute}
+            scheduleDow={scheduleDow}
+            setScheduleDow={setScheduleDow}
+            formCron={formCron}
+            setFormCron={setFormCron}
+            formToolkits={formToolkits}
+            setFormToolkits={setFormToolkits}
+            formTriggerMode={formTriggerMode}
+            setFormTriggerMode={setFormTriggerMode}
+            formEventSource={formEventSource}
+            setFormEventSource={setFormEventSource}
+            composioTriggerSlug={composioTriggerSlug}
+            setComposioTriggerSlug={setComposioTriggerSlug}
+            composioTriggerOptions={composioTriggerOptions}
+            composioTriggersLoading={composioTriggersLoading}
+            eventTriggerReadOnly={
+              panelMode === "edit" && formTriggerMode === "event"
+                ? items.find((h) => h.id === editingId)?.event_display ||
+                  items.find((h) => h.id === editingId)?.composio_trigger_slug ||
+                  "App event"
+                : null
+            }
+            onApplyTemplate={(template) => {
+              setFormTitle(template.title);
+              setFormHeadline(template.headline);
+              setFormSpec(template.spec);
+              setScheduleKind("weekdays");
+              setScheduleHour(8);
+              setScheduleMinute(0);
+              setFormCron(template.cron);
+              setFormToolkits(template.toolkits);
+            }}
+            onSave={panelMode === "edit" ? requestSaveEdit : requestCreate}
+            onCancel={closeFormPanel}
+          />
         ) : null}
 
         {error ? (
@@ -843,18 +724,18 @@ export function AutomationsPageClient() {
                 variant="compact"
                 value={search}
                 onChange={setSearch}
-                placeholder="Search automations…"
+                placeholder="Search habits…"
               />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
               {filtered.length === 0 ? (
                 <div className="px-3 py-6 text-center">
                   <p className="text-sm font-semibold text-neutral-700">
-                    No automations yet.
+                    No habits yet.
                   </p>
                   <p className="mt-1 text-xs font-medium leading-relaxed text-neutral-500">
-                    Start with a daily brief, inbox summary, or weekly review template.
-                    Connect apps first when an automation needs Gmail, Calendar, Slack, or files.
+                    Teach Koraku what to do in the background — morning briefs, inbox checks, weekly reviews.
+                    Connect apps first when a habit needs Gmail, Calendar, or Slack.
                   </p>
                 </div>
               ) : (
@@ -917,7 +798,7 @@ export function AutomationsPageClient() {
             mobileShowDetail ? "flex" : "hidden md:flex",
           )}>
             {!selected ? (
-              <p className="mt-20 text-center text-sm font-medium text-neutral-500">Select an automation</p>
+              <p className="mt-20 text-center text-sm font-medium text-neutral-500">Select a habit</p>
             ) : (
               <>
                 {/* Mobile Back Button */}
@@ -950,12 +831,12 @@ export function AutomationsPageClient() {
                     </div>
                     <p className="mt-1 text-sm font-medium text-neutral-500">
                       {selected.trigger_mode === "event"
-                        ? selected.event_display || "Runs when the connected event fires"
-                        : `Runs on a schedule · ${triggerSubtitle(selected)}`}
+                        ? `When · ${selected.event_display || "something happens in a connected app"}`
+                        : `Watching · ${triggerSubtitle(selected)}`}
                     </p>
                     {selected.next_run_at_computed ? (
                       <p className="mt-1 text-xs font-medium text-neutral-400">
-                        Next run (approx.):{" "}
+                        Next check (approx.):{" "}
                         <span className="font-mono text-neutral-600">
                           {new Date(selected.next_run_at_computed).toLocaleString()}
                         </span>
@@ -963,8 +844,10 @@ export function AutomationsPageClient() {
                     ) : null}
                     {pollActiveRun && selected.status === "active" ? (
                       <p className="mt-2 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-900 ring-1 ring-sky-200/80">
-                        Run in progress…{" "}
-                        {runs.find((r) => r.id === pollActiveRun)?.progress_detail || "Working"}
+                        Koraku is on it…{" "}
+                        {humanizeHabitProgress(
+                          runs.find((r) => r.id === pollActiveRun)?.progress_detail,
+                        )}
                       </p>
                     ) : null}
                     {webhookReveal?.id === selected.id ? (
@@ -996,7 +879,7 @@ export function AutomationsPageClient() {
                       onClick={requestRun}
                       className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-900 shadow-sm transition hover:bg-neutral-50 disabled:opacity-40"
                     >
-                      {running ? "Running…" : "Run now"}
+                      {running ? "Working…" : "Do this once"}
                     </button>
                     <button
                       type="button"
@@ -1028,6 +911,14 @@ export function AutomationsPageClient() {
                         <div className="absolute right-0 z-10 mt-1 min-w-[10rem] rounded-xl border border-neutral-200 bg-white py-1 shadow-lg">
                           <button
                             type="button"
+                            onClick={() => openEditPanel(selected)}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                          >
+                            <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                            Edit habit…
+                          </button>
+                          <button
+                            type="button"
                             onClick={requestDelete}
                             className="w-full px-3 py-2 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
                           >
@@ -1043,12 +934,15 @@ export function AutomationsPageClient() {
                   <p className="text-[13px] font-medium leading-relaxed text-neutral-700">{selected.natural_language_spec}</p>
                 </div>
 
-                <h3 className="mt-8 text-sm font-bold uppercase tracking-wide text-neutral-400">Run history</h3>
+                <h3 className="mt-8 text-sm font-bold uppercase tracking-wide text-neutral-400">
+                  What Koraku did
+                </h3>
                 {runsLoading ? (
                   <AutomationsRunHistorySkeleton />
                 ) : runs.length === 0 ? (
                   <p className="mt-4 text-sm text-neutral-500">
-                    No runs yet. Use <span className="font-semibold">Run now</span> or wait for the schedule.
+                    Nothing yet. Use <span className="font-semibold">Do this once</span> or wait for the next
+                    check.
                   </p>
                 ) : (
                   <div className="mt-4 space-y-6">
@@ -1062,15 +956,19 @@ export function AutomationsPageClient() {
                               className="rounded-2xl border border-neutral-200/80 bg-white px-4 py-3 shadow-[0_1px_2px_rgb(0_0_0_/0.04)]"
                             >
                               <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-[13px] font-semibold text-neutral-800">{run.trigger_summary}</p>
-                                {runStatusBadge(run) ? (
+                                <p className="text-[13px] font-semibold text-neutral-800">
+                                  {humanHabitTriggerSummary(run.trigger_summary)}
+                                </p>
+                                {humanHabitRunBadge(run) ? (
                                   <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-600">
-                                    {runStatusBadge(run)}
+                                    {humanHabitRunBadge(run)}
                                   </span>
                                 ) : null}
                               </div>
                               {run.status === "running" && run.progress_detail ? (
-                                <p className="mt-2 text-[12px] font-medium text-sky-800">{run.progress_detail}</p>
+                                <p className="mt-2 text-[12px] font-medium text-sky-800">
+                                  {humanizeHabitProgress(run.progress_detail)}
+                                </p>
                               ) : null}
                               {run.status === "skipped" ? (
                                 <p className="mt-2 text-[13px] font-medium text-neutral-600">{run.error || "Skipped"}</p>
@@ -1079,7 +977,7 @@ export function AutomationsPageClient() {
                                 <div className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-[13px] font-medium text-red-700">
                                   <p>{run.error || "Failed"}</p>
                                   <p className="mt-1 text-xs text-red-600">
-                                    Check required connections, tighten the automation spec, then retry with Run now.
+                                    Check connections, refine the habit instructions, then try Do this once.
                                   </p>
                                 </div>
                               ) : run.status !== "skipped" && run.status !== "running" ? (
@@ -1107,16 +1005,24 @@ export function AutomationsPageClient() {
         </div>
         <ConfirmDialog
           open={pendingConfirm === "create"}
-          title="Create this automation?"
+          title="Create this habit?"
           message={createSummary}
-          confirmLabel="Create"
+          confirmLabel="Create habit"
           onConfirm={() => void createAutomation()}
           onCancel={() => setPendingConfirm(null)}
         />
         <ConfirmDialog
+          open={pendingConfirm === "save-edit"}
+          title="Save habit changes?"
+          message={editSummary}
+          confirmLabel="Save"
+          onConfirm={() => void saveHabitEdits()}
+          onCancel={() => setPendingConfirm(null)}
+        />
+        <ConfirmDialog
           open={pendingConfirm === "delete"}
-          title="Delete automation?"
-          message="This removes the automation and all of its run history. This cannot be undone."
+          title="Delete habit?"
+          message="This removes the habit and everything Koraku did for it. This cannot be undone."
           confirmLabel="Delete"
           destructive
           onConfirm={() => void deleteSelected()}
@@ -1124,9 +1030,9 @@ export function AutomationsPageClient() {
         />
         <ConfirmDialog
           open={pendingConfirm === "run"}
-          title={`Run "${selected?.headline || selected?.title || "this automation"}" now?`}
-          message="Koraku may use connected apps listed on the automation. Review the run history after it finishes."
-          confirmLabel="Run now"
+          title={`Run "${selected?.headline || selected?.title || "this habit"}" now?`}
+          message="Koraku may use your connections for this habit. Check What Koraku did after it finishes."
+          confirmLabel="Do this once"
           onConfirm={() => void runNow()}
           onCancel={() => setPendingConfirm(null)}
         />

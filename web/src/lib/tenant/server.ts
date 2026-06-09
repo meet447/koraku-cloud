@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { ORG_ID_COOKIE, ORG_ID_HEADER } from "@/lib/tenant/constants";
-import { getCachedJson, setCachedJson } from "../koraku-redis";
+import { deleteCachedKeys, getCachedJson, setCachedJson } from "../koraku-redis";
 
 export type OrgSummary = {
   id: string;
@@ -10,6 +10,22 @@ export type OrgSummary = {
   role: string;
   isDefault: boolean;
 };
+
+function orgIdCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  };
+}
+
+/** Persist the active organization in the httpOnly tenant cookie. */
+export async function persistOrgIdCookie(orgId: string): Promise<void> {
+  const jar = await cookies();
+  jar.set(ORG_ID_COOKIE, orgId, orgIdCookieOptions());
+}
 
 /** Ensure the signed-in user has a default personal organization (Supabase RPC). */
 export async function ensureDefaultOrgId(
@@ -87,14 +103,28 @@ export async function resolveActiveOrgId(
       }
       return String(data.org_id);
     }
+
+    try {
+      await deleteCachedKeys(cacheKey);
+    } catch {
+      /* ignore cache delete errors */
+    }
   }
-  return ensureDefaultOrgId(supabase, userId);
+
+  const healed = await ensureDefaultOrgId(supabase, userId);
+  if (healed && healed !== fromCookie) {
+    await persistOrgIdCookie(healed);
+  }
+  return healed;
 }
 
-/** Forward tenant scope to the Python API (after Bearer auth is applied). */
-export async function applyTenantHeadersFromCookies(headers: Headers): Promise<void> {
-  const jar = await cookies();
-  const orgId = jar.get(ORG_ID_COOKIE)?.value?.trim();
+/** Forward validated tenant scope to the Python API (after Bearer auth is applied). */
+export async function applyTenantHeadersFromCookies(
+  headers: Headers,
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const orgId = await resolveActiveOrgId(supabase, userId);
   if (orgId) {
     headers.set(ORG_ID_HEADER, orgId);
   }

@@ -51,8 +51,10 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      applyUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange(() => {
+      void supabase.auth.getUser().then(({ data }) => {
+        applyUser(data.user ?? null);
+      });
     });
 
     return () => {
