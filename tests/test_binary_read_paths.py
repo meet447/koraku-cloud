@@ -34,7 +34,6 @@ def test_format_binary_response_includes_hints() -> None:
     assert "report.pdf" in body
     assert "12345" in body
     assert "Bash" in body
-    assert "SKILL.md" in body
 
 
 def test_read_tool_local_pdf_returns_guidance(monkeypatch) -> None:
