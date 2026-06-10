@@ -23,6 +23,7 @@ def artifact_dispatcher_prompt_section() -> str:
 - Artifact operations happen entirely in an isolated sandbox environment (Blaxel VM). Files do not write to the native host machine disk.
 - Once the document compilation task completes: state the workspace relative path naturally, confirm metadata if useful (page, slide, or row counts), and seamlessly offer cloud backups via **ComposioRun** if an account is attached.
 - For lightweight outlines or direct responses where no actual physical file is required, answer immediately in the chat channel without generating an artifact.
+- When research is already done and the user wants **report + deck + charts**, use **one ParallelRun** with `document`, `presentation`, and `code` tasks — **never** three separate **DocumentRun** / **PresentationRun** / **CodeRun** calls in sequence.
 """
 
 
@@ -64,14 +65,17 @@ def build_artifact_subagent_system_prompt(
 1. **Paths:** Use workspace-relative path syntaxes exclusively (e.g., `{subdir}/my-file{ext}`). Never bleed absolute host system paths.
 2. **Execution Strategy:** Leverage `{build_tool}` natively — supply the correct `output_path` and structural JSON `spec`. These operations run entirely **within the Blaxel sandbox environment**.
 3. **Spec Files:** If helpful, write a payload specification directly to the sandbox filesystem, then invoke `{build_tool}` referencing the targeted `spec_path`.
-4. **Verification Protocol:** Always run **Glob** against `outputs/presentations/*.pptx` (or your chosen output target directory) to ensure the artifact exists cleanly on disk before returning execution control.
-5. **Sandbox Isolation:** Do not attempt execution via local terminal commands, pip modules, or runtime virtual environments. Sandbox boundaries are strict.
+4. **Verification:** Trust the **Build*** tool JSON response (`ok`, `path`, `type`). Do **not** run **Glob** on the host — artifact files exist only in the sandbox session folder.
+5. **Specs:** Prefer `spec_path` (Write a JSON file in sandbox, then Build*) for large decks/reports; keep specs valid JSON (no trailing commas, closed strings).
 """
 
     if artifact_type == "presentation":
         builders += """
 ## Presentation Payload Specification
-`{"title":"...","subtitle":"...","slides":[{"title":"Slide title","body":["bullet 1","bullet 2"]}]}`
+Use `layout` as an integer (0=title, 1=content, 3=two-column) **or** a string alias:
+`title`, `content`, `two_column`, `table`, `cards`, `list`, `sources`. String aliases are normalized automatically.
+`{"title":"...","subtitle":"...","slides":[{"title":"Slide title","layout":"two_column","left":{"title":"A","bullets":["…"]},"right":{"title":"B","bullets":["…"]}}]}`
+Or use `body` / `bullets` arrays, or `table` with `headers` + `rows`.
 """
     elif artifact_type == "document":
         builders += """
@@ -108,13 +112,13 @@ def artifact_worker_sop_appendix(goal_class: str) -> str:
     if goal_class == "artifact_simple":
         return """
 ## Operational Execution Scope (Target: ≤3 rounds)
-- Sequence: Assemble the target JSON configuration structural payload → Invoke the correct **Build*** compilation tool → Validate via Glob → Provide status confirmation.
+- Sequence: Assemble the target JSON configuration structural payload → Invoke the correct **Build*** compilation tool → Confirm `ok` in the JSON response → Provide status confirmation.
 - Never trigger manual environment updates or point to external absolute system directories.
 """
     if goal_class == "artifact_compose":
         return """
 ## Operational Execution Scope (Composition)
-- Draft your compilation payload spec → Trigger **BuildPresentation** / **BuildDocument** / etc. → Validate generation status using Glob tools.
+- Draft your compilation payload spec → Trigger **BuildPresentation** / **BuildDocument** / etc. → Confirm success from the build tool JSON (`ok`, `path`).
 - Do not waste system loops diagnosing shell configurations or execution environments.
 """
     return """

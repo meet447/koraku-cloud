@@ -21,12 +21,14 @@ from koraku.api.chat_routes import (
     format_sse,
     normalize_stream_execution_target,
 )
+from koraku.agent.budget import classify_turn_task, credit_reserve_for_task_class
 from koraku.core.config import settings
 from koraku.credits.service import pre_check_org
 from koraku.core.detached_run_store import (
     detached_gc_seconds,
     get_detached_run_store,
 )
+from koraku.core.run_checkpoint import load_checkpoint
 from koraku.core.rate_limit import RateLimit, enforce_rate_limit, rate_limit_key
 from koraku.core.request_auth import resolve_request_auth
 from koraku.core.tenant import reset_tenant_org_id, set_tenant_org_id
@@ -67,6 +69,8 @@ async def _run_worker(
     auth_org_id: str | None,
     agent: Agent | None,
     server_mode: str,
+    *,
+    resume_checkpoint: Any | None = None,
 ) -> None:
     store = get_detached_run_store()
     buf = await store.get(run_id, owner_org_id=auth_org_id)
@@ -85,6 +89,7 @@ async def _run_worker(
         async for chunk in _stream_agent_sse(
             body.msg.strip(),
             images=body.images,
+            attachments=body.attachments,
             model=body.model,
             provider=body.provider,
             session_id=(body.session_id.strip() or None),
@@ -97,6 +102,7 @@ async def _run_worker(
             client_history=list(body.client_history),
             stream_run_id=run_id,
             execution_target=exec_target,
+            resume_checkpoint=resume_checkpoint,
         ):
             await buf.append(chunk)
     except Exception as e:
@@ -132,7 +138,11 @@ async def start_detached_run(body: StreamChatBody, request: Request) -> JSONResp
             limit=settings.chat_rate_limit_per_minute,
         )
     )
-    await pre_check_org(auth_org_id)
+    task_class = classify_turn_task(body.msg.strip())
+    await pre_check_org(
+        auth_org_id,
+        reserve=credit_reserve_for_task_class(task_class),
+    )
 
     agent = getattr(request.app.state, "koraku_agent", None)
     server_mode = getattr(request.app.state, "server_mode", "unconfigured")
@@ -146,13 +156,24 @@ async def start_detached_run(body: StreamChatBody, request: Request) -> JSONResp
             raise HTTPException(status_code=403, detail="This run belongs to another user")
         return JSONResponse({"run_id": run_id})
 
+    checkpoint = await load_checkpoint(run_id, owner_org_id=auth_org_id)
+    resumed = checkpoint is not None
+
     await store.register(run_id, owner_sub=auth_sub, owner_org_id=auth_org_id)
 
     asyncio.create_task(
-        _run_worker(run_id, body, auth_sub, auth_org_id, agent, server_mode),
+        _run_worker(
+            run_id,
+            body,
+            auth_sub,
+            auth_org_id,
+            agent,
+            server_mode,
+            resume_checkpoint=checkpoint,
+        ),
         name=f"koraku-detached-{run_id}",
     )
-    return JSONResponse({"run_id": run_id})
+    return JSONResponse({"run_id": run_id, "resumed": resumed})
 
 
 @router.get("/runs/{run_id}/status")
@@ -164,6 +185,19 @@ async def detached_run_status(run_id: str, request: Request) -> JSONResponse:
 
     buf = await get_detached_run_store().get(run_id, owner_org_id=auth_org_id)
     if buf is None:
+        checkpoint = await load_checkpoint(run_id, owner_org_id=auth_org_id)
+        if checkpoint is not None:
+            return JSONResponse(
+                {
+                    "run_id": run_id,
+                    "state": "resumable",
+                    "last_event_id": -1,
+                    "buffered_chunks": 0,
+                    "checkpoint_step": checkpoint.step_count,
+                    "hint": "POST /runs with the same turn_id to resume this run.",
+                },
+                status_code=200,
+            )
         return JSONResponse(
             {
                 "run_id": run_id,

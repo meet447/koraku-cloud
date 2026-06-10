@@ -108,6 +108,20 @@ class CloudSettings(BaseSettings):
         default=500,
         validation_alias=AliasChoices("CREDITS_MIN_RESERVE", "credits_min_reserve"),
     )
+    credits_min_reserve_research: int = Field(
+        default=2500,
+        validation_alias=AliasChoices(
+            "CREDITS_MIN_RESERVE_RESEARCH",
+            "credits_min_reserve_research",
+        ),
+    )
+    credits_min_reserve_automation: int = Field(
+        default=1500,
+        validation_alias=AliasChoices(
+            "CREDITS_MIN_RESERVE_AUTOMATION",
+            "credits_min_reserve_automation",
+        ),
+    )
     platform_admin_user_ids: str = Field(
         default="",
         validation_alias=AliasChoices(

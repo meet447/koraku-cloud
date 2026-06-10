@@ -86,6 +86,64 @@ class SdkSettings(BaseSettings):
         default=True,
         validation_alias=AliasChoices("CHAT_COMPACT_TOOL_CONTEXT", "chat_compact_tool_context"),
     )
+    context_pin_tool_results: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("CONTEXT_PIN_TOOL_RESULTS", "context_pin_tool_results"),
+    )
+    context_pinned_max_items: int = Field(
+        default=24,
+        validation_alias=AliasChoices("CONTEXT_PINNED_MAX_ITEMS", "context_pinned_max_items"),
+    )
+    context_pinned_summary_chars: int = Field(
+        default=900,
+        validation_alias=AliasChoices("CONTEXT_PINNED_SUMMARY_CHARS", "context_pinned_summary_chars"),
+    )
+    context_pinned_total_chars: int = Field(
+        default=4000,
+        validation_alias=AliasChoices("CONTEXT_PINNED_TOTAL_CHARS", "context_pinned_total_chars"),
+    )
+    context_pinned_tool_result_chars: int = Field(
+        default=6000,
+        validation_alias=AliasChoices(
+            "CONTEXT_PINNED_TOOL_RESULT_CHARS",
+            "context_pinned_tool_result_chars",
+        ),
+    )
+    parallel_subagent_max_tasks: int = Field(
+        default=3,
+        validation_alias=AliasChoices("PARALLEL_SUBAGENT_MAX_TASKS", "parallel_subagent_max_tasks"),
+    )
+    run_checkpoint_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("RUN_CHECKPOINT_ENABLED", "run_checkpoint_enabled"),
+    )
+    run_checkpoint_ttl_seconds: int = Field(
+        default=3600,
+        validation_alias=AliasChoices("RUN_CHECKPOINT_TTL_SECONDS", "run_checkpoint_ttl_seconds"),
+    )
+    chat_attachment_max_bytes: int = Field(
+        default=8 * 1024 * 1024,
+        validation_alias=AliasChoices("CHAT_ATTACHMENT_MAX_BYTES", "chat_attachment_max_bytes"),
+    )
+    chat_attachment_excerpt_chars: int = Field(
+        default=24_000,
+        validation_alias=AliasChoices("CHAT_ATTACHMENT_EXCERPT_CHARS", "chat_attachment_excerpt_chars"),
+    )
+    chat_attachment_max_per_message: int = Field(
+        default=4,
+        validation_alias=AliasChoices("CHAT_ATTACHMENT_MAX_PER_MESSAGE", "chat_attachment_max_per_message"),
+    )
+    chat_attachment_save_to_workspace: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "CHAT_ATTACHMENT_SAVE_TO_WORKSPACE",
+            "chat_attachment_save_to_workspace",
+        ),
+    )
+    imessage_attachment_max_bytes: int = Field(
+        default=15 * 1024 * 1024,
+        validation_alias=AliasChoices("IMESSAGE_ATTACHMENT_MAX_BYTES", "imessage_attachment_max_bytes"),
+    )
     chat_openai_native_tools: bool = Field(
         default=True,
         validation_alias=AliasChoices("CHAT_OPENAI_NATIVE_TOOLS", "chat_openai_native_tools"),
@@ -294,6 +352,22 @@ class SdkSettings(BaseSettings):
         validation_alias=AliasChoices(
             "ARTIFACT_SUBAGENT_WALL_SECONDS_COMPOSE",
             "artifact_subagent_wall_seconds_compose",
+        ),
+    )
+
+    workhorse_subagent_mode: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("WORKHORSE_SUBAGENT_MODE", "workhorse_subagent_mode"),
+    )
+    workhorse_subagent_max_steps: int = Field(
+        default=20,
+        validation_alias=AliasChoices("WORKHORSE_SUBAGENT_MAX_STEPS", "workhorse_subagent_max_steps"),
+    )
+    workhorse_subagent_wall_seconds: float = Field(
+        default=180.0,
+        validation_alias=AliasChoices(
+            "WORKHORSE_SUBAGENT_WALL_SECONDS",
+            "workhorse_subagent_wall_seconds",
         ),
     )
 

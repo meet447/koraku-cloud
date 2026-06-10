@@ -46,6 +46,14 @@ const VERB: Record<string, string> = {
   FirecrawlMap: "Mapped site",
   ExaSearch: "Web search",
   ComposioRun: "Connected apps",
+  ResearchRun: "Research worker",
+  CodeRun: "Code worker",
+  ParallelRun: "Parallel workers",
+  VerifyGoal: "Verify goal",
+  DocumentRun: "Document worker",
+  PresentationRun: "Presentation worker",
+  SpreadsheetRun: "Spreadsheet worker",
+  PdfRun: "PDF worker",
 };
 
 function fallbackLabel(tool: string): string {
@@ -206,6 +214,24 @@ export function humanizeToolExecution(
       return url
         ? { label: fallbackLabel(tool), detail: formatUrlForTimeline(url) }
         : { label: fallbackLabel(tool) };
+    }
+    case "ComposioRun":
+    case "ResearchRun":
+    case "CodeRun":
+    case "ParallelRun":
+    case "DocumentRun":
+    case "PresentationRun":
+    case "SpreadsheetRun":
+    case "PdfRun":
+    case "VerifyGoal": {
+      const goal = s(o.goal) ?? s(o.criteria);
+      const label = VERB[tool] ?? fallbackLabel(tool);
+      return goal
+        ? {
+            label: pending ? label : label,
+            detail: trunc(goal, 140),
+          }
+        : { label };
     }
     default: {
       const hit = pickFirst(o, [

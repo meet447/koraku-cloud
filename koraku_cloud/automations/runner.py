@@ -8,7 +8,16 @@ from contextvars import Token
 from typing import TYPE_CHECKING, Any, Callable
 
 from koraku.integrations.blaxel_lazy import clear_lazy_blaxel_session, set_lazy_blaxel_session
+from koraku.agent.budget import credit_reserve_for_task_class
 from koraku.agent.runtime_context import AgentRunContext
+from koraku.credits.service import (
+    CreditsExhaustedError,
+    OrgSuspendedError,
+    pre_check_org,
+    settle_run,
+)
+from koraku.credits.usage_tracker import RunUsageTracker
+from koraku.llm.catalog import resolve_effective_model, resolve_provider_id
 from koraku_cloud.automations import async_ops
 from koraku_cloud.automations.fingerprint import (
     outcome_label as compute_outcome_label,
@@ -21,7 +30,9 @@ from koraku_cloud.automations.progress import (
 from koraku_cloud.automations.run_context import prepare_automation_agent_context, reset_automation_tenant
 from koraku_cloud.automations.skip_rules import evaluate_skip
 from koraku.core.config import settings
+from koraku.core.product_hooks import product_hooks_active
 from koraku.core.models import SessionState, utcnow
+from koraku.integrations.blaxel_runtime import cloud_blaxel_block_reason
 from koraku.integrations import composio as composio_runtime
 from koraku.integrations.cloud_user import reset_cloud_user_id, set_cloud_user_id
 from koraku.integrations.supermemory_client import (
@@ -94,6 +105,8 @@ async def _run_agent_session_with_timeout(
     run_id: str = "",
 ) -> str | None:
     last_error: str | None = None
+    blaxel_lazy = product_hooks_active() and cloud_blaxel_block_reason(settings) is None
+    run_context = AgentRunContext(execution_target="cloud" if blaxel_lazy else "server")
 
     async def _consume_agent() -> None:
         nonlocal last_error
@@ -106,7 +119,7 @@ async def _run_agent_session_with_timeout(
             client_locale=None,
             image_parts=None,
             max_steps_override=settings.automation_max_steps,
-            run_context=AgentRunContext(),
+            run_context=run_context,
             cloud_sandbox=None,
             account_personalization=account_personalization,
             org_skills=org_skills,
@@ -260,7 +273,11 @@ def build_automation_user_message(
         f"**Trigger context:**\n{trigger_summary.strip()}\n"
         f"{toolkit_line}{imessage_line}{diff_line}\n"
         "Follow the instructions completely. Prefer concrete actions (tools) when needed. "
-        "End with a short summary of what you did."
+        "For multi-step work use **TodoWrite**; load skills via **SkillLoad** when relevant.\n"
+        "End with a short summary. When the outcome is machine-readable, include a JSON block:\n"
+        "```json\n"
+        '{"status":"success|partial|failed","summary":"…","artifacts":[],"next_action":null}\n'
+        "```"
     )
 
 
@@ -387,6 +404,34 @@ async def execute_automation(
                     user_id, oid, automation_id, run_id, started
                 )
 
+            try:
+                await pre_check_org(
+                    oid,
+                    reserve=credit_reserve_for_task_class("automation"),
+                )
+            except (CreditsExhaustedError, OrgSuspendedError) as exc:
+                detail = exc.detail if isinstance(exc.detail, dict) else {}
+                err_msg = str(detail.get("message") or exc.detail or "Credits unavailable")
+                finished = utcnow()
+                await _finalize_automation_run(
+                    user_id,
+                    oid,
+                    automation_id,
+                    run_id,
+                    "failed",
+                    err_msg,
+                    None,
+                    started,
+                    finished,
+                    auto=auto,
+                )
+                return {
+                    "ok": False,
+                    "run_id": run_id,
+                    "status": "failed",
+                    "error": err_msg,
+                }
+
             session = SessionState(session_id=f"auto-{automation_id}-{run_id}")
             user_msg = build_automation_user_message(
                 title=auto["title"],
@@ -408,6 +453,9 @@ async def execute_automation(
             lazy_tok, lazy_root_tok = set_lazy_blaxel_session(session.session_id)
 
             progress_state = {"phase": "starting", "detail": "Starting automation…"}
+            usage_tracker = RunUsageTracker()
+            eff_provider = resolve_provider_id(None)
+            resolved_model = resolve_effective_model(None, provider_id=eff_provider)
 
             async def _patch_progress() -> None:
                 if should_throttle_progress_patch(run_id):
@@ -424,6 +472,7 @@ async def execute_automation(
                     log.debug("patch_run_progress failed run_id=%s", run_id, exc_info=True)
 
             def _emit(ev: dict[str, Any]) -> None:
+                usage_tracker.ingest(ev)
                 phase, detail = progress_from_event(ev)
                 if phase:
                     progress_state["phase"] = phase
@@ -460,6 +509,22 @@ async def execute_automation(
                 status = "failed"
                 err = last_error or "No assistant output captured."
                 res = summary or None
+
+            try:
+                await settle_run(
+                    oid,
+                    run_id=run_id,
+                    usage=usage_tracker.usage,
+                    kind="automation",
+                    model=resolved_model,
+                    provider=eff_provider,
+                )
+            except Exception:
+                log.exception(
+                    "automation credit settle failed automation_id=%s run_id=%s",
+                    automation_id,
+                    run_id,
+                )
 
             await _finalize_automation_run(
                 user_id,

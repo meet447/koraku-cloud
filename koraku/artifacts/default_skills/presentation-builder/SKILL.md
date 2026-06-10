@@ -26,7 +26,10 @@ Do **not** use `python -m koraku.artifacts.pptx_build` in Bash unless BuildPrese
   "subtitle": "A quick introduction",
   "slides": [
     {"title": "What is an LLM?", "body": ["Large neural network", "Trained on text data"]},
-    {"title": "Applications", "body": ["Chatbots", "Code assist", "Summarization"]}
+    {"title": "Compare", "layout": "two_column", "left": {"bullets": ["Pros"]}, "right": {"bullets": ["Cons"]}}
   ]
+```
+
+`layout` accepts integers **or** string aliases (`title`, `content`, `two_column`, `table`, `cards`, `list`, `sources`). Aliases are normalized automatically.
 }
 ```

@@ -10,21 +10,32 @@ from koraku.agent.blaxel_scope import get_active_blaxel_session_root
 from koraku.tools.blaxel_dispatch import blaxel_bash_if_active, sandbox_abs_path
 
 
-def _pip_install(package: str, import_name: str | None = None) -> str:
-    imp = import_name or package.replace("-", "_")
-    return (
-        f"python3 -c 'import {shlex.quote(imp)}' 2>/dev/null "
-        f"|| (pip install -q {shlex.quote(package)} 2>/dev/null "
-        f"|| pip3 install -q {shlex.quote(package)} 2>/dev/null "
-        f"|| pip3 install -q --break-system-packages {shlex.quote(package)} 2>/dev/null "
-        f"|| true)"
-    )
+def _require_python_import(import_name: str, *, package_hint: str) -> str:
+    """Ensure an import works in the sandbox venv (bootstrap runs before this via Bash preamble)."""
+    imp = import_name.replace("'", "")
+    pkg = package_hint.replace("'", "")
+    return f"""\
+PY=python3; PIP=pip3
+if [ -x .koraku-venv/bin/python ]; then PY=.koraku-venv/bin/python; PIP=.koraku-venv/bin/pip; fi
+if ! $PY -c 'import {imp}' 2>/dev/null; then
+  $PIP install -q --no-cache-dir {shlex.quote(pkg)} 2>/dev/null \\
+    || $PIP install -q --no-cache-dir --break-system-packages {shlex.quote(pkg)} 2>/dev/null \\
+    || true
+fi
+if ! $PY -c 'import {imp}' 2>/dev/null; then
+  echo "Error: could not import {imp} (install {pkg} in sandbox venv)" >&2
+  exit 1
+fi
+"""
 
 
 def _blaxel_pptx_script(spec: dict[str, Any], abs_out: str) -> str:
+    from koraku.artifacts.pptx_layout import normalize_presentation_spec
+
+    spec = normalize_presentation_spec(spec)
     b64 = base64.b64encode(json.dumps(spec).encode()).decode()
-    return f"""{_pip_install("python-pptx", import_name="pptx")}
-python3 <<'PY'
+    return f"""{_require_python_import("pptx", package_hint="python-pptx")}
+$PY <<'PY'
 import base64, json, os
 from pptx import Presentation
 from pptx.util import Pt
@@ -72,8 +83,8 @@ PY"""
 
 def _blaxel_docx_script(spec: dict[str, Any], abs_out: str) -> str:
     b64 = base64.b64encode(json.dumps(spec).encode()).decode()
-    return f"""{_pip_install("python-docx", import_name="docx")}
-python3 <<'PY'
+    return f"""{_require_python_import("docx", package_hint="python-docx")}
+$PY <<'PY'
 import base64, json, os
 from docx import Document
 
@@ -109,8 +120,8 @@ PY"""
 
 def _blaxel_xlsx_script(spec: dict[str, Any], abs_out: str) -> str:
     b64 = base64.b64encode(json.dumps(spec).encode()).decode()
-    return f"""{_pip_install("openpyxl")}
-python3 <<'PY'
+    return f"""{_require_python_import("openpyxl", package_hint="openpyxl")}
+$PY <<'PY'
 import base64, json, os
 from openpyxl import Workbook
 
@@ -214,8 +225,8 @@ async def blaxel_merge_pdfs(inputs: list[str], output_rel: str) -> str:
         return "Error: chat session folder is not bound in the sandbox."
     abs_out = sandbox_abs_path(out_rel)
     abs_inputs = [sandbox_abs_path(str(p).replace("\\", "/")) for p in inputs]
-    cmd = f"""{_pip_install("pypdf")}
-python3 <<'PY'
+    cmd = f"""{_require_python_import("pypdf", package_hint="pypdf")}
+$PY <<'PY'
 import json
 from pypdf import PdfWriter
 writer = PdfWriter()

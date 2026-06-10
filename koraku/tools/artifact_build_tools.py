@@ -13,19 +13,30 @@ async def _load_spec(*, spec: str | None, spec_path: str | None) -> tuple[dict[s
     if gate:
         return None, gate
 
+    parsed: dict[str, Any] | None = None
+
     if spec and str(spec).strip():
         try:
-            parsed = json.loads(spec)
+            loaded = json.loads(spec)
         except json.JSONDecodeError as e:
             return None, f"Error: invalid JSON in `spec`: {e}"
-        if not isinstance(parsed, dict):
+        if not isinstance(loaded, dict):
             return None, "Error: `spec` must be a JSON object."
-        return parsed, None
+        parsed = loaded
 
-    if spec_path and str(spec_path).strip():
-        return await read_json_spec_from_sandbox(str(spec_path).strip())
+    elif spec_path and str(spec_path).strip():
+        parsed, err = await read_json_spec_from_sandbox(str(spec_path).strip())
+        if err:
+            return None, err
+    else:
+        return None, "Error: provide `spec` (JSON string) or `spec_path` (workspace-relative file in sandbox)."
 
-    return None, "Error: provide `spec` (JSON string) or `spec_path` (workspace-relative file in sandbox)."
+    assert parsed is not None
+    try:
+        json.dumps(parsed)
+    except (TypeError, ValueError) as e:
+        return None, f"Error: spec is not JSON-serializable: {e}"
+    return parsed, None
 
 
 async def _build_document(
@@ -48,11 +59,13 @@ async def _build_presentation(
     spec_path: str | None = None,
 ) -> str:
     from koraku.artifacts.blaxel_build import blaxel_build_artifact
+    from koraku.artifacts.pptx_layout import normalize_presentation_spec
 
     spec_dict, err = await _load_spec(spec=spec, spec_path=spec_path)
     if err:
         return err
     assert spec_dict is not None
+    spec_dict = normalize_presentation_spec(spec_dict)
     result = await blaxel_build_artifact("presentation", spec_dict, output_path)
     if result.startswith("Error"):
         return result

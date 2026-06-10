@@ -48,7 +48,11 @@ function chatMessageRowPropsEqual(prev: ChatMessageRowProps, next: ChatMessageRo
   if (prev.lastAssistant?.id !== next.lastAssistant?.id) return false;
   if (prev.m === next.m) return true;
   if (prev.m.role === "user" && next.m.role === "user") {
-    return prev.m.text === next.m.text && prev.m.images?.length === next.m.images?.length;
+    return (
+      prev.m.text === next.m.text &&
+      prev.m.images?.length === next.m.images?.length &&
+      prev.m.attachments?.length === next.m.attachments?.length
+    );
   }
   if (prev.m.role !== "assistant" || next.m.role !== "assistant") return false;
   const isStreamingRow = next.lastAssistant?.id === next.m.id && next.busy;
@@ -59,7 +63,7 @@ function chatMessageRowPropsEqual(prev: ChatMessageRowProps, next: ChatMessageRo
   const nextRun = next.m.run;
   return (
     prevRun.assistantMarkdown === nextRun.assistantMarkdown &&
-    prevRun.timeline.length === nextRun.timeline.length &&
+    prevRun.timeline === nextRun.timeline &&
     prevRun.activeThought === nextRun.activeThought &&
     prevRun.error === nextRun.error &&
     prevRun.statusText === nextRun.statusText &&
@@ -96,6 +100,18 @@ const ChatMessageRow = memo(function ChatMessageRow({
                     className="h-full w-full object-cover"
                   />
                 </div>
+              ))}
+            </div>
+          ) : null}
+          {m.attachments && m.attachments.length > 0 ? (
+            <div className="flex flex-wrap justify-end gap-1.5">
+              {m.attachments.map((att) => (
+                <span
+                  key={att.id}
+                  className="inline-flex max-w-full items-center rounded-full border border-neutral-200/80 bg-white px-2.5 py-1 text-xs text-neutral-600"
+                >
+                  {att.filename}
+                </span>
               ))}
             </div>
           ) : null}

@@ -69,8 +69,7 @@ def _resolve_host_path(path: str, *, parent_for_new_file: bool = False) -> tuple
         fpath = os.path.abspath(os.path.join(root, raw))
     if not settings.host_file_tools_restrict_to_workspace:
         return fpath, None
-    check_path = os.path.dirname(fpath) if parent_for_new_file else fpath
-    if not _path_is_under(check_path, root):
+    if not _path_is_under(fpath, root):
         return None, f"Error: Path must stay under workspace: {root}"
     return fpath, None
 
@@ -918,6 +917,7 @@ _BASE_TOOLS: list[Tool] = [
 
 from koraku.core.product_hooks import extra_agent_tools  # noqa: E402
 from koraku.plugins.memory import memory_agent_tools  # noqa: E402
+from koraku.tools.skills import skill_load_tool  # noqa: E402
 
 _AVAILABLE_TOOLS_CACHE: list[Tool] | None = None
 
@@ -925,6 +925,7 @@ _AVAILABLE_TOOLS_CACHE: list[Tool] | None = None
 def _build_available_tools() -> list[Tool]:
     """Assemble tool list (lazy — avoids importing ``koraku_cloud`` during ``koraku`` init)."""
     tools: list[Tool] = list(_BASE_TOOLS)
+    tools.append(skill_load_tool)
     tools.extend(memory_agent_tools())
     tools.extend(extra_agent_tools())
     out: list[Tool] = []

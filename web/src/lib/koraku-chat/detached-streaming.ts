@@ -20,11 +20,12 @@ export function shouldUseDetachedStreamingForPayload(
   textLen: number,
   imageCount: number,
   persistenceEnabled: boolean,
+  attachmentCount = 0,
 ): boolean {
   const mode = detachedChatMode();
   if (mode === "always") return true;
   if (mode === "heavy") {
-    return textLen >= 3200 || imageCount > 0;
+    return textLen >= 3200 || imageCount > 0 || attachmentCount > 0;
   }
   if (mode === "off") return false;
   if (!persistenceEnabled) return false;

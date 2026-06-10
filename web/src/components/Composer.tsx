@@ -3,7 +3,12 @@
 import Image from "next/image";
 import { useCallback, useRef, useState } from "react";
 import clsx from "clsx";
-import { ArrowUp, Plus, X } from "lucide-react";
+import { ArrowUp, FileText, Plus, X } from "lucide-react";
+import {
+  readComposerAttachmentsFromFiles,
+  isComposerAttachmentFile,
+  type ComposerAttachment,
+} from "@/lib/composer-attachments";
 import {
   readComposerImagesFromFiles,
   type ComposerImage,
@@ -11,8 +16,9 @@ import {
 import { ModelSelect } from "./ModelSelect";
 
 const MAX_IMAGES = 8;
+const MAX_ATTACHMENTS = 4;
 
-export type { ComposerImage };
+export type { ComposerImage, ComposerAttachment };
 
 export function Composer({
   busy,
@@ -31,12 +37,14 @@ export function Composer({
     model: string,
     dropdownModelLabel: string,
     images: ComposerImage[],
+    attachments: ComposerAttachment[],
   ) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const modelRef = useRef({ provider: "", model: "", dropdownModelLabel: "" });
   const [text, setText] = useState("");
   const [images, setImages] = useState<ComposerImage[]>([]);
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   const syncModel = useCallback((p: string, m: string, label: string) => {
     modelRef.current = { provider: p, model: m, dropdownModelLabel: label };
   }, []);
@@ -51,28 +59,52 @@ export function Composer({
     });
   };
 
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((x) => x.id !== id));
+  };
+
   const onFiles = (files: FileList | null) => {
     if (!files?.length) return;
     void (async () => {
-      const rows = await readComposerImagesFromFiles(files, MAX_IMAGES);
-      if (!rows.length) return;
-      setImages((prev) => [...prev, ...rows].slice(0, MAX_IMAGES));
+      const list = Array.from(files);
+      const imageFiles = list.filter((f) => !isComposerAttachmentFile(f));
+      const docFiles = list.filter((f) => isComposerAttachmentFile(f));
+      if (imageFiles.length) {
+        const rows = await readComposerImagesFromFiles(imageFiles, MAX_IMAGES);
+        if (rows.length) {
+          setImages((prev) => [...prev, ...rows].slice(0, MAX_IMAGES));
+        }
+      }
+      if (docFiles.length) {
+        const rows = await readComposerAttachmentsFromFiles(docFiles, MAX_ATTACHMENTS);
+        if (rows.length) {
+          setAttachments((prev) => [...prev, ...rows].slice(0, MAX_ATTACHMENTS));
+        }
+      }
     })();
   };
 
   const submit = () => {
     if (disabled) return;
     const t = text.trim();
-    const ready = images.filter((i) => i.data.length > 0);
-    if (!t && ready.length === 0) return;
+    const readyImages = images.filter((i) => i.data.length > 0);
+    const readyAttachments = attachments.filter((a) => a.data.length > 0);
+    if (!t && readyImages.length === 0 && readyAttachments.length === 0) return;
     const { provider, model, dropdownModelLabel } = modelRef.current;
-    onSend(t, provider, model, dropdownModelLabel, ready);
+    onSend(t, provider, model, dropdownModelLabel, readyImages, readyAttachments);
     setText("");
     for (const row of images) URL.revokeObjectURL(row.previewUrl);
     setImages([]);
+    setAttachments([]);
   };
 
-  const canSend = text.trim().length > 0 || images.some((i) => i.data.length > 0);
+  const canSend =
+    text.trim().length > 0 ||
+    images.some((i) => i.data.length > 0) ||
+    attachments.some((a) => a.data.length > 0);
+
+  const atFileLimit =
+    images.length >= MAX_IMAGES && attachments.length >= MAX_ATTACHMENTS;
 
   return (
     <div
@@ -84,7 +116,7 @@ export function Composer({
       <input
         ref={fileRef}
         type="file"
-        accept="image/jpeg,image/png,image/gif,image/webp"
+        accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.docx,.txt,.md,.csv,application/pdf,text/plain,text/markdown,text/csv,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         multiple
         className="sr-only"
         aria-hidden
@@ -132,6 +164,28 @@ export function Composer({
             ))}
           </div>
         ) : null}
+        {attachments.length > 0 ? (
+          <div className="mb-1.5 flex flex-wrap gap-1.5 px-0.5">
+            {attachments.map((att) => (
+              <div
+                key={att.id}
+                className="flex max-w-full items-center gap-1.5 rounded-lg border border-neutral-200/80 bg-white px-2 py-1.5 text-xs text-neutral-700"
+              >
+                <FileText className="h-3.5 w-3.5 shrink-0 text-neutral-500" />
+                <span className="truncate">{att.filename}</span>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => removeAttachment(att.id)}
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-50"
+                  aria-label={`Remove ${att.filename}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <textarea
           rows={2}
           aria-label={placeholder}
@@ -152,11 +206,11 @@ export function Composer({
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <button
               type="button"
-              disabled={disabled || images.length >= MAX_IMAGES}
+              disabled={disabled || atFileLimit}
               onClick={() => fileRef.current?.click()}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Add images"
-              title="Add images"
+              aria-label="Add images or documents"
+              title="Add images or documents"
             >
               <Plus className="h-4 w-4" />
             </button>

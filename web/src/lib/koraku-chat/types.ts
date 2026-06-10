@@ -1,4 +1,4 @@
-import type { ComposerImage } from "@/components/Composer";
+import type { ComposerAttachment, ComposerImage } from "@/components/Composer";
 import type { RunState } from "@/lib/korakuReducer";
 
 export type ChatMessage =
@@ -7,6 +7,7 @@ export type ChatMessage =
       role: "user";
       text: string;
       images?: { id: string; previewUrl: string }[];
+      attachments?: { id: string; filename: string }[];
     }
   | { id: string; role: "assistant"; run: RunState };
 
@@ -31,6 +32,7 @@ export type OutboundJob = {
   model: string;
   dropdownModelLabel: string;
   images: ComposerImage[];
+  attachments: ComposerAttachment[];
 };
 
 export type StreamingTurn = {
