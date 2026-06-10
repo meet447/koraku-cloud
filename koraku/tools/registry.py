@@ -69,8 +69,7 @@ def _resolve_host_path(path: str, *, parent_for_new_file: bool = False) -> tuple
         fpath = os.path.abspath(os.path.join(root, raw))
     if not settings.host_file_tools_restrict_to_workspace:
         return fpath, None
-    check_path = os.path.dirname(fpath) if parent_for_new_file else fpath
-    if not _path_is_under(check_path, root):
+    if not _path_is_under(fpath, root):
         return None, f"Error: Path must stay under workspace: {root}"
     return fpath, None
 
