@@ -91,9 +91,9 @@ async def _automations_create(**kwargs: Any) -> str:
     tm = trigger_mode.lower()
     if tm == "event":
         return (
-            "Error: Event automations must be created in the Koraku UI or API so a webhook "
-            "URL and token are issued. Use AutomationsCreate with trigger_mode 'scheduled' "
-            "for cron-based runs."
+            "Error: Event automations are created in the Koraku Automations UI (trigger: App event) "
+            "or POST /api/automations so webhook URLs and Composio triggers are provisioned. "
+            "Use trigger_mode 'scheduled' here for cron-based runs."
         )
     if tm != "scheduled":
         return (
@@ -252,7 +252,7 @@ def _build_automations_create_tool():
         description=(
             "Create a saved automation shown in the Automations app. "
             "Use trigger_mode 'scheduled' with timezone (IANA) and cron_expression (5 cron fields). "
-            "Event triggers are not available yet. "
+            "For app event triggers (Gmail, Slack, etc.), create the automation in the UI or POST /api/automations. "
             "natural_language_spec is the full user intent (what to do when the automation runs)."
         ),
         input_schema={
@@ -268,7 +268,7 @@ def _build_automations_create_tool():
                 },
                 "trigger_mode": {
                     "type": "string",
-                    "description": "Must be 'scheduled' (event triggers are not available yet)",
+                    "description": "Must be 'scheduled' (use UI/API for event triggers)",
                 },
                 "timezone": {
                     "type": "string",
@@ -280,7 +280,7 @@ def _build_automations_create_tool():
                 },
                 "event_display": {
                     "type": "string",
-                    "description": "Ignored; event triggers are not available yet",
+                    "description": "Ignored for scheduled automations; use UI for event triggers",
                 },
                 "headline": {
                     "type": "string",

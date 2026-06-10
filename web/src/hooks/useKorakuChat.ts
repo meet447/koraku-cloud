@@ -45,6 +45,7 @@ import { safeError } from "@/lib/safe-log";
 import { supabaseAuthHeaders } from "@/lib/supabase/fetch-auth";
 import { sortChatSessions } from "@/lib/chat-sessions";
 import { rememberLastActiveThreadId, readLastActiveThreadId } from "@/lib/last-active-thread";
+import type { ComposerAttachment } from "@/lib/composer-attachments";
 import type { ComposerImage } from "@/lib/composer-images";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
@@ -451,6 +452,7 @@ export function useKorakuChat() {
 
         const trimmed = job.text.trim();
         const imgs = job.images.filter((i) => i.data.length > 0);
+        const atts = job.attachments.filter((a) => a.data.length > 0);
         const priorMessages = messagesBySessionRef.current[sid] ?? [];
         const label =
           (job.dropdownModelLabel || "").trim() || (job.model || "").trim() || "";
@@ -465,6 +467,7 @@ export function useKorakuChat() {
           trimmed.length,
           imgs.length,
           persistenceEnabledRef.current,
+          atts.length,
         );
         const userImages =
           imgs.length > 0
@@ -480,14 +483,27 @@ export function useKorakuChat() {
             : trimmed
           : imgs.length > 1
             ? "Images"
-            : "Image";
+            : imgs.length === 1
+              ? "Image"
+              : atts.length > 1
+                ? "Attachments"
+                : atts[0]?.filename || "Attachment";
 
         markStreamStart(sid);
 
         setMessagesBySession((prev) => {
           const nextList: ChatMessage[] = [
             ...(prev[sid] ?? []),
-            { id: userMsgId, role: "user", text: trimmed, images: userImages },
+            {
+              id: userMsgId,
+              role: "user",
+              text: trimmed,
+              images: userImages,
+              attachments:
+                atts.length > 0
+                  ? atts.map((a) => ({ id: a.id, filename: a.filename }))
+                  : undefined,
+            },
             {
               id: assistantMsgId,
               role: "assistant",
@@ -551,6 +567,11 @@ export function useKorakuChat() {
           client_tz: clientTz || null,
           client_locale: clientLocale || null,
           images: imgs.map((i) => ({ media_type: i.media_type, data: i.data })),
+          attachments: atts.map((a) => ({
+            filename: a.filename,
+            media_type: a.media_type,
+            data: a.data,
+          })),
         };
         const clientHistory = chatMessagesToClientHistory(priorMessages);
         if (clientHistory.length > 0) body.client_history = clientHistory;
@@ -930,10 +951,12 @@ export function useKorakuChat() {
       model: string,
       dropdownModelLabel: string,
       images: ComposerImage[] = [],
+      attachments: ComposerAttachment[] = [],
     ) => {
       const trimmed = text.trim();
       const imgs = images.filter((i) => i.data.length > 0);
-      if (!trimmed && imgs.length === 0) return;
+      const atts = attachments.filter((a) => a.data.length > 0);
+      if (!trimmed && imgs.length === 0 && atts.length === 0) return;
       if (!hydrated) return;
 
       const sid = activeIdRef.current;
@@ -944,6 +967,7 @@ export function useKorakuChat() {
         model,
         dropdownModelLabel,
         images: imgs.map((i) => ({ ...i })),
+        attachments: atts.map((a) => ({ ...a })),
       };
 
       if (streamingSidsRef.current.has(sid)) {
@@ -1286,6 +1310,7 @@ export type KorakuChatThreadApi = {
     model: string,
     dropdownModelLabel: string,
     images?: ComposerImage[],
+    attachments?: ComposerAttachment[],
   ) => void;
   serverChatSessionByUi: Record<string, string>;
   workspaceRefreshToken: number;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   Brain,
@@ -35,7 +35,7 @@ function TreeRows({
   children,
   hasItems,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   hasItems: boolean;
 }) {
   if (!hasItems) return null;
@@ -50,7 +50,7 @@ function TreeRows({
   );
 }
 
-function TreeRow({ children }: { children: React.ReactNode }) {
+function TreeRow({ children }: { children: ReactNode }) {
   return (
     <li className="relative m-0 pb-5 pl-10 last:pb-1">
       <div
@@ -71,8 +71,11 @@ function ThoughtBlock({
   body: string;
   live?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const open = expanded;
+  const header = live
+    ? `Thinking · ${seconds.toFixed(1)}s`
+    : `Thought for ${seconds.toFixed(1)}s`;
 
   return (
     <div className="text-[13px] leading-snug">
@@ -88,15 +91,7 @@ function ThoughtBlock({
             <ChevronRight className="h-4 w-4" />
           )}
         </span>
-        <span className="font-semibold text-koraku-ink">
-          {live ? "Thinking" : `Thought for ${seconds.toFixed(1)}s`}
-          {live ? (
-            <span className="font-medium text-neutral-400">
-              {" "}
-              · {seconds.toFixed(1)}s
-            </span>
-          ) : null}
-        </span>
+        <span className="font-semibold text-koraku-ink">{header}</span>
       </button>
       {open ? (
         <p
@@ -111,6 +106,8 @@ function ThoughtBlock({
     </div>
   );
 }
+
+const MemoThoughtBlock = memo(ThoughtBlock);
 
 function DetailText({
   text,
@@ -148,21 +145,58 @@ function DetailText({
   );
 }
 
+const WORKER_LABELS: Record<string, string> = {
+  research: KORAKU_COPY.researchWorker,
+  code: KORAKU_COPY.codeWorker,
+  document: "Document worker",
+  presentation: "Presentation worker",
+  spreadsheet: "Spreadsheet worker",
+  pdf: "PDF worker",
+};
+
+function subagentGroupLabel(
+  row: Extract<TimelineRow, { kind: "subagent" }>,
+): string {
+  if (row.variant === "workhorse") {
+    const w = WORKER_LABELS[row.worker || ""] || row.worker || "Worker";
+    return row.open ? w : `${w} (done)`;
+  }
+  if (row.variant === "parallel") {
+    const n = row.parallelCount || Math.max(1, row.children.length);
+    const base = `${KORAKU_COPY.parallelWorkers} · ${n}`;
+    return row.open ? base : `${base} (done)`;
+  }
+  const tk = row.toolkits.length ? row.toolkits.join(", ") : "integrations";
+  return row.open
+    ? `${KORAKU_COPY.connectedAppsWorker} · ${tk}`
+    : `${KORAKU_COPY.connectedAppsWorker} · ${tk} (done)`;
+}
+
 function SubagentGroup({
   row,
 }: {
   row: Extract<TimelineRow, { kind: "subagent" }>;
 }) {
-  const [open, setOpen] = useState(true);
-  const tk = row.toolkits.length ? row.toolkits.join(", ") : "integrations";
-  const label = row.open
-    ? `${KORAKU_COPY.connectedAppsWorker} · ${tk}`
-    : `${KORAKU_COPY.connectedAppsWorker} · ${tk} (done)`;
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const open = userOpen ?? row.open;
+  const label = subagentGroupLabel(row);
+  const accent =
+    row.variant === "workhorse"
+      ? "text-sky-500"
+      : row.variant === "parallel"
+        ? "text-amber-600"
+        : "text-violet-500";
+  const border =
+    row.variant === "workhorse"
+      ? "border-sky-200/80"
+      : row.variant === "parallel"
+        ? "border-amber-200/80"
+        : "border-violet-200/80";
   return (
     <div className="text-[13px] leading-snug">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setUserOpen((o) => !(o ?? row.open))}
         className="flex w-full items-start gap-2 text-left"
       >
         <span className="mt-0.5 shrink-0 text-neutral-500">
@@ -172,25 +206,25 @@ function SubagentGroup({
             <ChevronRight className="h-4 w-4" />
           )}
         </span>
-        <Layers2 className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" aria-hidden />
+        <Layers2 className={`mt-0.5 h-4 w-4 shrink-0 ${accent}`} aria-hidden />
         <span className="font-semibold text-koraku-ink">{label}</span>
       </button>
       {open ? (
-        <div className="mt-2 space-y-4 border-l border-violet-200/80 pl-3 ml-[1.125rem]">
+        <div className={`mt-2 space-y-4 border-l ${border} pl-3 ml-[1.125rem]`}>
           {row.children.length === 0 ? (
             <p className="text-[12px] text-neutral-400">Working…</p>
           ) : (
             row.children.map((child) => (
               <div key={child.id}>
                 {child.kind === "thought" ? (
-                  <ThoughtBlock
+                  <MemoThoughtBlock
                     seconds={child.seconds}
                     body={child.body}
                   />
                 ) : child.kind === "subagent" ? (
-                  <SubagentGroup row={child} />
+                  <MemoSubagentGroup row={child} />
                 ) : (
-                  <ToolLine row={child} />
+                  <MemoToolLine row={child} />
                 )}
               </div>
             ))
@@ -247,7 +281,67 @@ function ToolLine({ row }: { row: Extract<TimelineRow, { kind: "tool" }> }) {
   );
 }
 
-export function ToolTimeline({
+const MemoToolLine = memo(
+  ToolLine,
+  (prev, next) =>
+    prev.row === next.row ||
+    (prev.row.id === next.row.id &&
+      prev.row.label === next.row.label &&
+      prev.row.detail === next.row.detail &&
+      prev.row.ok === next.row.ok &&
+      prev.row.callId === next.row.callId),
+);
+
+/** Timer isolated so the full trace tree does not re-render every 500ms. */
+function LiveThoughtBlock({
+  started,
+  body,
+}: {
+  started: number;
+  body: string;
+}) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => setTick((x) => x + 1), 500);
+    return () => clearInterval(t);
+  }, []);
+  const seconds = useMemo(() => {
+    void tick;
+    return Math.round(Math.max(0, (Date.now() - started) / 1000) * 10) / 10;
+  }, [started, tick]);
+  return <ThoughtBlock seconds={seconds} body={body} live />;
+}
+
+function hasRunningToolInTimeline(rows: TimelineRow[]): boolean {
+  for (const row of rows) {
+    if (row.kind === "tool" && row.callId) return true;
+    if (row.kind === "subagent" && hasRunningToolInTimeline(row.children)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const MemoSubagentGroup = memo(
+  SubagentGroup,
+  (prev, next) =>
+    prev.row === next.row ||
+    (prev.row.id === next.row.id &&
+      prev.row.open === next.row.open &&
+      prev.row.children === next.row.children),
+);
+
+function timelineRowNode(row: TimelineRow): ReactNode {
+  if (row.kind === "thought") {
+    return <MemoThoughtBlock seconds={row.seconds} body={row.body} />;
+  }
+  if (row.kind === "subagent") {
+    return <MemoSubagentGroup row={row} />;
+  }
+  return <MemoToolLine row={row} />;
+}
+
+function ToolTimelineInner({
   rows,
   activeThought,
   toolCallCount,
@@ -261,69 +355,33 @@ export function ToolTimeline({
 }) {
   const [manualCardOpen, setManualCardOpen] = useState<boolean | null>(null);
   const cardOpen = manualCardOpen ?? streamingExpand;
-  const [tick, setTick] = useState(0);
 
-  useEffect(() => {
-    if (!activeThought) return;
-    const t = window.setInterval(() => setTick((x) => x + 1), 500);
-    return () => clearInterval(t);
-  }, [activeThought]);
-
-  const liveThoughtSeconds = useMemo(() => {
-    if (!activeThought) return 0;
-    void tick;
-    return Math.max(0, (Date.now() - activeThought.started) / 1000);
-  }, [activeThought, tick]);
-
-  const nTools = toolCallCount;
-  const hasRunningTool = rows.some(
-    (row) => row.kind === "tool" && Boolean(row.callId),
+  const hasRunningTool = useMemo(
+    () => hasRunningToolInTimeline(rows),
+    [rows],
   );
-  const hasTree =
-    rows.length > 0 || activeThought != null || nTools > 0;
+  const hasTree = rows.length > 0 || activeThought != null || toolCallCount > 0;
+
+  const header = useMemo(() => {
+    if (hasRunningTool) return "Running tools";
+    if (toolCallCount > 0) {
+      return `Called ${toolCallCount} tool${toolCallCount === 1 ? "" : "s"}`;
+    }
+    return "Agent activity";
+  }, [hasRunningTool, toolCallCount]);
+
+  const rowEntries = useMemo(
+    () =>
+      rows.map((row) => ({
+        key: row.id,
+        node: timelineRowNode(row),
+      })),
+    [rows],
+  );
+
+  const showLiveThought = activeThought != null;
 
   if (!hasTree) return null;
-
-  const header =
-    hasRunningTool
-      ? "Running tools"
-      : nTools > 0
-        ? `Called ${nTools} tool${nTools === 1 ? "" : "s"}`
-        : "Agent activity";
-
-  const entries: { key: string; node: React.ReactNode }[] = [];
-
-  rows.forEach((row) => {
-    if (row.kind === "thought") {
-      entries.push({
-        key: row.id,
-        node: <ThoughtBlock seconds={row.seconds} body={row.body} />,
-      });
-    } else if (row.kind === "subagent") {
-      entries.push({
-        key: row.id,
-        node: <SubagentGroup row={row} />,
-      });
-    } else {
-      entries.push({
-        key: row.id,
-        node: <ToolLine row={row} />,
-      });
-    }
-  });
-
-  if (activeThought) {
-    entries.push({
-      key: "__live_thought__",
-      node: (
-        <ThoughtBlock
-          seconds={Math.round(liveThoughtSeconds * 10) / 10}
-          body={activeThought.text}
-          live
-        />
-      ),
-    });
-  }
 
   return (
     <div className="mb-6 bg-transparent px-0 py-1">
@@ -341,12 +399,44 @@ export function ToolTimeline({
       </button>
 
       {cardOpen && (
-        <TreeRows hasItems={entries.length > 0}>
-          {entries.map((e) => (
+        <TreeRows hasItems={rowEntries.length > 0 || showLiveThought}>
+          {rowEntries.map((e) => (
             <TreeRow key={e.key}>{e.node}</TreeRow>
           ))}
+          {showLiveThought && activeThought ? (
+            <TreeRow key="__live_thought__">
+              <LiveThoughtBlock
+                started={activeThought.started}
+                body={activeThought.text}
+              />
+            </TreeRow>
+          ) : null}
         </TreeRows>
       )}
     </div>
   );
 }
+
+function toolTimelinePropsEqual(
+  prev: {
+    rows: TimelineRow[];
+    activeThought: RunState["activeThought"];
+    toolCallCount: number;
+    streamingExpand?: boolean;
+  },
+  next: {
+    rows: TimelineRow[];
+    activeThought: RunState["activeThought"];
+    toolCallCount: number;
+    streamingExpand?: boolean;
+  },
+): boolean {
+  return (
+    prev.rows === next.rows &&
+    prev.toolCallCount === next.toolCallCount &&
+    prev.streamingExpand === next.streamingExpand &&
+    prev.activeThought === next.activeThought
+  );
+}
+
+export const ToolTimeline = memo(ToolTimelineInner, toolTimelinePropsEqual);

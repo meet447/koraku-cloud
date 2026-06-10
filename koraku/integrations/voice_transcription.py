@@ -17,6 +17,7 @@ from koraku.integrations.inbound_media_url import (validate_inbound_media_url,
 log = logging.getLogger(__name__)
 
 MAX_AUDIO_BYTES = 15 * 1024 * 1024
+MAX_MEDIA_BYTES_DEFAULT = 15 * 1024 * 1024
 
 AUDIO_EXTENSIONS = frozenset(
     {
@@ -75,8 +76,8 @@ def classify_media_url(url: str) -> str:
         return "audio"
     if ext in IMAGE_EXTENSIONS:
         return "image"
-    if ext in (".pdf", ".doc", ".docx", ".txt", ".vcf"):
-        return "other"
+    if ext in (".pdf", ".doc", ".docx", ".txt", ".md", ".markdown", ".csv", ".vcf"):
+        return "document"
     return "other"
 
 
@@ -99,10 +100,15 @@ _REDIRECT_STATUS = frozenset({301, 302, 303, 307, 308})
 _MAX_REDIRECTS = 5
 
 
-async def download_media(url: str) -> tuple[bytes, str | None] | None:
+async def download_media_bytes(
+    url: str,
+    *,
+    max_bytes: int | None = None,
+) -> tuple[bytes, str | None] | None:
     current = validate_inbound_media_url(url)
     if not current:
         return None
+    limit = int(max_bytes if max_bytes is not None else MAX_MEDIA_BYTES_DEFAULT)
 
     async def validate_url_hook(request: httpx.Request) -> None:
         if not validate_redirect_url(str(request.url)):
@@ -119,17 +125,21 @@ async def download_media(url: str) -> tuple[bytes, str | None] | None:
         ) as client:
             res = await client.get(current)
     except httpx.HTTPError as e:
-        log.warning("voice media download failed: %s", e)
+        log.warning("inbound media download failed: %s", e)
         return None
     if not res.is_success:
         code = res.status_code
-        log.warning("voice media download %s: %s", code, url[:120])
+        log.warning("inbound media download %s: %s", code, url[:120])
         return None
     data = res.content
-    if len(data) > MAX_AUDIO_BYTES:
-        log.warning("voice media too large (%s bytes)", len(data))
+    if len(data) > limit:
+        log.warning("inbound media too large (%s bytes)", len(data))
         return None
     return data, res.headers.get("content-type")
+
+
+async def download_media(url: str) -> tuple[bytes, str | None] | None:
+    return await download_media_bytes(url, max_bytes=MAX_AUDIO_BYTES)
 
 
 async def transcribe_audio_bytes(

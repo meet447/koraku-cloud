@@ -74,6 +74,7 @@ class SessionState(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
     step_count: int = 0
+    pinned_context: list[dict[str, Any]] = Field(default_factory=list)
 
     def touch(self) -> None:
         self.updated_at = utcnow()

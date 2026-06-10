@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from koraku.agent import _step_budget, get_or_create_chat_session
+from koraku.agent.budget import classify_turn_task, credit_reserve_for_task_class
 from koraku.core.session_store import get_session_store
 from koraku.agent.runtime_context import AgentRunContext, ExecutionTarget
 from koraku.agent.unconfigured import run_unconfigured
@@ -90,6 +91,32 @@ class StreamImagePart(BaseModel):
         return m
 
 
+class StreamAttachmentPart(BaseModel):
+    """Document attachment as raw base64 (PDF, DOCX, TXT, MD, CSV)."""
+
+    filename: str = Field(..., max_length=255)
+    media_type: str = Field(..., max_length=128)
+    data: str = Field(..., max_length=20_000_000)
+
+    @field_validator("filename")
+    @classmethod
+    def filename_nonempty(cls, v: str) -> str:
+        name = (v or "").strip()
+        if not name:
+            raise ValueError("filename is required")
+        return name
+
+    @model_validator(mode="after")
+    def supported_type(self) -> "StreamAttachmentPart":
+        from koraku.integrations.attachment_extract import is_supported_attachment
+
+        if not is_supported_attachment(self.filename, self.media_type):
+            raise ValueError(
+                "Unsupported attachment — use PDF, DOCX, TXT, MD, or CSV."
+            )
+        return self
+
+
 class StreamClientHistoryMessage(BaseModel):
     """One visible prior chat message sent by the browser as a hydration fallback."""
 
@@ -122,6 +149,7 @@ class StreamChatBody(BaseModel):
     client_tz: str | None = None
     client_locale: str | None = None
     images: list[StreamImagePart] = Field(default_factory=list, max_length=8)
+    attachments: list[StreamAttachmentPart] = Field(default_factory=list, max_length=4)
     client_history: list[StreamClientHistoryMessage] = Field(default_factory=list, max_length=40)
     # Client turn UUID; when set on ``POST /runs`` it becomes the detached ``run_id`` (idempotent resume).
     turn_id: str = Field(default="", max_length=64)
@@ -130,8 +158,10 @@ class StreamChatBody(BaseModel):
 
     @model_validator(mode="after")
     def msg_or_images(self) -> "StreamChatBody":
-        if not (self.msg.strip() or self.images):
-            raise ValueError("Provide a non-empty message and/or at least one image")
+        if not (self.msg.strip() or self.images or self.attachments):
+            raise ValueError(
+                "Provide a non-empty message, image(s), and/or document attachment(s)"
+            )
         tid = (self.turn_id or "").strip()
         if tid:
             try:
@@ -183,10 +213,21 @@ async def _yield_sse_events_from_queue(
             await asyncio.sleep(0)
 
 
+def _merge_attachment_context(msg: str, attachment_context: str) -> str:
+    base = (msg or "").strip()
+    ctx = (attachment_context or "").strip()
+    if not ctx:
+        return base
+    if not base:
+        return ctx
+    return f"{base}\n\n{ctx}"
+
+
 async def _stream_agent_sse(
     msg: str,
     *,
     images: list[StreamImagePart],
+    attachments: list[StreamAttachmentPart] | None = None,
     model: str,
     provider: str,
     session_id: str | None,
@@ -201,15 +242,46 @@ async def _stream_agent_sse(
     cancel_event: asyncio.Event | None = None,
     stream_run_id: str | None = None,
     execution_target: ExecutionTarget | None = None,
+    resume_checkpoint: Any | None = None,
 ) -> AsyncIterator[str]:
-    session = await asyncio.to_thread(
-        get_or_create_chat_session,
-        session_id, owner_sub=auth_sub, owner_org_id=auth_org_id
-    )
+    from koraku.core.run_checkpoint import RunCheckpoint, restore_session
+
+    resume_turn = False
+    if resume_checkpoint is not None:
+        cp = (
+            resume_checkpoint
+            if isinstance(resume_checkpoint, RunCheckpoint)
+            else RunCheckpoint.model_validate(resume_checkpoint)
+        )
+        session = restore_session(cp)
+        resume_turn = True
+    else:
+        session = await asyncio.to_thread(
+            get_or_create_chat_session,
+            session_id, owner_sub=auth_sub, owner_org_id=auth_org_id
+        )
     eff_provider, resolved_model = resolve_provider_and_model(provider, model)
-    budget = msg.strip() or ("[images]" if images else "")
     exec_target = execution_target or normalize_stream_execution_target(None)
     blaxel_lazy = exec_target == "cloud" and cloud_blaxel_block_reason(settings) is None
+    attachment_rows = [a.model_dump() for a in (attachments or [])]
+    attachment_context = ""
+    if attachment_rows:
+        from koraku.integrations.attachment_extract import process_chat_attachments
+
+        ws_for_attachments = workspace_dir()
+        if blaxel_lazy and product_hooks_active() and auth_sub and session.session_id:
+            ws_for_attachments = session_workspace_root_posix(
+                effective_cloud_user_id(),
+                session.session_id,
+                settings,
+            )
+        attachment_context = await asyncio.to_thread(
+            process_chat_attachments,
+            attachment_rows,
+            workspace=ws_for_attachments,
+        )
+    agent_msg = _merge_attachment_context(msg, attachment_context)
+    budget = agent_msg.strip() or ("[images]" if images else "[attachments]")
 
     stream_state = KorakuStreamState()
     if stream_run_id and str(stream_run_id).strip():
@@ -263,7 +335,7 @@ async def _stream_agent_sse(
     hydration_task = asyncio.create_task(
         hydrate_session_for_turn(
             session,
-            incoming_user_text=msg.strip(),
+            incoming_user_text=agent_msg.strip(),
             auth_sub=auth_sub,
             auth_org_id=auth_org_id,
             client_history=client_history_rows_for_hydration(client_history),
@@ -353,6 +425,18 @@ async def _stream_agent_sse(
         )
     yield format_sse(stream_state.system_init_payload(init_cwd, koraku_boot))
     await asyncio.sleep(0)
+    if resume_turn:
+        yield format_sse(
+            {
+                "type": "koraku.run_resumed",
+                "data": {
+                    "runId": stream_state.run_id,
+                    "step": session.step_count,
+                    "pinned": len(session.pinned_context),
+                },
+            }
+        )
+        await asyncio.sleep(0)
     for row in map_koraku_stream_events({"type": "agent.history", "data": hydration.to_trace_data()}, stream_state):
         yield format_sse(row)
         await asyncio.sleep(0)
@@ -381,10 +465,10 @@ async def _stream_agent_sse(
         try:
             img_payload = [{"media_type": p.media_type, "data": p.data} for p in images]
             agent_iter = (
-                run_unconfigured(msg, session, emit, image_parts=img_payload)
+                run_unconfigured(agent_msg, session, emit, image_parts=img_payload)
                 if agent is None
                 else agent.run(
-                    msg,
+                    agent_msg,
                     session,
                     emit,
                     model=model,
@@ -398,6 +482,9 @@ async def _stream_agent_sse(
                     org_skills=org_skills,
                     run_id=stream_state.run_id,
                     cancel_event=eff_cancel,
+                    resume_turn=resume_turn,
+                    checkpoint_owner_sub=auth_sub,
+                    checkpoint_owner_org=auth_org_id,
                 )
             )
             async for _ in agent_iter:
@@ -412,7 +499,7 @@ async def _stream_agent_sse(
             await after_turn_memory_ingest(
                 auth_sub=auth_sub,
                 auth_org_id=auth_org_id,
-                msg=msg,
+                msg=agent_msg,
                 session=session,
                 run_id=stream_state.run_id,
             )
@@ -490,7 +577,11 @@ async def stream_endpoint_post(body: StreamChatBody, request: Request):
             limit=settings.chat_rate_limit_per_minute,
         )
     )
-    await pre_check_org(auth_org_id)
+    task_class = classify_turn_task(body.msg.strip())
+    await pre_check_org(
+        auth_org_id,
+        reserve=credit_reserve_for_task_class(task_class),
+    )
 
     agent = getattr(request.app.state, "koraku_agent", None)
     server_mode = getattr(request.app.state, "server_mode", "unconfigured")
@@ -508,6 +599,7 @@ async def stream_endpoint_post(body: StreamChatBody, request: Request):
             async for chunk in _stream_agent_sse(
                 body.msg.strip(),
                 images=body.images,
+                attachments=body.attachments,
                 model=body.model,
                 provider=body.provider,
                 session_id=(body.session_id.strip() or None),

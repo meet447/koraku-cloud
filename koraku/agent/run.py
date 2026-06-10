@@ -40,9 +40,12 @@ from koraku.agent.composio_delegate_context import (
 )
 from koraku.tools.composio_delegate_tool import COMPOSIO_RUN_TOOL
 from koraku.tools.artifact_delegate_tool import ARTIFACT_RUN_TOOLS
+from koraku.tools.parallel_delegate_tool import PARALLEL_RUN_TOOL
+from koraku.tools.workhorse_delegate_tool import WORKHORSE_RUN_TOOLS
 from koraku.integrations.artifact_prompt import (
     artifact_subagent_mode_active,
 )
+from koraku.integrations.workhorse_prompt import workhorse_subagent_mode_active
 from koraku.agent.blaxel_scope import blaxel_sandbox_scope, blaxel_session_workspace_scope
 from koraku.integrations.cloud_user import effective_cloud_user_id
 from koraku.workspace.agent_workspace import agent_workspace_scope
@@ -75,6 +78,12 @@ from koraku.agent.events import (
 )
 from koraku.agent.tool_executor import ToolExecutionMixin
 from koraku.agent.delegation import SubagentDelegationMixin
+from koraku.agent.context_pins import (
+    format_pinned_context,
+    pinned_tool_use_ids,
+    record_pins,
+)
+from koraku.core.run_checkpoint import mark_checkpoint_completed, save_checkpoint
 
 log = logging.getLogger(__name__)
 
@@ -162,6 +171,14 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                 if t.name not in seen:
                     active_tools.append(t)
                     seen.add(t.name)
+        if workhorse_subagent_mode_active():
+            for t in WORKHORSE_RUN_TOOLS:
+                if t.name not in seen:
+                    active_tools.append(t)
+                    seen.add(t.name)
+            if PARALLEL_RUN_TOOL.name not in seen:
+                active_tools.append(PARALLEL_RUN_TOOL)
+                seen.add(PARALLEL_RUN_TOOL.name)
         for t in extra_tools:
             if t.name not in seen:
                 active_tools.append(t)
@@ -203,6 +220,9 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
         *,
         run_id: str | None = None,
         cancel_event: asyncio.Event | None = None,
+        resume_turn: bool = False,
+        checkpoint_owner_sub: str | None = None,
+        checkpoint_owner_org: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         composio_registry_token: list[Any] = [None]
         try:
@@ -225,6 +245,9 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                     org_skills=org_skills,
                     run_id=run_id,
                     cancel_event=cancel_event,
+                    resume_turn=resume_turn,
+                    checkpoint_owner_sub=checkpoint_owner_sub,
+                    checkpoint_owner_org=checkpoint_owner_org,
                 ):
                     yield row
         finally:
@@ -250,6 +273,9 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
         *,
         run_id: str | None = None,
         cancel_event: asyncio.Event | None = None,
+        resume_turn: bool = False,
+        checkpoint_owner_sub: str | None = None,
+        checkpoint_owner_org: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         from koraku.integrations.blaxel_lazy import lazy_blaxel_session_active
         from koraku.integrations.blaxel_runtime import cloud_blaxel_block_reason, resolve_blaxel_session_root
@@ -295,6 +321,9 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
 
             imessage_budget_tok = reset_imessage_send_budget()
         limits_tok = None
+        from koraku.tools.skills import bind_org_skills, reset_org_skills
+
+        skills_tok = bind_org_skills(org_skills)  # type: ignore[arg-type]
         try:
             with (
                 agent_workspace_scope(ws),
@@ -353,7 +382,11 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                 yield tools_event
 
                 delegate_tok: Any = None
-                needs_delegate = (composio_runtime.is_configured() and bool(settings.composio_subagent_mode)) or artifact_subagent_mode_active()
+                needs_delegate = (
+                    (composio_runtime.is_configured() and bool(settings.composio_subagent_mode))
+                    or artifact_subagent_mode_active()
+                    or workhorse_subagent_mode_active()
+                )
                 if needs_delegate:
                     delegate_tok = set_composio_delegate_context(
                         ComposioDelegateContext(
@@ -375,9 +408,10 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                         )
                     )
                 try:
-                    user_turn = build_user_message_blocks(user_input, imgs)
-                    session.add_message("user", user_turn)
-                    session.step_count = 0
+                    if not resume_turn:
+                        user_turn = build_user_message_blocks(user_input, imgs)
+                        session.add_message("user", user_turn)
+                        session.step_count = 0
                     system_prompt = build_system_prompt(
                         ws,
                         client_timezone=client_timezone,
@@ -411,12 +445,17 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                         cancel_event=cancel_event,
                         run_id=run_id,
                         context_manager=self.context_manager,
+                        checkpoint_owner_sub=checkpoint_owner_sub,
+                        checkpoint_owner_org=checkpoint_owner_org,
                     ):
                         yield ev
+                    if run_id:
+                        await mark_checkpoint_completed(run_id, owner_org_id=checkpoint_owner_org)
                 finally:
                     if delegate_tok is not None:
                         reset_composio_delegate_context(delegate_tok)
         finally:
+            reset_org_skills(skills_tok)
             if limits_tok is not None:
                 reset_active_limits(limits_tok)
             if imessage_budget_tok is not None:
@@ -496,6 +535,8 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
         cancel_event: asyncio.Event | None,
         run_id: str | None,
         context_manager: ContextManager,
+        checkpoint_owner_sub: str | None = None,
+        checkpoint_owner_org: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         loop_tracker = LoopTracker()
         max_rounds = limits.max_rounds
@@ -534,7 +575,17 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                 yield ce
                 return
 
-            context_messages = context_manager.process_messages(session.messages)
+            pin_ids = pinned_tool_use_ids(session)
+            context_messages = context_manager.process_messages(
+                session.messages,
+                pinned_tool_use_ids=pin_ids,
+            )
+            pinned_block = format_pinned_context(session)
+            if pinned_block:
+                context_messages = [
+                    *context_messages,
+                    AgentMessage(role="user", content=pinned_block),
+                ]
             working_memory_context = format_working_memory_context(working_memory)
             if working_memory_context is not None:
                 context_messages = [*context_messages, working_memory_context]
@@ -662,6 +713,8 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
 
             if not tool_uses:
                 session.add_message("assistant", assistant_content, model=effective_model, stop_reason="end_turn")
+                if run_id:
+                    await mark_checkpoint_completed(run_id, owner_org_id=checkpoint_owner_org)
                 done = {
                     "type": "agent.completed",
                     "data": {
@@ -715,6 +768,14 @@ class Agent(SubagentDelegationMixin, ToolExecutionMixin):
                 yield result_event
 
             session.add_message("user", tool_results)
+            record_pins(session, tool_uses, tool_results)
+            if run_id:
+                await save_checkpoint(
+                    run_id=run_id,
+                    session=session,
+                    owner_sub=checkpoint_owner_sub,
+                    owner_org_id=checkpoint_owner_org,
+                )
 
             loop_tracker.record(tool_uses)
             if loop_tracker.has_repeat():

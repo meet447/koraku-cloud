@@ -31,7 +31,12 @@ class ContextManager:
         self.compact_tool_rounds = compact_tool_rounds
         self.summaries: list[str] = []
 
-    def process_messages(self, messages: list[AgentMessage]) -> list[AgentMessage]:
+    def process_messages(
+        self,
+        messages: list[AgentMessage],
+        *,
+        pinned_tool_use_ids: set[str] | None = None,
+    ) -> list[AgentMessage]:
         """
         Process messages for LLM consumption:
         1. Drop thinking tokens
@@ -40,10 +45,11 @@ class ContextManager:
         4. Summarize old history if too long
         5. Apply sliding window
         """
+        pins = pinned_tool_use_ids or set()
         cleaned = self._drop_thinking(messages)
         if self.compact_tool_rounds:
-            cleaned = self._drop_completed_tool_round_pairs(cleaned)
-        cleaned = self._truncate_tool_results(cleaned)
+            cleaned = self._drop_completed_tool_round_pairs(cleaned, pinned_tool_use_ids=pins)
+        cleaned = self._truncate_tool_results(cleaned, pinned_tool_use_ids=pins)
         cleaned = self._summarize_if_needed(cleaned)
         cleaned = self._apply_sliding_window(cleaned)
         cleaned = self._ensure_valid_tool_chains(cleaned)
@@ -146,13 +152,31 @@ class ContextManager:
             return clean[: max_chars - 3].rstrip() + "..."
         return clean
 
-    def _drop_completed_tool_round_pairs(self, messages: list[AgentMessage]) -> list[AgentMessage]:
+    def _tool_use_ids_in_assistant(self, msg: AgentMessage) -> set[str]:
+        ids: set[str] = set()
+        if msg.role != "assistant" or not isinstance(msg.content, list):
+            return ids
+        for block in msg.content:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                tid = str(block.get("id") or "").strip()
+                if tid:
+                    ids.add(tid)
+        return ids
+
+    def _drop_completed_tool_round_pairs(
+        self,
+        messages: list[AgentMessage],
+        *,
+        pinned_tool_use_ids: set[str] | None = None,
+    ) -> list[AgentMessage]:
         """Remove assistant(tool-only) + user(tool-result) pairs; keep Q&A text for follow-ups.
 
         Only drops a pair when the tool result is immediately resolved by a later assistant
         answer. If another user message follows first (for example, "??" after a tool-only
         turn), keep the tool result so the model can recover the missing answer.
+        Pinned tool_use ids are never dropped.
         """
+        pins = pinned_tool_use_ids or set()
         out: list[AgentMessage] = []
         i = 0
         n = len(messages)
@@ -164,6 +188,10 @@ class ContextManager:
                 and self._user_is_tool_results_only(messages[i + 1])
                 and self._assistant_has_visible_text(messages[i + 2])
             ):
+                if self._tool_use_ids_in_assistant(cur) & pins:
+                    out.append(cur)
+                    i += 1
+                    continue
                 i += 2
                 continue
             out.append(cur)
@@ -189,8 +217,20 @@ class ContextManager:
             result.append(AgentMessage(role=msg.role, content=filtered))
         return result
 
-    def _truncate_tool_results(self, messages: list[AgentMessage]) -> list[AgentMessage]:
+    def _truncate_tool_results(
+        self,
+        messages: list[AgentMessage],
+        *,
+        pinned_tool_use_ids: set[str] | None = None,
+    ) -> list[AgentMessage]:
         """Truncate long tool results to save tokens."""
+        pins = pinned_tool_use_ids or set()
+        from koraku.core.config import settings
+
+        pin_cap = max(
+            self.max_tool_result_chars,
+            int(getattr(settings, "context_pinned_tool_result_chars", 6000)),
+        )
         result = []
         for msg in messages:
             if isinstance(msg.content, str):
@@ -200,10 +240,15 @@ class ContextManager:
             for block in msg.content:
                 if isinstance(block, dict) and block.get("type") == "tool_result":
                     content = block.get("content", "")
-                    if isinstance(content, str) and len(content) > self.max_tool_result_chars:
+                    cap = (
+                        pin_cap
+                        if str(block.get("tool_use_id") or "").strip() in pins
+                        else self.max_tool_result_chars
+                    )
+                    if isinstance(content, str) and len(content) > cap:
                         truncated = (
-                            content[: self.max_tool_result_chars]
-                            + f"\n...[truncated: tool result exceeded {self.max_tool_result_chars} chars for LLM context]"
+                            content[:cap]
+                            + f"\n...[truncated: tool result exceeded {cap} chars for LLM context]"
                         )
                         new_block = dict(block)
                         new_block["content"] = truncated

@@ -37,6 +37,8 @@ class UsageAccumulator:
         self.cache_read_input_tokens += int(data.get("cache_read_input_tokens") or 0)
 
     def add_estimated_round(self, *, input_tokens: int, output_tokens: int) -> None:
+        if self.input_tokens > 0 or self.output_tokens > 0:
+            return
         self.estimated_input_tokens += max(0, int(input_tokens))
         self.estimated_output_tokens += max(0, int(output_tokens))
 

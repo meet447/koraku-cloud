@@ -224,6 +224,40 @@ def test_agent_cancelled_emits_completion_with_cancelled_flag() -> None:
     assert rows[1]["data"]["cancelled"] is True
 
 
+def test_artifact_subagent_payload_from_compilation_context() -> None:
+    state = KorakuStreamState()
+    rows = map_koraku_stream_events(
+        {
+            "type": "tool_execution",
+            "data": {
+                "target_capability": "BuildDocument",
+                "evaluation_parameters": {"output_path": "outputs/documents/a.docx"},
+                "execution_id": "call_doc_1",
+            },
+            "subprocess_context": {"workhorse": "document", "format_target": "document"},
+        },
+        state,
+    )
+    inner = json.loads(rows[0]["data"])
+    assert inner["subagent"] == {"workhorse": "document"}
+    assert inner["tool_name"] == "BuildDocument"
+    assert inner["tool_use_id"] == "workhorse:call_doc_1"
+
+
+def test_compilation_start_normalizes_to_workhorse_start() -> None:
+    state = KorakuStreamState()
+    rows = map_koraku_stream_events(
+        {
+            "type": "agent.subagent",
+            "data": {"subprocess_phase": "compilation_start", "format_target": "presentation"},
+            "subprocess_context": {"compilation_active": True, "format_target": "presentation"},
+        },
+        state,
+    )
+    assert rows[0]["data"]["phase"] == "workhorse_start"
+    assert rows[0]["data"]["workhorse"] == "presentation"
+
+
 def test_composio_subagent_completed_does_not_emit_top_level_completion() -> None:
     state = KorakuStreamState()
     rows = map_koraku_stream_events(
@@ -231,6 +265,70 @@ def test_composio_subagent_completed_does_not_emit_top_level_completion() -> Non
             "type": "agent.completed",
             "data": {"reason": "end_turn", "steps": 1, "mode": "composio_sub"},
             "subagent": {"composio": True, "toolkits": ["GMAIL"]},
+        },
+        state,
+    )
+    assert rows == []
+
+
+def test_workhorse_subagent_payload_from_subprocess_context() -> None:
+    state = KorakuStreamState()
+    rows = map_koraku_stream_events(
+        {
+            "type": "tool_execution",
+            "data": {
+                "tool": "WebSearch",
+                "input": {"query": "nifty 50"},
+                "id": "tool_1",
+                "mode": "sequential",
+            },
+            "subprocess_context": {"workhorse": "research"},
+        },
+        state,
+    )
+    inner = _inner(rows[0])
+    assert inner["subagent"] == {"workhorse": "research"}
+    assert inner["tool_use_id"] == "workhorse:tool_1"
+
+
+def test_workhorse_subagent_start_normalizes_phase() -> None:
+    state = KorakuStreamState()
+    rows = map_koraku_stream_events(
+        {
+            "type": "agent.subagent",
+            "data": {"phase": "start", "worker": "research"},
+            "subprocess_context": {"workhorse": "research"},
+        },
+        state,
+    )
+    assert len(rows) == 1
+    assert rows[0]["type"] == "koraku.subagent"
+    assert rows[0]["data"]["phase"] == "workhorse_start"
+    assert rows[0]["data"]["workhorse"] == "research"
+
+
+def test_composio_subagent_start_from_subprocess_phase() -> None:
+    state = KorakuStreamState()
+    rows = map_koraku_stream_events(
+        {
+            "type": "agent.subagent",
+            "data": {"subprocess_phase": "initialization", "active_scopes": ["GMAIL"]},
+            "subprocess_context": {"integration_active": True, "active_scopes": ["GMAIL"]},
+        },
+        state,
+    )
+    assert rows[0]["data"]["phase"] == "composio_start"
+    assert rows[0]["data"]["toolkits"] == ["GMAIL"]
+    assert rows[0]["data"]["composio"] is True
+
+
+def test_workhorse_subagent_completed_does_not_emit_top_level_completion() -> None:
+    state = KorakuStreamState()
+    rows = map_koraku_stream_events(
+        {
+            "type": "agent.completed",
+            "data": {"reason": "end_turn", "steps": 2, "mode": "research_sub_loop"},
+            "subprocess_context": {"workhorse": "research"},
         },
         state,
     )

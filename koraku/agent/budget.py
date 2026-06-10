@@ -105,6 +105,19 @@ _COMPOSIO_WORKER_STRIP_BASE_TOOLS = frozenset(
 _COMPOSIO_WORKER_STRIP_COMPOSE = frozenset({"WebSearch", "WebFetch", "Bash"})
 
 
+def credit_reserve_for_task_class(task_class: str) -> int:
+    """Credits to reserve before starting a run (pre-check headroom)."""
+    base = max(0, int(settings.credits_min_reserve))
+    tc = (task_class or "standard").strip().lower()
+    if tc == "research":
+        extra = int(getattr(settings, "credits_min_reserve_research", 2500))
+        return max(base, extra)
+    if tc == "automation":
+        extra = int(getattr(settings, "credits_min_reserve_automation", 1500))
+        return max(base, extra)
+    return base
+
+
 def classify_turn_task(user_input: str) -> str:
     """``research`` | ``standard`` — trace label and safety budgets only (never tool gating)."""
     text = (user_input or "").lower()
@@ -424,3 +437,55 @@ def composio_worker_sop_appendix(goal_class: str) -> str:
 - Return what was drafted or sent with identifiers (message id, event time).
 """
     return ""
+
+
+_WORKHORSE_DELEGATE_TOOL_NAMES = frozenset(
+    {
+        "ComposioRun",
+        "DocumentRun",
+        "PresentationRun",
+        "SpreadsheetRun",
+        "PdfRun",
+        "ResearchRun",
+        "CodeRun",
+        "VerifyGoal",
+        "ParallelRun",
+    }
+)
+
+_RESEARCH_WORKER_TOOL_NAMES = frozenset(
+    {"WebSearch", "WebFetch", "Read", "Glob", "Grep", "TodoWrite", "MemorySearch", "SkillLoad"}
+)
+
+_CODE_WORKER_TOOL_NAMES = frozenset(
+    {"Read", "Write", "Edit", "Bash", "Glob", "Grep", "TodoWrite", "SkillLoad"}
+)
+
+
+def tools_for_research_worker(base_tools: list[Tool]) -> list[Tool]:
+    return [
+        t
+        for t in base_tools
+        if t.name in _RESEARCH_WORKER_TOOL_NAMES and t.name not in _WORKHORSE_DELEGATE_TOOL_NAMES
+    ]
+
+
+def tools_for_code_worker(base_tools: list[Tool], *, blaxel_active: bool) -> list[Tool]:
+    allowed = set(_CODE_WORKER_TOOL_NAMES)
+    if not blaxel_active:
+        allowed.discard("Bash")
+    return [
+        t
+        for t in base_tools
+        if t.name in allowed and t.name not in _WORKHORSE_DELEGATE_TOOL_NAMES
+    ]
+
+
+def workhorse_max_rounds(*, override: int | None = None) -> int:
+    if override is not None:
+        return max(2, min(int(override), int(settings.workhorse_subagent_max_steps)))
+    return max(4, min(int(settings.workhorse_subagent_max_steps), int(settings.research_max_steps)))
+
+
+def workhorse_wall_seconds() -> float:
+    return float(settings.workhorse_subagent_wall_seconds)

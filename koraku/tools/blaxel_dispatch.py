@@ -13,6 +13,11 @@ from koraku.tools.binary_read_paths import format_binary_read_response, should_u
 
 SANDBOX_VENV_DIR = ".koraku-venv"
 
+# Pre-baked on first Bash in a session (--no-cache-dir keeps ephemeral VM disks usable).
+_SANDBOX_VENV_PACKAGES = (
+    "pip matplotlib numpy pillow pandas python-docx python-pptx openpyxl pypdf"
+)
+
 _SANDBOX_PYTHON_PREAMBLE = f"""\
 if [ -x {SANDBOX_VENV_DIR}/bin/python ]; then
   export PATH="{SANDBOX_VENV_DIR}/bin:$PATH"
@@ -21,8 +26,8 @@ elif [ ! -f {SANDBOX_VENV_DIR}/.bootstrap_attempted ]; then
   touch {SANDBOX_VENV_DIR}/.bootstrap_attempted
   python3 -m venv {SANDBOX_VENV_DIR} 2>/dev/null || true
   if [ -x {SANDBOX_VENV_DIR}/bin/pip ]; then
-    {SANDBOX_VENV_DIR}/bin/pip install -q -U pip matplotlib numpy pillow pandas 2>/dev/null \\
-      || {SANDBOX_VENV_DIR}/bin/pip install -q -U pip matplotlib numpy pillow pandas --break-system-packages 2>/dev/null \\
+    {SANDBOX_VENV_DIR}/bin/pip install -q --no-cache-dir -U {_SANDBOX_VENV_PACKAGES} 2>/dev/null \\
+      || {SANDBOX_VENV_DIR}/bin/pip install -q --no-cache-dir -U {_SANDBOX_VENV_PACKAGES} --break-system-packages 2>/dev/null \\
       || true
   fi
   [ -x {SANDBOX_VENV_DIR}/bin/python ] && export PATH="{SANDBOX_VENV_DIR}/bin:$PATH"
@@ -36,8 +41,9 @@ def format_blaxel_sandbox_execution_guide(session_root: str) -> str:
     return (
         f"- **Blaxel sandbox** uses folder `{root}`.\n"
         "- **Paths**: relative to that folder (e.g. `chart.py`, `outputs/plot.png`).\n"
-        "- **Python / charts**: Bash auto-activates `.koraku-venv` (created on first shell use). "
-        "Run scripts with `python script.py` after `pip install` packages inside the venv.\n"
+        "- **Python / charts / artifacts**: Bash auto-activates `.koraku-venv` (created on first shell use) "
+        "with matplotlib, python-docx, python-pptx, openpyxl, and pypdf. "
+        "Run scripts with `python script.py`; only pip-install extras when missing.\n"
         "- **Large files**: prefer **Write** with `mode=append` in ~32KB chunks, or Bash "
         "`cat <<'EOF' > file.py` … `EOF` when Write args truncate.\n"
         "- **Grep**: `path` is a directory; to search one file use `path='.'` and "

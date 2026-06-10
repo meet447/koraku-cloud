@@ -15,9 +15,10 @@ from koraku.agent.prompt_sections import (
 from koraku.core.config import settings
 from koraku.integrations import composio as composio_runtime
 from koraku.integrations.artifact_prompt import artifact_dispatcher_prompt_section
+from koraku.integrations.workhorse_prompt import workhorse_dispatcher_prompt_section
 from koraku.integrations.supermemory_client import supermemory_configured
 from koraku.plugins.memory import prefetch_learned_memory_volatile as _prefetch_learned
-from koraku.tools.skills import CloudSkill, load_skill_catalog, skills_empty_message
+from koraku.tools.skills import CloudSkill, load_skill_prompt_section, skills_empty_message
 
 log = logging.getLogger(__name__)
 
@@ -79,6 +80,7 @@ def build_stable_tier(*, display_name: str | None) -> str:
 - **Spreadsheet task:** .xlsx tracking/models → **SpreadsheetRun** with exact geometric structure.
 - **PDF task:** Operations → **PdfRun** with targeted path configurations.
 - **Research task:** WebSearch + WebFetch on canonical URLs. Evaluate data critically; don't just regurgitate text snippets.
+- **Multi-file research deliverables:** After **ResearchRun**, batch independent `.docx`, `.pptx`, and chart PNG work via **ParallelRun** (`document` + `presentation` + `code`) — not one serial worker at a time.
 - **Memory task:** Run **MemorySearch** natively before making historical or relational claims about the user. Use **MemorySave** solely for durable facts they explicitly ask you to track.
 - **Automation task:** Recurrences → Execute mutations on runtime schedules rather than explaining the abstract workflow.
 {MEMORY_RECALL_STABLE}
@@ -87,6 +89,8 @@ def build_stable_tier(*, display_name: str | None) -> str:
 - **Parallel Tool Calling:** Issue independent tool calls concurrently in a single turn whenever safe to optimize execution latency.
 - **Rigorous Web Research:** For time-sensitive facts, prices, or availability, execute parallel **WebSearch** angles and follow up with **WebFetch** on canonical URLs. Evaluate retrieved data critically instead of relying on search result snippets.
 - Use **TodoWrite** exclusively for multi-step work paths requiring 3+ independent deliverables.
+- For deep research, coding in the sandbox, or pre-completion checks, delegate via **ResearchRun**, **CodeRun**, and **VerifyGoal** when those tools are available.
+- When a task matches an entry in the skills index, call **SkillLoad** before executing the playbook.
 - Use native API tool routing channels exclusively. Never emit pseudo-JSON tool structures in plain text channels.
 - Refuse illicit, destructive, or toxic instructions instantly and cleanly, without preaching or lecturing.
 
@@ -112,7 +116,7 @@ def build_context_tier(
         format_soul_section(soul, account_personalization, ws),
         format_memory_section(mem, account_personalization, ws),
     ]
-    skills = load_skill_catalog(ws, cloud_skills=org_skills)
+    skills = load_skill_prompt_section(ws, cloud_skills=org_skills)
     parts.append(skills if skills else skills_empty_message())
     comp = (
         composio_runtime.composio_system_prompt_section()
@@ -124,6 +128,9 @@ def build_context_tier(
     artifact_sec = artifact_dispatcher_prompt_section()
     if artifact_sec.strip():
         parts.append(artifact_sec.strip())
+    workhorse_sec = workhorse_dispatcher_prompt_section()
+    if workhorse_sec.strip():
+        parts.append(workhorse_sec.strip())
     return "\n\n".join(p.strip() for p in parts if p.strip())
 
 

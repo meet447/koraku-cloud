@@ -28,14 +28,23 @@ export type TimelineRow =
   | {
       id: string;
       kind: "subagent";
-      variant: "composio";
+      variant: "composio" | "workhorse" | "parallel";
       toolkits: string[];
-      /** Open until the server sends ``composio_end`` (``koraku.subagent``). */
+      /** Research/code worker label when ``variant === "workhorse"``. */
+      worker?: string;
+      /** Parallel batch size when ``variant === "parallel"``. */
+      parallelCount?: number;
       open: boolean;
       children: TimelineRow[];
     };
 
-/** Composio integration worker stream (nested under a ``ComposioRun`` tool). */
+/** Nested worker stream metadata (Composio, research/code, parallel batch). */
+export type SubagentNestMeta =
+  | { kind: "composio"; toolkits: string[] }
+  | { kind: "workhorse"; worker: string }
+  | { kind: "parallel"; count: number };
+
+/** @deprecated Use SubagentNestMeta */
 export type ComposioSubagentMeta = { composio: true; toolkits: string[] };
 
 /** Persisted turn lifecycle for detached-run resume (stored in Supabase ``content_json.run``). */
@@ -80,7 +89,7 @@ export type RunState = {
    * Latest ``subagent`` payload from ``stream_event`` (thinking/text). Used when finalizing
    * thoughts so rows nest under an open Composio worker group.
    */
-  streamSubagentMeta: ComposioSubagentMeta | null;
+  streamSubagentMeta: SubagentNestMeta | null;
   /** True after this turn emitted ``assistant_message`` with ``tool_use`` blocks. */
   sawToolUseThisTurn: boolean;
   /**
@@ -126,17 +135,136 @@ export function initialRunState(): RunState {
   };
 }
 
-function _metaFromSubagentPayload(sub: unknown): ComposioSubagentMeta | null {
+function _metaFromSubagentPayload(sub: unknown): SubagentNestMeta | null {
   if (sub === true) {
-    return { composio: true, toolkits: [] };
+    return { kind: "composio", toolkits: [] };
   }
   if (!sub || typeof sub !== "object") return null;
   const o = sub as Record<string, unknown>;
-  if (!o.composio) return null;
-  const tk = Array.isArray(o.toolkits)
-    ? (o.toolkits as unknown[]).map((x) => String(x)).filter(Boolean)
-    : [];
-  return { composio: true, toolkits: tk };
+  if (o.composio) {
+    const tk = Array.isArray(o.toolkits)
+      ? (o.toolkits as unknown[]).map((x) => String(x)).filter(Boolean)
+      : [];
+    return { kind: "composio", toolkits: tk };
+  }
+  const worker = String(o.workhorse || "").trim();
+  if (worker) {
+    return { kind: "workhorse", worker };
+  }
+  if (o.parallel) {
+    const count = typeof o.count === "number" ? o.count : 0;
+    return { kind: "parallel", count };
+  }
+  return null;
+}
+
+/** Delegate tools that spawn background workers (nest under parallel batch when active). */
+const DELEGATE_RUN_TOOLS = new Set([
+  "ParallelRun",
+  "ResearchRun",
+  "CodeRun",
+  "DocumentRun",
+  "PresentationRun",
+  "SpreadsheetRun",
+  "PdfRun",
+  "VerifyGoal",
+]);
+
+function _isDelegateRunTool(tool: string): boolean {
+  return DELEGATE_RUN_TOOLS.has(tool);
+}
+
+function _trailingDelegateRunRows(
+  timeline: TimelineRow[],
+): { kept: TimelineRow[]; adopted: TimelineRow[] } {
+  let split = timeline.length;
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    const r = timeline[i];
+    if (r?.kind === "tool" && _isDelegateRunTool(r.tool)) {
+      split = i;
+    } else {
+      break;
+    }
+  }
+  return {
+    kept: timeline.slice(0, split),
+    adopted: timeline.slice(split),
+  };
+}
+
+function _findLastOpenParallelPath(
+  rows: TimelineRow[],
+  path: number[] = [],
+): number[] | null {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (r?.kind !== "subagent") continue;
+    const nextPath = [...path, i];
+    if (r.open && r.variant === "parallel") {
+      return nextPath;
+    }
+    const inner = _findLastOpenParallelPath(r.children, nextPath);
+    if (inner) return inner;
+  }
+  return null;
+}
+
+function _closeParallelNest(timeline: TimelineRow[]): TimelineRow[] {
+  const path = _findLastOpenParallelPath(timeline);
+  if (path) return _closeNestAtPath(timeline, path);
+  return _closeInnermostSubagentNest(timeline);
+}
+
+function _appendRowDuringParallelBatch(
+  s: RunState,
+  row: TimelineRow,
+  meta: SubagentNestMeta | null,
+): RunState {
+  if (_isDelegateRunTool(row.kind === "tool" ? row.tool : "")) {
+    const parallelPath = _findLastOpenParallelPath(s.timeline);
+    if (parallelPath) {
+      return { ...s, timeline: _appendChildAtPath(s.timeline, parallelPath, row) };
+    }
+  }
+  return _appendTimelineRow(s, row, meta);
+}
+
+function _isOpenSubagentRow(r: TimelineRow): r is Extract<TimelineRow, { kind: "subagent" }> {
+  return r.kind === "subagent" && r.open;
+}
+
+function _hasOpenSubagentNest(timeline: TimelineRow[]): boolean {
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    if (_isOpenSubagentRow(timeline[i]!)) return true;
+  }
+  return false;
+}
+
+function _appendChildToOpenSubagentNest(
+  timeline: TimelineRow[],
+  child: TimelineRow,
+): TimelineRow[] {
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    const r = timeline[i];
+    if (_isOpenSubagentRow(r)) {
+      const next = [...timeline];
+      next[i] = { ...r, children: [...r.children, child] };
+      return next;
+    }
+  }
+  return [...timeline, child];
+}
+
+function _closeInnermostSubagentNest(timeline: TimelineRow[]): TimelineRow[] {
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    const r = timeline[i];
+    if (_isOpenSubagentRow(r)) {
+      const next = [...timeline];
+      next[i] = { ...r, open: false };
+      return next;
+    }
+  }
+  return timeline;
 }
 
 function _hasOpenComposioNest(timeline: TimelineRow[]): boolean {
@@ -153,41 +281,133 @@ function _appendChildToOpenComposioNest(
   timeline: TimelineRow[],
   child: TimelineRow,
 ): TimelineRow[] {
-  for (let i = timeline.length - 1; i >= 0; i--) {
-    const r = timeline[i];
-    if (r?.kind === "subagent" && r.variant === "composio" && r.open) {
-      const next = [...timeline];
-      const parent = r;
-      next[i] = {
-        ...parent,
-        children: [...parent.children, child],
-      };
-      return next;
-    }
-  }
-  return [...timeline, child];
+  return _appendChildToOpenSubagentNest(timeline, child);
 }
 
 function _appendTimelineRow(
   s: RunState,
   row: TimelineRow,
-  meta: ComposioSubagentMeta | null,
+  meta: SubagentNestMeta | null,
 ): RunState {
-  if (meta?.composio && _hasOpenComposioNest(s.timeline)) {
-    return { ...s, timeline: _appendChildToOpenComposioNest(s.timeline, row) };
+  if (meta?.kind === "workhorse") {
+    const path =
+      _findOpenWorkerPath(s.timeline, meta.worker) ??
+      _findWorkerPath(s.timeline, meta.worker);
+    if (path) {
+      return { ...s, timeline: _appendChildAtPath(s.timeline, path, row) };
+    }
+  }
+  if (meta?.kind === "composio") {
+    const path = _findOpenComposioPath(s.timeline);
+    if (path) {
+      return { ...s, timeline: _appendChildAtPath(s.timeline, path, row) };
+    }
+  }
+  if (meta && _hasOpenSubagentNest(s.timeline)) {
+    return { ...s, timeline: _appendChildToOpenSubagentNest(s.timeline, row) };
   }
   return { ...s, timeline: [...s.timeline, row] };
 }
 
-/** Stream Composio worker prose into the timeline (never the main answer bubble). */
+const THOUGHT_COALESCE_MIN_CHARS = 48;
+
+function _shouldDropEphemeralThought(s: RunState): boolean {
+  const raw = s.activeThought?.text.trim() ?? "";
+  if (!raw) return true;
+  return raw.length < THOUGHT_COALESCE_MIN_CHARS;
+}
+
+function _clearActiveThought(s: RunState): RunState {
+  return { ...s, activeThought: null };
+}
+
+function _innermostOpenSubagentMeta(timeline: TimelineRow[]): SubagentNestMeta | null {
+  function walk(rows: TimelineRow[]): SubagentNestMeta | null {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const r = rows[i];
+      if (r?.kind !== "subagent" || !r.open) continue;
+      const inner = walk(r.children);
+      if (inner) return inner;
+      if (r.variant === "workhorse" && r.worker) {
+        return { kind: "workhorse", worker: r.worker };
+      }
+      if (r.variant === "composio") {
+        return { kind: "composio", toolkits: r.toolkits };
+      }
+      if (r.variant === "parallel") {
+        return { kind: "parallel", count: r.parallelCount || 0 };
+      }
+    }
+    return null;
+  }
+  return walk(timeline);
+}
+
+function _findWorkerPath(
+  rows: TimelineRow[],
+  worker: string,
+  path: number[] = [],
+): number[] | null {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (r?.kind !== "subagent") continue;
+    const nextPath = [...path, i];
+    if (r.variant === "workhorse" && r.worker === worker) {
+      return nextPath;
+    }
+    const inner = _findWorkerPath(r.children, worker, nextPath);
+    if (inner) return inner;
+  }
+  return null;
+}
+
+function _resolveThoughtNestMeta(
+  s: RunState,
+  metaOverride?: SubagentNestMeta | null,
+): SubagentNestMeta | null {
+  if (metaOverride) return metaOverride;
+  if (s.streamSubagentMeta) return s.streamSubagentMeta;
+  return _innermostOpenSubagentMeta(s.timeline);
+}
+function _finalizeThoughtForNewStep(
+  s: RunState,
+  incomingMeta: SubagentNestMeta | null,
+): RunState {
+  if (!s.activeThought?.text.trim()) {
+    return {
+      ...s,
+      activeThought: null,
+      streamSubagentMeta: incomingMeta ?? s.streamSubagentMeta,
+    };
+  }
+  if (s.streamSubagentMeta || incomingMeta || _innermostOpenSubagentMeta(s.timeline)) {
+    if (_shouldDropEphemeralThought(s)) {
+      return {
+        ...s,
+        activeThought: null,
+        streamSubagentMeta: incomingMeta ?? s.streamSubagentMeta,
+      };
+    }
+    // Finalize under the meta the thought accumulated with — not the incoming step's worker.
+    const finalized = finalizeThought(s, s.streamSubagentMeta);
+    return { ...finalized, streamSubagentMeta: incomingMeta ?? finalized.streamSubagentMeta };
+  }
+  if (s.sawToolUseThisTurn && !_shouldDropEphemeralThought(s)) {
+    return finalizeThought(s);
+  }
+  if (_shouldDropEphemeralThought(s)) {
+    return _clearActiveThought(s);
+  }
+  return finalizeThought(s);
+}
+
 function _appendSubagentProseChunk(
   s: RunState,
   chunk: string,
-  meta: ComposioSubagentMeta,
+  meta: SubagentNestMeta,
 ): RunState {
-  const base = s.streamSubagentMeta?.composio
-    ? s
-    : { ...s, streamSubagentMeta: meta };
+  const base =
+    s.streamSubagentMeta != null ? s : { ...s, streamSubagentMeta: meta };
   if (!base.activeThought) {
     return {
       ...base,
@@ -207,7 +427,7 @@ function _appendSubagentProseChunk(
 
 /** Flush streamed subagent prose when the provider closes a text block (or at turn end). */
 function _finalizeSubagentProse(s: RunState): RunState {
-  if (!s.streamSubagentMeta?.composio || !s.activeThought) {
+  if (!s.streamSubagentMeta || !s.activeThought) {
     return s;
   }
   return finalizeThought(s);
@@ -216,7 +436,7 @@ function _finalizeSubagentProse(s: RunState): RunState {
 function _appendSubagentThoughtRow(
   s: RunState,
   rawBody: string,
-  meta: ComposioSubagentMeta,
+  meta: SubagentNestMeta,
   seconds = 0,
 ): RunState {
   const raw = rawBody.trim();
@@ -254,23 +474,112 @@ function _mapTimelineForToolRow(
   });
 }
 
-function _closeInnermostComposioNest(timeline: TimelineRow[]): TimelineRow[] {
-  for (let i = timeline.length - 1; i >= 0; i--) {
-    const r = timeline[i];
-    if (r?.kind === "subagent" && r.variant === "composio" && r.open) {
-      const next = [...timeline];
-      next[i] = { ...r, open: false };
-      return next;
-    }
-  }
-  return timeline;
+function _findLastOpenParallelIndex(timeline: TimelineRow[]): number {
+  const path = _findLastOpenParallelPath(timeline);
+  if (!path || path.length === 0) return -1;
+  return path[path.length - 1]!;
 }
 
-function finalizeThought(s: RunState): RunState {
+function _findOpenWorkerPath(
+  rows: TimelineRow[],
+  worker: string,
+  path: number[] = [],
+): number[] | null {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (r?.kind !== "subagent") continue;
+    const nextPath = [...path, i];
+    if (r.open && r.variant === "workhorse" && r.worker === worker) {
+      return nextPath;
+    }
+    const inner = _findOpenWorkerPath(r.children, worker, nextPath);
+    if (inner) return inner;
+  }
+  return null;
+}
+
+function _findOpenComposioPath(
+  rows: TimelineRow[],
+  path: number[] = [],
+): number[] | null {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (r?.kind !== "subagent") continue;
+    const nextPath = [...path, i];
+    if (r.open && r.variant === "composio") {
+      return nextPath;
+    }
+    const inner = _findOpenComposioPath(r.children, nextPath);
+    if (inner) return inner;
+  }
+  return null;
+}
+
+function _appendChildAtPath(
+  timeline: TimelineRow[],
+  path: number[],
+  child: TimelineRow,
+): TimelineRow[] {
+  if (path.length === 0) return [...timeline, child];
+  const [head, ...rest] = path;
+  const row = timeline[head];
+  if (!row || row.kind !== "subagent") return timeline;
+  const next = [...timeline];
+  next[head] = {
+    ...row,
+    children: _appendChildAtPath(row.children, rest, child),
+  };
+  return next;
+}
+
+function _closeNestAtPath(timeline: TimelineRow[], path: number[]): TimelineRow[] {
+  if (path.length === 0) return timeline;
+  const [head, ...rest] = path;
+  const row = timeline[head];
+  if (!row || row.kind !== "subagent") return timeline;
+  const next = [...timeline];
+  if (rest.length === 0) {
+    next[head] = { ...row, open: false };
+    return next;
+  }
+  next[head] = {
+    ...row,
+    children: _closeNestAtPath(row.children, rest),
+  };
+  return next;
+}
+
+function _appendWorkerGroup(timeline: TimelineRow[], group: TimelineRow): TimelineRow[] {
+  const parallelIdx = _findLastOpenParallelIndex(timeline);
+  if (parallelIdx >= 0) {
+    return _appendChildAtPath(timeline, [parallelIdx], group);
+  }
+  if (_hasOpenSubagentNest(timeline)) {
+    return _appendChildToOpenSubagentNest(timeline, group);
+  }
+  return [...timeline, group];
+}
+
+function _closeWorkerNest(timeline: TimelineRow[], worker: string): TimelineRow[] {
+  const path = _findOpenWorkerPath(timeline, worker);
+  if (path) return _closeNestAtPath(timeline, path);
+  return _closeInnermostSubagentNest(timeline);
+}
+
+function _closeInnermostComposioNest(timeline: TimelineRow[]): TimelineRow[] {
+  const path = _findOpenComposioPath(timeline);
+  if (path) return _closeNestAtPath(timeline, path);
+  return _closeInnermostSubagentNest(timeline);
+}
+
+function finalizeThought(
+  s: RunState,
+  metaOverride?: SubagentNestMeta | null,
+): RunState {
   if (!s.activeThought) return s;
   const elapsed = Math.max(0, (Date.now() - s.activeThought.started) / 1000);
   const raw = s.activeThought.text.trim();
-  const meta = s.streamSubagentMeta;
+  const meta = _resolveThoughtNestMeta(s, metaOverride);
   if (!raw) {
     return { ...s, activeThought: null, streamSubagentMeta: null };
   }
@@ -288,6 +597,39 @@ function finalizeThought(s: RunState): RunState {
     streamSubagentMeta: null,
   };
   return _appendTimelineRow(cleared, row, meta);
+}
+
+function _subagentGroupFromMeta(meta: SubagentNestMeta): Extract<TimelineRow, { kind: "subagent" }> {
+  if (meta.kind === "composio") {
+    return {
+      id: rid(),
+      kind: "subagent",
+      variant: "composio",
+      toolkits: meta.toolkits,
+      open: true,
+      children: [],
+    };
+  }
+  if (meta.kind === "workhorse") {
+    return {
+      id: rid(),
+      kind: "subagent",
+      variant: "workhorse",
+      toolkits: [],
+      worker: meta.worker,
+      open: true,
+      children: [],
+    };
+  }
+  return {
+    id: rid(),
+    kind: "subagent",
+    variant: "parallel",
+    toolkits: [],
+    parallelCount: meta.count,
+    open: true,
+    children: [],
+  };
 }
 
 /** Min matching suffix length before we treat streamed text as the same span as ``stepText``. */
@@ -530,7 +872,7 @@ function handleToolEvent(s: RunState, event: Record<string, unknown>): RunState 
       callId: id || undefined,
       ...(fileRelPath ? { fileRelPath } : {}),
     };
-    const withRow = _appendTimelineRow(s, row, meta);
+    const withRow = _appendRowDuringParallelBatch(s, row, meta);
     return {
       ...withRow,
       pendingToolByUseId: id
@@ -619,7 +961,7 @@ function handleStreamEvent(s: RunState, ev: Record<string, unknown>): RunState {
   // then a full summary) and duplicate closings.
   if (t === "message_start") {
     const stepMeta = _metaFromSubagentPayload(ev.subagent);
-    let next = finalizeThought(s);
+    let next = _finalizeThoughtForNewStep(s, stepMeta);
     if (stepMeta) {
       return {
         ...next,
@@ -660,10 +1002,20 @@ function handleStreamEvent(s: RunState, ev: Record<string, unknown>): RunState {
     const bType = String(block.type || "");
     let next = { ...s, blockKindByIndex: { ...s.blockKindByIndex, [idx]: bType } };
     if (bType === "thinking") {
-      next = finalizeThought(next);
+      const sm =
+        _metaFromSubagentPayload(ev.subagent) ??
+        s.streamSubagentMeta ??
+        _innermostOpenSubagentMeta(s.timeline);
+      const cur = s.activeThought?.text.trim() ?? "";
+      if (cur && cur.length >= THOUGHT_COALESCE_MIN_CHARS) {
+        next = finalizeThought(next, sm);
+      } else if (s.activeThought) {
+        return { ...next, streamSubagentMeta: sm ?? next.streamSubagentMeta };
+      }
       next = {
         ...next,
-        activeThought: { started: Date.now(), text: "" },
+        streamSubagentMeta: sm,
+        activeThought: { started: Date.now(), text: cur },
       };
     }
     return next;
@@ -719,8 +1071,15 @@ function handleStreamEvent(s: RunState, ev: Record<string, unknown>): RunState {
     const kind = s.blockKindByIndex[idx];
     let next = { ...s };
     if (kind === "thinking") {
-      next = finalizeThought(next);
-    } else if (kind === "text" && next.streamSubagentMeta?.composio) {
+      const sm =
+        _metaFromSubagentPayload(ev.subagent) ??
+        next.streamSubagentMeta ??
+        _innermostOpenSubagentMeta(next.timeline);
+      const cur = next.activeThought?.text.trim() ?? "";
+      if (cur.length >= THOUGHT_COALESCE_MIN_CHARS || cur.includes("\n")) {
+        next = finalizeThought(next, sm);
+      }
+    } else if (kind === "text" && next.streamSubagentMeta) {
       next = _finalizeSubagentProse(next);
     }
     const { [idx]: _i, ...restPart } = next.partialJsonByIndex;
@@ -892,7 +1251,7 @@ export function applyKorakuSseEvent(
   }
 
   if (typ === "koraku.turn_usage") {
-    return next;
+    return s;
   }
 
   if (typ === "koraku.subagent") {
@@ -907,14 +1266,10 @@ export function applyKorakuSseEvent(
       if (_hasOpenComposioNest(tl)) {
         tl = _closeInnermostComposioNest(tl);
       }
-      const group: TimelineRow = {
-        id: rid(),
-        kind: "subagent",
-        variant: "composio",
-        toolkits: tk,
-        open: true,
-        children: [],
-      };
+      const group = _subagentGroupFromMeta({ kind: "composio", toolkits: tk });
+      if (_hasOpenSubagentNest(tl)) {
+        return { ...next, timeline: _appendChildToOpenSubagentNest(tl, group) };
+      }
       return { ...next, timeline: [...tl, group] };
     }
     if (phase === "composio_end") {
@@ -922,6 +1277,43 @@ export function applyKorakuSseEvent(
       return {
         ...flushed,
         timeline: _closeInnermostComposioNest(flushed.timeline),
+        streamSubagentMeta: null,
+      };
+    }
+    if (phase === "workhorse_start") {
+      const worker = String(d.workhorse || d.worker || "worker");
+      const group = _subagentGroupFromMeta({ kind: "workhorse", worker });
+      return { ...next, timeline: _appendWorkerGroup(next.timeline, group) };
+    }
+    if (phase === "workhorse_end") {
+      const worker = String(d.workhorse || d.worker || "").trim();
+      const workerMeta: SubagentNestMeta | null = worker
+        ? { kind: "workhorse", worker }
+        : null;
+      let flushed = next;
+      if (flushed.activeThought?.text.trim()) {
+        flushed = finalizeThought(flushed, flushed.streamSubagentMeta ?? workerMeta);
+      }
+      return {
+        ...flushed,
+        timeline: worker
+          ? _closeWorkerNest(flushed.timeline, worker)
+          : _closeInnermostSubagentNest(flushed.timeline),
+        streamSubagentMeta: null,
+      };
+    }
+    if (phase === "parallel_start") {
+      const count = typeof d.count === "number" ? Number(d.count) : 0;
+      const { kept, adopted } = _trailingDelegateRunRows(next.timeline);
+      const group = _subagentGroupFromMeta({ kind: "parallel", count });
+      group.children = adopted;
+      return { ...next, timeline: [...kept, group] };
+    }
+    if (phase === "parallel_end") {
+      const flushed = finalizeThought(next);
+      return {
+        ...flushed,
+        timeline: _closeParallelNest(flushed.timeline),
         streamSubagentMeta: null,
       };
     }
@@ -992,6 +1384,10 @@ export function applyKorakuSseEvent(
         ev = inner.event as Record<string, unknown>;
       }
       if (!ev) return next;
+      const envelopeSubagent = inner.subagent;
+      if (envelopeSubagent != null && ev.subagent == null) {
+        ev = { ...ev, subagent: envelopeSubagent };
+      }
       return handleStreamEvent(next, ev);
     }
 
