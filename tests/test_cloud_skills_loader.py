@@ -35,7 +35,7 @@ def test_cloud_skill_catalog_ignores_workspace_dot_koraku(tmp_path: Path) -> Non
     (skill_dir / "SKILL.md").write_text("should not load in cloud", encoding="utf-8")
 
     register_product_hooks(ProductHooks())
-    text = skills.load_skill_catalog(
+    text = skills.load_skill_prompt_section(
         str(ws),
         cloud_skills=[
             {
@@ -46,7 +46,10 @@ def test_cloud_skill_catalog_ignores_workspace_dot_koraku(tmp_path: Path) -> Non
             }
         ],
     )
-    assert "Org skill `weekly-plan`" in text
+    assert "Agent skills (index)" in text
+    assert "`weekly-plan`" in text
+    assert "Plan the week" in text
+    assert "Use MemorySearch first." not in text
     assert "local-only" not in text
     assert "should not load" not in text
 

@@ -16,6 +16,9 @@ def _load_spec(path: str | None, inline: str | None) -> dict[str, Any]:
     return {}
 
 
+from koraku.artifacts.pptx_layout import normalize_presentation_spec, slide_body_lines
+
+
 def build_pptx(spec: dict[str, Any], out_path: str) -> str:
     try:
         from pptx import Presentation
@@ -26,6 +29,7 @@ def build_pptx(spec: dict[str, Any], out_path: str) -> str:
         ) from e
 
     prs = Presentation()
+    spec = normalize_presentation_spec(spec)
     title_slide = str(spec.get("title") or "").strip()
     subtitle = str(spec.get("subtitle") or "").strip()
     if title_slide:
@@ -45,9 +49,7 @@ def build_pptx(spec: dict[str, Any], out_path: str) -> str:
         if stitle and slide.shapes.title:
             slide.shapes.title.text = stitle
 
-        body = slide_spec.get("body") or slide_spec.get("bullets") or []
-        if isinstance(body, str):
-            body = [line.strip() for line in body.split("\n") if line.strip()]
+        body = slide_body_lines(slide_spec)
 
         if body and len(slide.placeholders) > 1:
             tf = slide.placeholders[1].text_frame

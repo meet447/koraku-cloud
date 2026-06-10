@@ -43,6 +43,9 @@ export const KORAKU_COPY = {
     "Your Koraku workspace folder appears here after the first reply streams.",
   workspaceTitle: "Workspace",
   connectedAppsWorker: "Connected apps",
+  researchWorker: "Research worker",
+  codeWorker: "Code worker",
+  parallelWorkers: "Parallel workers",
   integrationsDisabled:
     "Connections aren’t available on your workspace yet. You can still browse options below.",
   authNotConfigured: "Sign-in is temporarily unavailable. Please try again later.",

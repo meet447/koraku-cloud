@@ -28,5 +28,7 @@ export function jobPreviewText(job: OutboundJob): string {
   }
   if (job.images.length > 1) return `${job.images.length} images`;
   if (job.images.length === 1) return "Image";
+  if (job.attachments.length > 1) return `${job.attachments.length} attachments`;
+  if (job.attachments.length === 1) return job.attachments[0]?.filename || "Attachment";
   return "…";
 }

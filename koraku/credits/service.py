@@ -42,11 +42,11 @@ class CreditsExhaustedError(HTTPException):
         super().__init__(status_code=402, detail=detail)
 
 
-async def pre_check_org(org_id: str | None) -> UsageSummary | None:
+async def pre_check_org(org_id: str | None, *, reserve: int | None = None) -> UsageSummary | None:
     oid = (org_id or "").strip()
     if not oid or not credits_configured():
         return None
-    allowed, summary = await asyncio.to_thread(pre_check_sync, oid)
+    allowed, summary = await asyncio.to_thread(pre_check_sync, oid, reserve=reserve)
     if not allowed:
         from koraku.credits.store import _org_suspended_sync
 

@@ -6,6 +6,7 @@ from koraku.agent.budget import (
     classify_composio_goal,
     classify_turn_task,
     composio_max_rounds_for_goal,
+    credit_reserve_for_task_class,
     dispatcher_mode_active,
     resolve_turn_limits,
     tools_for_composio_worker,
@@ -16,6 +17,17 @@ from koraku.tools.tool_def import Tool
 
 def _fake_tool(name: str) -> Tool:
     return Tool(name=name, description=name, input_schema={"type": "object", "properties": {}}, handler=lambda **_: "")
+
+
+def test_credit_reserve_for_task_class_research_beats_base(monkeypatch) -> None:
+    from koraku.core.config import settings
+
+    monkeypatch.setattr(settings, "credits_min_reserve", 500)
+    monkeypatch.setattr(settings, "credits_min_reserve_research", 2500)
+    monkeypatch.setattr(settings, "credits_min_reserve_automation", 1500)
+    assert credit_reserve_for_task_class("standard") == 500
+    assert credit_reserve_for_task_class("research") == 2500
+    assert credit_reserve_for_task_class("automation") == 1500
 
 
 def test_classify_turn_task_standard() -> None:
