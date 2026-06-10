@@ -106,6 +106,7 @@ export function Sidebar({
             onClick={onCloseMobile}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition hover:bg-white/90 hover:text-neutral-900 md:hidden"
             aria-label="Close sidebar"
+            title="Close sidebar"
           >
             <X className="h-4 w-4" strokeWidth={iconStroke} />
           </button>
@@ -119,6 +120,7 @@ export function Sidebar({
             onCloseMobile ? "hidden md:flex" : "flex"
           )}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? (
             <PanelLeft className="h-4 w-4" strokeWidth={iconStroke} />

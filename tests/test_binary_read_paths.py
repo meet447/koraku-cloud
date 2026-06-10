@@ -36,7 +36,6 @@ def test_format_binary_response_includes_hints() -> None:
     assert "Bash" in body
 
 
-
 def test_read_tool_local_pdf_returns_guidance(monkeypatch) -> None:
     from koraku.agent.runtime_context import bind_execution_target, reset_execution_target
     from koraku.core.config import settings

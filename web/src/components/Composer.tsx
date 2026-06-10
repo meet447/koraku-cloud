@@ -156,6 +156,7 @@ export function Composer({
                   onClick={() => removeImage(img.id)}
                   className="absolute right-0.5 top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-neutral-900/85 text-white shadow hover:bg-neutral-800 disabled:opacity-50"
                   aria-label="Remove image"
+                  title="Remove image"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -209,6 +210,7 @@ export function Composer({
               onClick={() => fileRef.current?.click()}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Add images or documents"
+              title="Add images or documents"
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -226,6 +228,7 @@ export function Composer({
               disabled={disabled || !canSend}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-white shadow-sm transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
               aria-label="Send"
+              title="Send"
             >
               <ArrowUp className="h-4 w-4" />
             </button>

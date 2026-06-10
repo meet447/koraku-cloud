@@ -70,6 +70,7 @@ export function SidebarChatList({
           }}
           className="rounded-md p-1 text-neutral-400 transition hover:bg-white/80 hover:text-neutral-600"
           aria-label="Search chats"
+          title="Search chats"
         >
           <Search className="h-3.5 w-3.5" strokeWidth={iconStroke} />
         </button>
