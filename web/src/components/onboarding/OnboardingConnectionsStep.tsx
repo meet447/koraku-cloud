@@ -80,10 +80,10 @@ export function OnboardingConnectionsStep({ disabled = false }: { disabled?: boo
     setConnecting(slug);
     setError(null);
     try {
-      const data = await korakuFetchJson<{ redirect_url: string | null }>(
-        "/koraku-api/api/composio/connect",
-        { method: "POST", json: { toolkit: slug } },
-      );
+      const data = await korakuFetchJson<{
+        redirect_url: string | null;
+        already_connected?: boolean;
+      }>("/koraku-api/api/composio/connect", { method: "POST", json: { toolkit: slug } });
       if (data.redirect_url) {
         window.open(data.redirect_url, "_blank", "noopener,noreferrer");
       }

@@ -145,6 +145,28 @@ def user_id() -> str:
     return explicit or "koraku-local"
 
 
+def invalidate_connections_cache(uid: str | None = None) -> None:
+    """Drop cached connection rows and prompt sections for a Composio user."""
+    resolved = (uid or user_id()).strip()
+    if not resolved:
+        return
+    _connections_cache.invalidate(resolved)
+    for suffix in ("quick", "full", "flat"):
+        _prompt_section_cache.invalidate(f"{resolved}:{suffix}")
+
+
+def _connection_auth_config_id(item: Any) -> str:
+    direct = getattr(item, "auth_config_id", None)
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+    auth_config = getattr(item, "auth_config", None)
+    if auth_config is not None:
+        nested = getattr(auth_config, "id", None)
+        if isinstance(nested, str) and nested.strip():
+            return nested.strip()
+    return ""
+
+
 def list_connections_summary() -> list[dict[str, Any]]:
     """All connections for the configured Koraku user (any status)."""
     if not is_configured():
@@ -167,12 +189,173 @@ def list_connections_summary() -> list[dict[str, Any]]:
             "toolkit_slug": slug,
             "toolkit_name": name,
             "is_disabled": item.is_disabled,
+            "auth_config_id": _connection_auth_config_id(item),
         })
 
     _connections_cache.set(uid, out)
     for suffix in ("quick", "full", "flat"):
         _prompt_section_cache.invalidate(f"{uid}:{suffix}")
     return [dict(r) for r in out]
+
+
+def connections_for_toolkit(toolkit: str) -> list[dict[str, Any]]:
+    slug = toolkit.strip().upper()
+    return [
+        dict(r)
+        for r in list_connections_summary()
+        if (r.get("toolkit_slug") or "").strip().upper() == slug
+    ]
+
+
+def primary_connected_account_id(toolkit: str) -> str | None:
+    """Pick one connected account when Composio requires an explicit account id."""
+    rows = connections_for_toolkit(toolkit)
+    if not rows:
+        return None
+    active = [
+        r
+        for r in rows
+        if r.get("status") == "ACTIVE" and not r.get("is_disabled")
+    ]
+    pool = active if active else rows
+    account_id = (pool[-1].get("id") or "").strip()
+    return account_id or None
+
+
+def toolkit_slug_from_composio_tool(tool_slug: str) -> str | None:
+    """Map ``GMAIL_SEND_EMAIL`` → ``GMAIL`` when the prefix is a known toolkit slug."""
+    raw = (tool_slug or "").strip().upper()
+    if not raw:
+        return None
+    if _TOOLKIT_SLUG_SAFE.match(raw):
+        return raw
+    if "_" not in raw:
+        return None
+    prefix = raw.split("_", 1)[0]
+    if _TOOLKIT_SLUG_SAFE.match(prefix):
+        return prefix
+    return None
+
+
+def _connected_account_id_for_tool_execution(tool_slug: str) -> str | None:
+    toolkit = toolkit_slug_from_composio_tool(tool_slug)
+    if not toolkit:
+        return None
+    if not connections_for_toolkit(toolkit):
+        return None
+    return primary_connected_account_id(toolkit)
+
+
+def _is_multiple_connected_accounts_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "multiple connected accounts" in msg or "allow_multiple" in msg
+
+
+_STALE_CONNECTION_STATUSES = frozenset(
+    {"INITIATED", "FAILED", "EXPIRED", "INACTIVE", "PENDING"},
+)
+
+
+def cleanup_duplicate_toolkit_connections(toolkit: str | None = None) -> int:
+    """
+    Delete duplicate Composio connections for a toolkit, keeping one primary account.
+
+    Removes stale INITIATED/FAILED/EXPIRED rows and collapses multiple ACTIVE accounts
+    to the most recent active connection so authorize/execute can resolve a single account.
+    """
+    if not is_configured():
+        return 0
+
+    uid = user_id()
+    invalidate_connections_cache(uid)
+    rows = list_connections_summary()
+    by_toolkit: dict[str, list[dict[str, Any]]] = {}
+    toolkit_filter = (toolkit or "").strip().upper()
+    for row in rows:
+        tk = (row.get("toolkit_slug") or "").strip().upper()
+        if not tk or (toolkit_filter and tk != toolkit_filter):
+            continue
+        by_toolkit.setdefault(tk, []).append(row)
+
+    if not any(len(group) > 1 for group in by_toolkit.values()):
+        return 0
+
+    c = _client()
+    removed = 0
+    for tk, group in by_toolkit.items():
+        if len(group) <= 1:
+            continue
+        keep_id = primary_connected_account_id(tk) or (group[-1].get("id") or "").strip()
+        if not keep_id:
+            continue
+        for row in group:
+            account_id = (row.get("id") or "").strip()
+            if not account_id or account_id == keep_id:
+                continue
+            status = (row.get("status") or "").strip().upper()
+            if status not in _STALE_CONNECTION_STATUSES and status != "ACTIVE":
+                continue
+            try:
+                c.connected_accounts.delete(account_id)
+                removed += 1
+            except Exception:
+                logger.warning(
+                    "Failed to delete duplicate %s connection %s",
+                    tk,
+                    account_id,
+                    exc_info=True,
+                )
+
+    if removed:
+        invalidate_connections_cache(uid)
+    return removed
+
+
+def _auth_config_id_for_toolkit(
+    c: Any,
+    toolkit: str,
+    existing: list[dict[str, Any]],
+) -> str:
+    for row in existing:
+        auth_config_id = (row.get("auth_config_id") or "").strip()
+        if auth_config_id:
+            return auth_config_id
+        account_id = (row.get("id") or "").strip()
+        if not account_id:
+            continue
+        try:
+            acct = c.connected_accounts.get(account_id)
+        except Exception:
+            logger.debug("Could not load connected account %s", account_id, exc_info=True)
+            continue
+        auth_config_id = _connection_auth_config_id(acct)
+        if auth_config_id:
+            return auth_config_id
+    raise ValueError(
+        f"Could not resolve Composio auth config for {toolkit}. "
+        "Remove duplicate connections in the Composio dashboard and try again."
+    )
+
+
+def _start_toolkit_auth_allow_multiple(
+    c: Any,
+    toolkit: str,
+    existing: list[dict[str, Any]],
+) -> Any:
+    auth_config_id = _auth_config_id_for_toolkit(c, toolkit, existing)
+    uid = user_id()
+    link = getattr(c.connected_accounts, "link", None)
+    if callable(link):
+        return link(user_id=uid, auth_config_id=auth_config_id)
+    initiate = c.connected_accounts.initiate
+    try:
+        return initiate(
+            user_id=uid,
+            auth_config_id=auth_config_id,
+            allow_multiple=True,
+        )
+    except TypeError:
+        return initiate(uid, auth_config_id, allow_multiple=True)
 
 
 def active_toolkit_slugs() -> list[str]:
@@ -194,12 +377,37 @@ def start_toolkit_auth(toolkit: str, *, callback_url: str | None = None) -> dict
     slug = toolkit.strip().upper()
     if not _TOOLKIT_SLUG_SAFE.match(slug):
         raise ValueError("Invalid toolkit slug")
+    uid = user_id()
+    invalidate_connections_cache(uid)
+    cleanup_duplicate_toolkit_connections(slug)
+    existing = connections_for_toolkit(slug)
+    active = [
+        row
+        for row in existing
+        if row.get("status") == "ACTIVE" and not row.get("is_disabled")
+    ]
+    if active:
+        account = active[-1]
+        return {
+            "connection_request_id": account["id"],
+            "status": "ACTIVE",
+            "redirect_url": None,
+            "already_connected": True,
+        }
+
     c = _client()
-    req = c.toolkits.authorize(user_id=user_id(), toolkit=slug)
+    try:
+        req = c.toolkits.authorize(user_id=uid, toolkit=slug)
+    except Exception as exc:
+        if not existing or not _is_multiple_connected_accounts_error(exc):
+            raise
+        req = _start_toolkit_auth_allow_multiple(c, slug, existing)
+    invalidate_connections_cache(uid)
     return {
         "connection_request_id": req.id,
         "status": req.status,
         "redirect_url": req.redirect_url,
+        "already_connected": False,
     }
 
 
@@ -297,13 +505,17 @@ def _execute_composio_tool_sync(slug: str, arguments: dict[str, Any]) -> str:
                 version = v.strip()
         except Exception:
             pass
-        res = c.tools.execute(
-            slug=slug,
-            arguments=dict(arguments or {}),
-            user_id=user_id(),
-            version=version,
-            dangerously_skip_version_check=True,
-        )
+        execute_kwargs: dict[str, Any] = {
+            "slug": slug,
+            "arguments": dict(arguments or {}),
+            "user_id": user_id(),
+            "version": version,
+            "dangerously_skip_version_check": True,
+        }
+        connected_account_id = _connected_account_id_for_tool_execution(slug)
+        if connected_account_id:
+            execute_kwargs["connected_account_id"] = connected_account_id
+        res = c.tools.execute(**execute_kwargs)
         if hasattr(res, "model_dump"):
             res = res.model_dump()
     except Exception as e:

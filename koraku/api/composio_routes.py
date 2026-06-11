@@ -50,6 +50,7 @@ async def _composio_request_scope(
 
 
 def _composio_overview_payload() -> dict:
+    composio_runtime.cleanup_duplicate_toolkit_connections()
     return {
         "configured": True,
         "user_id": composio_runtime.user_id(),
