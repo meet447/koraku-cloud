@@ -40,9 +40,12 @@ export function SidebarChatList({
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const streamingSet = new Set(streamingSessionIds);
-  const deletingSet = new Set(deletingSessionIds);
-  const refreshingSet = new Set(refreshingSessionIds);
+
+  // ⚡ Bolt: Memoize Sets to avoid re-allocation on every render when dependencies haven't changed
+  const streamingSet = useMemo(() => new Set(streamingSessionIds), [streamingSessionIds]);
+  const deletingSet = useMemo(() => new Set(deletingSessionIds), [deletingSessionIds]);
+  const refreshingSet = useMemo(() => new Set(refreshingSessionIds), [refreshingSessionIds]);
+
   const visibleSessions = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = q

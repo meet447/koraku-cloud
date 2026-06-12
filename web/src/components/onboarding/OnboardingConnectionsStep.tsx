@@ -11,6 +11,9 @@ import { isToolkitEnabled } from "@/lib/connections";
 import { KorakuAlert } from "@/components/KorakuAlert";
 import { OnboardingConnectionsSkeleton } from "@/components/onboarding/OnboardingSkeleton";
 
+// ⚡ Bolt: Define constant set at module scope to prevent re-allocation on every render
+const WANT_SLUGS_SET = new Set(ONBOARDING_CONNECTION_SLUGS.map((s) => s.toUpperCase()));
+
 type Overview = {
   configured: boolean;
   connections: Array<{
@@ -68,8 +71,7 @@ export function OnboardingConnectionsStep({ disabled = false }: { disabled?: boo
   }, [loadOverview, loadCatalog]);
 
   const suggested = useMemo(() => {
-    const want = new Set(ONBOARDING_CONNECTION_SLUGS.map((s) => s.toUpperCase()));
-    return catalogItems.filter((t) => want.has(t.slug.toUpperCase()));
+    return catalogItems.filter((t) => WANT_SLUGS_SET.has(t.slug.toUpperCase()));
   }, [catalogItems]);
 
   async function connectToolkit(slug: string) {
