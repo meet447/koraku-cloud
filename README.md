@@ -1,20 +1,65 @@
-# Koraku Cloud
+# Koraku
 
-> Koraku product monorepo — web app, Supabase-backed chat, automations, and the `koraku_cloud` API layer.
+> Automate your work with natural language.
 
-The **open-source embeddable SDK** (`koraku`, `@koraku/client`) is maintained separately: [github.com/meet447/Koraku](https://github.com/meet447/Koraku). This repo vendors the same `koraku/` sources for Cloud development and syncs them to Koraku via `./scripts/export-sdk-oss-repo.sh`.
+**Koraku** is an AI workspace in the cloud. Connect the apps you already use — Gmail, Notion, Linear, Calendar, and dozens more — then describe outcomes in plain language. Agents pull live context, draft results in your workspace, and ask before sending email, posting to chat, or changing records in connected tools.
+
+This repository (**koraku-cloud**) is the product monorepo: the Next.js web app, Supabase-backed persistence, automations, and the `koraku_cloud` API layer.
+
+The **open-source embeddable SDK** (`koraku`, `@koraku/client`) lives separately at [github.com/meet447/Koraku](https://github.com/meet447/Koraku). This repo vendors the same `koraku/` sources for Cloud development and syncs them via `./scripts/export-sdk-oss-repo.sh`.
 
 - **Repo:** [github.com/meet447/koraku-cloud](https://github.com/meet447/koraku-cloud)
 - **License:** [MIT](LICENSE)
 - **Security:** [SECURITY.md](SECURITY.md) · **Conduct:** [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 - **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
 
+## What Koraku is for
+
+Koraku is built for people who want agent work that feels native — not one-off chats that forget context or scripts you have to maintain.
+
+| Goal | How Koraku helps |
+|------|------------------|
+| **One place for agent work** | Hosted chat, workspace files, automations, and run history in your account |
+| **Your stack, connected** | OAuth to 35+ apps; context stays in Koraku instead of scattered across sessions |
+| **Natural language, not scripts** | Describe outcomes; agents follow personalization and memory on every run |
+| **You stay in control** | Approval gates before sensitive actions; revoke integrations anytime |
+| **Pick up anywhere** | Web app, scheduled automations, and optional iMessage / SMS |
+
+Typical workflows: morning briefs across calendar and inbox, research that lands as workspace notes, follow-up drafts that wait for your OK, and a second brain that remembers tone and preferences across chats.
+
+## How it works
+
+1. **Connect** — Link Gmail, Notion, Linear, and the rest once in Settings.
+2. **Instruct** — Describe what you want in plain language; no scripts required.
+3. **Review & run** — Drafts land in your cloud workspace; Koraku asks before high-impact actions.
+
+## What’s in this repo
+
+- **AI buddy** — Streaming chat with tools (web search, files, shell, connected apps).
+- **Second brain** — Learned memory plus personalization (name, tone, persona) per organization.
+- **Agent workspace** — Cloud folder for drafts, exports, and agent-created files.
+- **Automations** — Cron-style jobs and event triggers via Composio, with run history.
+- **Connected apps** — Gmail, Calendar, Slack, Notion, Linear, and more via [Composio](https://composio.dev/).
+- **iMessage (optional)** — Inbound/outbound messaging via [SendBlue](docs/SENDBLUE.md).
+- **Embeddable SDK** — `koraku/` and `packages/koraku-client/` (exported to the open-source Koraku repo).
+
+## Koraku Cloud vs open-source SDK
+
+| | **Koraku Cloud** (this repo) | **Koraku SDK** ([meet447/Koraku](https://github.com/meet447/Koraku)) |
+|--|------------------------------|------------------------------------------------------------------------|
+| **What** | Full product: web UI, auth, orgs, automations | Embeddable ReAct agent for Python, HTTP, and web clients |
+| **Install** | Self-host with Docker or manual setup (below) | `pip install koraku` · `@koraku/client` on npm |
+| **Persistence** | Supabase (chat, personalization, automations) | Local `.koraku/` files or bring your own backend |
+| **Use when** | You want the Koraku app experience | You’re building your own app on top of the agent |
+
+See [docs/SDK.md](docs/SDK.md) and [docs/PACKAGING.md](docs/PACKAGING.md) for integration details.
+
 ## Documentation
 
 | Doc | Purpose |
 |-----|---------|
 | [docs/SELF_HOST.md](docs/SELF_HOST.md) | Install (Docker / manual), env, production checklist |
-| [docs/SDK.md](docs/SDK.md) | Embed Koraku in Python or TypeScript (export source for Koraku repo) |
+| [docs/SDK.md](docs/SDK.md) | Embed Koraku in Python or TypeScript |
 | [docs/PACKAGING.md](docs/PACKAGING.md) | SDK vs Cloud packages, OSS export, PyPI |
 | [docs/DATA_LIFECYCLE.md](docs/DATA_LIFECYCLE.md) | What is stored where (privacy / ops) |
 | [docs/SENDBLUE.md](docs/SENDBLUE.md) | iMessage / SMS via SendBlue |
@@ -56,14 +101,6 @@ npm run db:migrate
 ```
 
 Koraku Cloud requires Supabase for signed-in users (personalization, chat history, skills). SDK-only mode (`KORAKU_SERVER_APP=sdk`) may still use local `.koraku/` files — see [docs/SDK.md](docs/SDK.md).
-
-## What Koraku Cloud includes
-
-- **AI buddy** — streaming chat with tools (web, files, shell, connected apps).
-- **Second brain** — `Memory.md` / `Soul.md` plus optional Supabase personalization per organization.
-- **Automations** — cron-style jobs and Composio event triggers, with run history.
-- **Connected apps** — Gmail, Calendar, Slack, and more via [Composio](https://composio.dev/).
-- **iMessage (optional)** — inbound/outbound via [SendBlue](docs/SENDBLUE.md).
 
 ## Where tools run
 
