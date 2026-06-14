@@ -58,6 +58,7 @@ See [docs/SDK.md](docs/SDK.md) and [docs/PACKAGING.md](docs/PACKAGING.md) for in
 
 | Doc | Purpose |
 |-----|---------|
+| [docs/OVERVIEW.md](docs/OVERVIEW.md) | Product goals, memory layers, repo split |
 | [docs/SELF_HOST.md](docs/SELF_HOST.md) | Install (Docker / manual), env, production checklist |
 | [docs/SDK.md](docs/SDK.md) | Embed Koraku in Python or TypeScript |
 | [docs/PACKAGING.md](docs/PACKAGING.md) | SDK vs Cloud packages, OSS export, PyPI |

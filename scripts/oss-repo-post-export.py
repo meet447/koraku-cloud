@@ -35,8 +35,8 @@ def _patch_pyproject_urls(dest: Path) -> None:
         )
     if "koraku-cloud" not in text.lower() and "# Koraku Cloud" not in text:
         text = text.rstrip() + (
-            "\n\n# Koraku Cloud product code lives in "
-            "https://github.com/meet447/koraku-cloud (private monorepo).\n"
+            "\n\n# Koraku product code lives in "
+            "https://github.com/meet447/koraku-cloud (public monorepo).\n"
         )
     path.write_text(text, encoding="utf-8")
 

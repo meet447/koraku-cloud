@@ -1,6 +1,8 @@
-# Contributing to Koraku Cloud
+# Contributing to Koraku
 
-Thanks for helping improve Koraku. This repository is the **product monorepo** (web UI, `koraku_cloud`, Supabase). The open-source SDK is developed here under `koraku/` and synced to [meet447/Koraku](https://github.com/meet447/Koraku).
+Thanks for helping improve Koraku — an AI workspace in the cloud (connected apps, agents with approval gates, automations, and optional iMessage). This repository is the **product monorepo** (web UI, `koraku_cloud`, Supabase). The open-source SDK is developed here under `koraku/` and synced to [meet447/Koraku](https://github.com/meet447/Koraku).
+
+Product context: [README.md](README.md) · [docs/OVERVIEW.md](docs/OVERVIEW.md)
 
 ## Code of Conduct
 
@@ -28,7 +30,7 @@ cp .env.example .env
 cd web && npm install && npm run dev
 ```
 
-See [README.md](README.md), [docs/SELF_HOST.md](docs/SELF_HOST.md), and [`.env.example`](.env.example).
+See [README.md](README.md), [docs/OVERVIEW.md](docs/OVERVIEW.md), [docs/SELF_HOST.md](docs/SELF_HOST.md), and [`.env.example`](.env.example).
 
 ## Sync SDK to the open-source repo
 

@@ -6,12 +6,24 @@ Engineering map of what the backend stores, processes, and depends on. Use for s
 
 | Flow | Primary stores | Third parties |
 |------|----------------|---------------|
-| Chat (`POST /stream`) | Session store (memory or Redis); optional Supabase chat history; SSE to browser | LLM; optional Exa/Firecrawl; Composio; Blaxel when `execution_target=cloud` |
+| Chat (`POST /stream`) | Session store (memory or Redis); optional Supabase chat history; SSE to browser | LLM; optional Exa/Firecrawl; Composio; Blaxel when `execution_target=cloud`; Supermemory prefetch/ingest when configured |
 | Detached runs (`POST /runs`) | In-process or Redis buffer + replay | Same as chat |
 | Automations | Supabase `koraku_automation*` (scoped by `org_id`) | LLM; tools as configured |
 | Personalization | Supabase `koraku_personalization` **per `(user_id, org_id)`** | Supabase |
+| Learned memory | Supermemory (per user + org scope) when `SUPERMEMORY_API_KEY` is set | [Supermemory](https://supermemory.ai/) |
 | Agent skills | Supabase `koraku_skill` **per `org_id`** + bundled defaults in the API image | Supabase |
 | iMessage | SendBlue webhook → agent; optional voice transcription | SendBlue; Whisper (Fireworks/OpenAI) |
+
+## Memory layers (product)
+
+| Layer | User-facing | Store | Cleared on account data delete? |
+|-------|-------------|-------|--------------------------------|
+| **Personalization** | Settings: agent name, preferences, persona | Supabase `koraku_personalization` | Yes (Supabase rows) |
+| **Learned memory** | Memory page: facts from conversations | Supermemory when configured | **No** — retained separately; see product copy in Settings |
+| **Skills** | Settings: custom agent instructions | Supabase `koraku_skill` | Yes (org skills) |
+| **Chat history** | Threads in sidebar | Supabase `chat_thread` / `chat_message` | Yes |
+
+Explicit personalization (`memory`, `soul`) is injected every turn. Learned memory is prefetched on demand (`MemorySearch`) and ingested after each turn via `after_turn_memory_ingest` in `koraku_cloud/product_hooks.py`.
 
 ## Components
 
@@ -43,6 +55,14 @@ Engineering map of what the backend stores, processes, and depends on. Use for s
 
 `SUPABASE_SERVICE_ROLE_KEY` is server-only. JWT verification: `SUPABASE_JWT_SECRET` or JWKS.
 
+### Supermemory (learned memory, when configured)
+
+- **What:** Conversation-derived facts scoped by user (`sub`) and org; prefetched into prompts and updated after each chat turn.
+- **Config:** `SUPERMEMORY_API_KEY`, `SUPERMEMORY_CONTEXT_MAX_CHARS`, `MEMORY_BACKEND` (Cloud default path uses Supermemory when the key is set).
+- **Modules:** `koraku/integrations/supermemory_client.py`, `koraku/plugins/memory/supermemory.py`; ingest hook in `koraku_cloud/product_hooks.py`.
+- **PII:** User and assistant message text from turns sent to Supermemory per their terms.
+- **Delete/export:** Standard `POST /api/account/delete-data` does **not** purge Supermemory; operators must handle separately if required.
+
 ### Composio
 
 OAuth toolkits; tokens held by Composio. Tool results may appear in LLM context and logs.
@@ -61,8 +81,8 @@ Use `koraku/core/redact.py` before logging user-controlled strings. Prefer `run_
 
 ## User data operations (web)
 
-- **Export:** `GET /api/account/export` — threads, messages, personalization rows (all orgs), automations, recent runs.
-- **Delete:** `POST /api/account/delete-data` — cascades user-owned Supabase rows; review Composio disconnect separately.
+- **Export:** `GET /api/account/export` — threads, messages, personalization rows (all orgs), automations, recent runs. Does not include Supermemory learned-memory blobs.
+- **Delete:** `POST /api/account/delete-data` — cascades user-owned Supabase rows; review Composio disconnect separately. Long-term learned memory in Supermemory may remain (see product Settings copy).
 
 ## Operational settings
 

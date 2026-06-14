@@ -61,10 +61,12 @@ The chat composer offers:
 
 ## Manual install
 
+**Recommended:** use `./scripts/install-monorepo.sh` (creates **only** `koraku-cloud/.venv` with editable SDK + `koraku_cloud`).
+
 ```bash
 # Backend
-python3 -m venv venv && source venv/bin/activate
-pip install -e ".[all]"
+./scripts/install-monorepo.sh
+source .venv/bin/activate
 cp .env.example .env   # edit LLM keys
 ./scripts/run-api.sh    # :8000 (uvicorn)
 
@@ -72,6 +74,14 @@ cp .env.example .env   # edit LLM keys
 cd packages/koraku-client && npm install && npm run build
 cd ../web && npm install && cp ../.env.example .env.local
 npm run dev             # :3000
+```
+
+Equivalent without the script:
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[all]"
+pip install -e "./koraku_cloud"
 ```
 
 Set `KORAKU_BACKEND_URL=http://127.0.0.1:8000` in `web/.env.local` if needed.
@@ -109,6 +119,12 @@ Before inviting real users:
 - `SUPABASE_JWT_SECRET` (HS256) or JWKS for asymmetric project JWTs.
 - Org-scoped routes require a valid org membership (`X-Koraku-Org-Id` from the web cookie after sign-in).
 - `GET /api/chat-models` requires the same auth as chat when `REQUIRE_AUTH_FOR_CHAT=true` (demo mode with auth off is local-only).
+
+### Platform admin
+
+- Operators manage org credits, limits, and suspensions at **`/admin`** (Dashboard, Organizations).
+- Grant access via **`PLATFORM_ADMIN_USER_IDS`** (comma-separated Supabase user UUIDs on the Python API) or a row in **`koraku_platform_admin`**.
+- Mutations are written to **`koraku_admin_audit_log`**. See README § Platform admin.
 
 ### Blaxel and file tools (Cloud)
 

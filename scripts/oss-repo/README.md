@@ -4,7 +4,7 @@
 
 **Koraku** is a Python SDK for building agents with tools (web, files, shell, Composio integrations) and an optional self-hosted HTTP server. Use it in-process, behind FastAPI, or from web clients via [`@koraku/client`](packages/koraku-client/).
 
-The full **Koraku Cloud** product (Next.js app, Supabase, automations, workspace APIs) lives in the private monorepo: [github.com/meet447/koraku-cloud](https://github.com/meet447/koraku-cloud).
+The full **Koraku** product (Next.js app, Supabase, automations, workspace APIs) lives in the public monorepo: [github.com/meet447/koraku-cloud](https://github.com/meet447/koraku-cloud).
 
 - **License:** [MIT](LICENSE)
 - **Docs:** [docs/SDK.md](docs/SDK.md)
