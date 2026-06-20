@@ -16,9 +16,7 @@ def test_sdk_app_has_stream_not_product_routes() -> None:
 
 def test_cloud_app_has_product_routes() -> None:
     cloud = create_cloud_app()
-    paths = {getattr(r, "path", "") for r in cloud.routes}
-    assert "/health" in paths
-    assert "/runs" in paths
-    assert "/api/personalization" in paths
     client = TestClient(cloud)
     assert client.get("/health").status_code == 200
+    assert client.get("/runs").status_code != 404
+    assert client.get("/api/personalization").status_code != 404
