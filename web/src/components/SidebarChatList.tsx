@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import type { ChatSession } from "@/hooks/useKorakuChat";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { sortChatSessions } from "@/lib/chat-sessions";
 
 const iconStroke = 1.5;
@@ -40,6 +41,7 @@ export function SidebarChatList({
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // ⚡ Bolt: Memoize Sets to avoid re-allocation on every render when dependencies haven't changed
   const streamingSet = useMemo(() => new Set(streamingSessionIds), [streamingSessionIds]);
@@ -196,7 +198,7 @@ export function SidebarChatList({
                     disabled={deleting}
                     onClick={(e) => {
                       e.stopPropagation();
-                      void onDeleteChat(s.id);
+                      setConfirmDeleteId(s.id);
                     }}
                     className={clsx(
                       "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-neutral-400 transition",
@@ -225,6 +227,20 @@ export function SidebarChatList({
           })
         )}
       </div>
+      <ConfirmDialog
+        open={confirmDeleteId !== null}
+        title="Delete chat"
+        message="Are you sure you want to delete this chat? This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (confirmDeleteId) {
+            void onDeleteChat(confirmDeleteId);
+            setConfirmDeleteId(null);
+          }
+        }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }
