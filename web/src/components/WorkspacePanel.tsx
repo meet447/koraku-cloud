@@ -228,8 +228,12 @@ export function WorkspacePanel({
   const [error, setError] = useState<string | null>(null);
 
   useLayoutEffect(() => {
-    setPanelWidthPx(clamp(readNumLs(LS_PANEL_W, PANEL_DEFAULT), PANEL_MIN, 2000));
-    setTreeWidthPx(clamp(readNumLs(LS_TREE_W, TREE_DEFAULT), TREE_MIN, TREE_MAX_FIXED));
+    setPanelWidthPx(
+      clamp(readNumLs(LS_PANEL_W, PANEL_DEFAULT), PANEL_MIN, 2000),
+    );
+    setTreeWidthPx(
+      clamp(readNumLs(LS_TREE_W, TREE_DEFAULT), TREE_MIN, TREE_MAX_FIXED),
+    );
     setTreeCollapsed(readBoolLs(LS_TREE_COLLAPSED, false));
     setHydrated(true);
   }, []);
@@ -359,12 +363,19 @@ export function WorkspacePanel({
       setFilePreview(null);
       const ext = extensionOf(rel);
       try {
-        if (ext === ".pdf" || ext === ".docx" || ext === ".pptx" || isImageExt(ext)) {
+        if (
+          ext === ".pdf" ||
+          ext === ".docx" ||
+          ext === ".pptx" ||
+          isImageExt(ext)
+        ) {
           const q = new URLSearchParams({
             session_id: serverSessionId,
             path: rel,
           });
-          const res = await korakuFetch(`/koraku-api/api/workspace/file/blob?${q}`);
+          const res = await korakuFetch(
+            `/koraku-api/api/workspace/file/blob?${q}`,
+          );
           if (!res.ok) {
             const t = await res.text();
             setError(t.slice(0, 400) || res.statusText);
@@ -429,7 +440,9 @@ export function WorkspacePanel({
           session_id: serverSessionId,
           path: rel,
         });
-        const res = await korakuFetch(`/koraku-api/api/workspace/file/blob?${q}`);
+        const res = await korakuFetch(
+          `/koraku-api/api/workspace/file/blob?${q}`,
+        );
         if (!res.ok) {
           const t = await res.text();
           setError(t.slice(0, 400) || res.statusText);
@@ -476,7 +489,7 @@ export function WorkspacePanel({
   const segments = relPath ? relPath.split("/").filter(Boolean) : [];
 
   const panelW = hydrated ? panelWidthPx : PANEL_DEFAULT;
-  const widthStyle = isMobile ? undefined : (visible ? panelW : 0);
+  const widthStyle = isMobile ? undefined : visible ? panelW : 0;
 
   return (
     <>
@@ -491,15 +504,19 @@ export function WorkspacePanel({
         className={clsx(
           "flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-neutral-200/90 bg-[#f7f7f7] ease-out",
           "shadow-[0_0_0_3px_rgb(255_255_255),0_0_0_4px_rgb(229_229_229_/_0.55),0_14px_40px_-14px_rgb(0_0_0_/_0.09)]",
-          
+
           // Desktop specific layout
           "md:relative md:shrink-0 md:translate-x-0",
-          resizeMode === "panel" ? "md:duration-0" : "md:duration-200 md:transition-[width]",
-          visible ? "md:min-w-[300px]" : "md:min-w-0 md:border-transparent md:shadow-none",
+          resizeMode === "panel"
+            ? "md:duration-0"
+            : "md:duration-200 md:transition-[width]",
+          visible
+            ? "md:min-w-[300px]"
+            : "md:min-w-0 md:border-transparent md:shadow-none",
 
           // Mobile specific layout (slide over)
           "fixed inset-y-0 right-0 z-50 w-full sm:w-[480px] transition-transform duration-300 md:w-auto md:fixed-none",
-          visible ? "translate-x-0" : "translate-x-full md:translate-x-0"
+          visible ? "translate-x-0" : "translate-x-full md:translate-x-0",
         )}
         aria-hidden={!visible}
       >
@@ -507,6 +524,7 @@ export function WorkspacePanel({
           <button
             type="button"
             aria-label="Resize workspace panel"
+            title="Resize workspace panel"
             onMouseDown={startPanelResize}
             className={clsx(
               "absolute left-0 top-0 z-20 h-full w-3 -translate-x-1/2 cursor-col-resize touch-none hidden md:block",
@@ -515,342 +533,390 @@ export function WorkspacePanel({
             )}
           />
         ) : null}
-      {visible ? (
-      <div
-        key={serverSessionId ?? "workspace"}
-        className="flex h-full min-h-0 w-full min-w-[300px] flex-col"
-      >
-        <header className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-neutral-200/70 bg-neutral-100/90 px-2.5">
-          <span className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-500">
-            Workspace
-          </span>
-          <div className="flex shrink-0 items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => void loadTree()}
-              disabled={!serverSessionId || loadingTree}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition hover:bg-white/80 hover:text-neutral-900 disabled:opacity-40"
-              title="Refresh explorer"
-            >
-              <RefreshCw
-                className={clsx("h-3.5 w-3.5", loadingTree && "animate-spin")}
-                strokeWidth={1.5}
-              />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition hover:bg-white/80 hover:text-neutral-900"
-              title="Close workspace"
-            >
-              <PanelRightClose className="h-3.5 w-3.5" strokeWidth={1.5} />
-            </button>
-          </div>
-        </header>
-
-        {!serverSessionId ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 text-center text-[13px] text-neutral-500">
-            <p>Send a message in chat first.</p>
-            <p className="text-xs text-neutral-400">
-              Your Koraku workspace folder appears here after the first reply streams.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div ref={innerSplitRef} className="flex min-h-0 flex-1 flex-row overflow-hidden">
-              {treeCollapsed ? (
-                <div className="flex w-9 shrink-0 flex-col items-center border-r border-neutral-200/70 bg-neutral-100/60 py-2">
-                  <button
-                    type="button"
-                    onClick={expandTree}
-                    title="Show explorer"
-                    className="rounded-md p-1.5 text-neutral-500 transition hover:bg-white/90 hover:text-neutral-900"
-                  >
-                    <ChevronsRight className="h-4 w-4" strokeWidth={1.5} aria-hidden />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div
-                    style={{ width: isMobile ? "100%" : treeWidthPx }}
+        {visible ? (
+          <div
+            key={serverSessionId ?? "workspace"}
+            className="flex h-full min-h-0 w-full min-w-[300px] flex-col"
+          >
+            <header className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-neutral-200/70 bg-neutral-100/90 px-2.5">
+              <span className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-neutral-500">
+                Workspace
+              </span>
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => void loadTree()}
+                  disabled={!serverSessionId || loadingTree}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition hover:bg-white/80 hover:text-neutral-900 disabled:opacity-40"
+                  aria-label="Refresh explorer"
+                  title="Refresh explorer"
+                >
+                  <RefreshCw
                     className={clsx(
-                      "min-h-0 min-w-0 shrink-0 flex-col border-r border-neutral-200/70 bg-neutral-100/50",
-                      isMobile && fileRel ? "hidden" : "flex"
+                      "h-3.5 w-3.5",
+                      loadingTree && "animate-spin",
                     )}
-                  >
-                    <div className="flex h-8 shrink-0 items-center justify-between border-b border-neutral-200/60 px-2">
-                      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-500">
-                        Explorer
-                      </span>
+                    strokeWidth={1.5}
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition hover:bg-white/80 hover:text-neutral-900"
+                  aria-label="Close workspace"
+                  title="Close workspace"
+                >
+                  <PanelRightClose className="h-3.5 w-3.5" strokeWidth={1.5} />
+                </button>
+              </div>
+            </header>
+
+            {!serverSessionId ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 text-center text-[13px] text-neutral-500">
+                <p>Send a message in chat first.</p>
+                <p className="text-xs text-neutral-400">
+                  Your Koraku workspace folder appears here after the first
+                  reply streams.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div
+                  ref={innerSplitRef}
+                  className="flex min-h-0 flex-1 flex-row overflow-hidden"
+                >
+                  {treeCollapsed ? (
+                    <div className="flex w-9 shrink-0 flex-col items-center border-r border-neutral-200/70 bg-neutral-100/60 py-2">
                       <button
                         type="button"
-                        onClick={collapseTree}
-                        title="Hide explorer"
-                        className="rounded p-1 text-neutral-400 transition hover:bg-white/70 hover:text-neutral-700"
+                        onClick={expandTree}
+                        aria-label="Show explorer"
+                        title="Show explorer"
+                        className="rounded-md p-1.5 text-neutral-500 transition hover:bg-white/90 hover:text-neutral-900"
                       >
-                        <ChevronsLeft className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
+                        <ChevronsRight
+                          className="h-4 w-4"
+                          strokeWidth={1.5}
+                          aria-hidden
+                        />
                       </button>
-                    </div>
-
-                    <nav
-                      aria-label="Folder path"
-                      className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-neutral-200/50 px-2 py-1.5 text-[10px] text-neutral-500"
-                    >
-                      <button
-                        type="button"
-                        className="shrink-0 rounded px-1 py-0.5 font-medium transition hover:bg-white/80 hover:text-neutral-800"
-                        onClick={() => {
-                          setRelPath("");
-                          setFileRel(null);
-                          setFilePreview(null);
-                        }}
-                      >
-                        workspace
-                      </button>
-                      {segments.map((seg, i) => {
-                        const cum = segments.slice(0, i + 1).join("/");
-                        return (
-                          <span key={cum} className="flex shrink-0 items-center">
-                            <ChevronRight className="mx-0.5 h-3 w-3 opacity-40" aria-hidden />
-                            <button
-                              type="button"
-                              className="max-w-[7rem] truncate rounded px-1 py-0.5 transition hover:bg-white/80 hover:text-neutral-800"
-                              onClick={() => {
-                                setRelPath(cum);
-                                setFileRel(null);
-                                setFilePreview(null);
-                              }}
-                            >
-                              {seg}
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </nav>
-
-                    {error && !tree ? (
-                      <p className="p-2 text-xs text-red-600">{error}</p>
-                    ) : null}
-
-                    <ul className="min-h-0 flex-1 overflow-y-auto py-0.5">
-                      {relPath ? (
-                        <li>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 px-2 py-1 text-left text-[12px] text-neutral-600 transition hover:bg-white/60"
-                            onClick={() => {
-                              const parts = relPath.split("/").filter(Boolean);
-                              parts.pop();
-                              setRelPath(parts.join("/"));
-                              setFileRel(null);
-                              setFilePreview(null);
-                            }}
-                          >
-                            <span className="text-neutral-400">‥</span>
-                            <span>..</span>
-                          </button>
-                        </li>
-                      ) : null}
-                      {(tree?.directories ?? []).map((d) => (
-                        <li key={`d:${d.path}`}>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-1.5 px-2 py-[3px] text-left text-[12px] transition hover:bg-white/60"
-                            onClick={() => {
-                              setRelPath(joinRel(relPath, d.name));
-                              setFileRel(null);
-                              setFilePreview(null);
-                            }}
-                          >
-                            <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600/90" />
-                            <span className="truncate text-koraku-ink">{d.name}</span>
-                          </button>
-                        </li>
-                      ))}
-                      {(tree?.files ?? []).map((f) => {
-                        const full = joinRel(relPath, f.name);
-                        const ext = extensionOf(f.name);
-                        const previewable =
-                          ext === ".pdf" ||
-                          ext === ".docx" ||
-                          ext === ".pptx" ||
-                          isImageExt(ext) ||
-                          isMarkdownExt(ext) ||
-                          isTextLikeExt(ext);
-                        const downloadable = isOfficeDownloadExt(ext);
-                        const active = fileRel === full;
-                        return (
-                          <li key={`f:${f.path}`}>
-                            <button
-                              type="button"
-                              className={clsx(
-                                "flex w-full items-center gap-1.5 border-l-2 px-2 py-[3px] text-left text-[12px] transition",
-                                active
-                                  ? "border-orange-600 bg-white/90 text-neutral-900"
-                                  : "border-transparent hover:bg-white/60",
-                                !previewable && !downloadable && "opacity-50",
-                              )}
-                              title={
-                                downloadable
-                                  ? "Download"
-                                  : previewable
-                                    ? undefined
-                                    : "No in-panel preview for this type yet"
-                              }
-                              onClick={() => {
-                                if (previewable) void loadFile(full);
-                                else if (downloadable) void downloadFile(full);
-                              }}
-                              disabled={!previewable && !downloadable}
-                            >
-                              <FileText className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
-                              <span className="truncate">{f.name}</span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                      {!loadingTree &&
-                      !(tree?.directories?.length) &&
-                      !(tree?.files?.length) ? (
-                        <li className="px-3 py-6 text-center text-[11px] text-neutral-400">
-                          Empty folder
-                        </li>
-                      ) : null}
-                      {loadingTree ? (
-                        <li className="flex items-center justify-center gap-2 py-8 text-[11px] text-neutral-400">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Loading…
-                        </li>
-                      ) : null}
-                    </ul>
-                  </div>
-
-                  <button
-                    type="button"
-                    aria-label="Resize explorer"
-                    onMouseDown={startTreeResize}
-                    className={clsx(
-                      "group relative z-10 w-1 shrink-0 cursor-col-resize touch-none border-0 bg-neutral-200/40 p-0 hidden md:block",
-                      resizeMode === "tree" && "bg-neutral-300",
-                    )}
-                  >
-                    <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-neutral-200/80 group-hover:bg-neutral-300" />
-                  </button>
-                </>
-              )}
-
-              <div className={clsx(
-                "min-h-0 min-w-0 flex-1 flex-col bg-white",
-                isMobile && !fileRel ? "hidden md:flex" : "flex"
-              )}>
-                <div className="flex h-9 shrink-0 items-end gap-px overflow-x-auto border-b border-neutral-200/70 bg-neutral-100/40 px-1 pt-1">
-                  {isMobile && fileRel && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFileRel(null);
-                        setFilePreview(null);
-                      }}
-                      className="flex items-center h-8 px-2.5 text-xs font-semibold text-neutral-500 hover:text-neutral-800 border border-b-0 border-neutral-200/80 rounded-t-md bg-white mr-1 shadow-sm transition"
-                    >
-                      ← Explorer
-                    </button>
-                  )}
-                  {fileRel ? (
-                    <div
-                      className="flex h-8 max-w-full items-center gap-2 rounded-t-md border border-b-0 border-neutral-200/80 bg-white px-3 text-[12px] font-medium text-koraku-ink shadow-sm"
-                      title={fileRel}
-                    >
-                      <FileText className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
-                      <span className="truncate">{fileBaseName(fileRel)}</span>
                     </div>
                   ) : (
-                    <span className="px-2 pb-2 text-[11px] font-medium text-neutral-400">
-                      No file open
-                    </span>
+                    <>
+                      <div
+                        style={{ width: isMobile ? "100%" : treeWidthPx }}
+                        className={clsx(
+                          "min-h-0 min-w-0 shrink-0 flex-col border-r border-neutral-200/70 bg-neutral-100/50",
+                          isMobile && fileRel ? "hidden" : "flex",
+                        )}
+                      >
+                        <div className="flex h-8 shrink-0 items-center justify-between border-b border-neutral-200/60 px-2">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-neutral-500">
+                            Explorer
+                          </span>
+                          <button
+                            type="button"
+                            onClick={collapseTree}
+                            aria-label="Hide explorer"
+                            title="Hide explorer"
+                            className="rounded p-1 text-neutral-400 transition hover:bg-white/70 hover:text-neutral-700"
+                          >
+                            <ChevronsLeft
+                              className="h-3.5 w-3.5"
+                              strokeWidth={1.5}
+                              aria-hidden
+                            />
+                          </button>
+                        </div>
+
+                        <nav
+                          aria-label="Folder path"
+                          className="flex shrink-0 items-center gap-0.5 overflow-x-auto border-b border-neutral-200/50 px-2 py-1.5 text-[10px] text-neutral-500"
+                        >
+                          <button
+                            type="button"
+                            className="shrink-0 rounded px-1 py-0.5 font-medium transition hover:bg-white/80 hover:text-neutral-800"
+                            onClick={() => {
+                              setRelPath("");
+                              setFileRel(null);
+                              setFilePreview(null);
+                            }}
+                          >
+                            workspace
+                          </button>
+                          {segments.map((seg, i) => {
+                            const cum = segments.slice(0, i + 1).join("/");
+                            return (
+                              <span
+                                key={cum}
+                                className="flex shrink-0 items-center"
+                              >
+                                <ChevronRight
+                                  className="mx-0.5 h-3 w-3 opacity-40"
+                                  aria-hidden
+                                />
+                                <button
+                                  type="button"
+                                  className="max-w-[7rem] truncate rounded px-1 py-0.5 transition hover:bg-white/80 hover:text-neutral-800"
+                                  onClick={() => {
+                                    setRelPath(cum);
+                                    setFileRel(null);
+                                    setFilePreview(null);
+                                  }}
+                                >
+                                  {seg}
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </nav>
+
+                        {error && !tree ? (
+                          <p className="p-2 text-xs text-red-600">{error}</p>
+                        ) : null}
+
+                        <ul className="min-h-0 flex-1 overflow-y-auto py-0.5">
+                          {relPath ? (
+                            <li>
+                              <button
+                                type="button"
+                                className="flex w-full items-center gap-2 px-2 py-1 text-left text-[12px] text-neutral-600 transition hover:bg-white/60"
+                                onClick={() => {
+                                  const parts = relPath
+                                    .split("/")
+                                    .filter(Boolean);
+                                  parts.pop();
+                                  setRelPath(parts.join("/"));
+                                  setFileRel(null);
+                                  setFilePreview(null);
+                                }}
+                              >
+                                <span className="text-neutral-400">‥</span>
+                                <span>..</span>
+                              </button>
+                            </li>
+                          ) : null}
+                          {(tree?.directories ?? []).map((d) => (
+                            <li key={`d:${d.path}`}>
+                              <button
+                                type="button"
+                                className="flex w-full items-center gap-1.5 px-2 py-[3px] text-left text-[12px] transition hover:bg-white/60"
+                                onClick={() => {
+                                  setRelPath(joinRel(relPath, d.name));
+                                  setFileRel(null);
+                                  setFilePreview(null);
+                                }}
+                              >
+                                <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600/90" />
+                                <span className="truncate text-koraku-ink">
+                                  {d.name}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                          {(tree?.files ?? []).map((f) => {
+                            const full = joinRel(relPath, f.name);
+                            const ext = extensionOf(f.name);
+                            const previewable =
+                              ext === ".pdf" ||
+                              ext === ".docx" ||
+                              ext === ".pptx" ||
+                              isImageExt(ext) ||
+                              isMarkdownExt(ext) ||
+                              isTextLikeExt(ext);
+                            const downloadable = isOfficeDownloadExt(ext);
+                            const active = fileRel === full;
+                            return (
+                              <li key={`f:${f.path}`}>
+                                <button
+                                  type="button"
+                                  className={clsx(
+                                    "flex w-full items-center gap-1.5 border-l-2 px-2 py-[3px] text-left text-[12px] transition",
+                                    active
+                                      ? "border-orange-600 bg-white/90 text-neutral-900"
+                                      : "border-transparent hover:bg-white/60",
+                                    !previewable &&
+                                      !downloadable &&
+                                      "opacity-50",
+                                  )}
+                                  aria-label={
+                                    downloadable
+                                      ? "Download"
+                                      : previewable
+                                        ? undefined
+                                        : "No in-panel preview for this type yet"
+                                  }
+                                  title={
+                                    downloadable
+                                      ? "Download"
+                                      : previewable
+                                        ? undefined
+                                        : "No in-panel preview for this type yet"
+                                  }
+                                  onClick={() => {
+                                    if (previewable) void loadFile(full);
+                                    else if (downloadable)
+                                      void downloadFile(full);
+                                  }}
+                                  disabled={!previewable && !downloadable}
+                                >
+                                  <FileText className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+                                  <span className="truncate">{f.name}</span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                          {!loadingTree &&
+                          !tree?.directories?.length &&
+                          !tree?.files?.length ? (
+                            <li className="px-3 py-6 text-center text-[11px] text-neutral-400">
+                              Empty folder
+                            </li>
+                          ) : null}
+                          {loadingTree ? (
+                            <li className="flex items-center justify-center gap-2 py-8 text-[11px] text-neutral-400">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Loading…
+                            </li>
+                          ) : null}
+                        </ul>
+                      </div>
+
+                      <button
+                        type="button"
+                        aria-label="Resize explorer"
+                        title="Resize explorer"
+                        onMouseDown={startTreeResize}
+                        className={clsx(
+                          "group relative z-10 w-1 shrink-0 cursor-col-resize touch-none border-0 bg-neutral-200/40 p-0 hidden md:block",
+                          resizeMode === "tree" && "bg-neutral-300",
+                        )}
+                      >
+                        <span className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-neutral-200/80 group-hover:bg-neutral-300" />
+                      </button>
+                    </>
                   )}
-                </div>
 
-                {error && tree ? (
-                  <p className="shrink-0 border-b border-red-100 bg-red-50 px-3 py-1.5 text-xs text-red-700">
-                    {error}
-                  </p>
-                ) : null}
+                  <div
+                    className={clsx(
+                      "min-h-0 min-w-0 flex-1 flex-col bg-white",
+                      isMobile && !fileRel ? "hidden md:flex" : "flex",
+                    )}
+                  >
+                    <div className="flex h-9 shrink-0 items-end gap-px overflow-x-auto border-b border-neutral-200/70 bg-neutral-100/40 px-1 pt-1">
+                      {isMobile && fileRel && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFileRel(null);
+                            setFilePreview(null);
+                          }}
+                          className="flex items-center h-8 px-2.5 text-xs font-semibold text-neutral-500 hover:text-neutral-800 border border-b-0 border-neutral-200/80 rounded-t-md bg-white mr-1 shadow-sm transition"
+                        >
+                          ← Explorer
+                        </button>
+                      )}
+                      {fileRel ? (
+                        <div
+                          className="flex h-8 max-w-full items-center gap-2 rounded-t-md border border-b-0 border-neutral-200/80 bg-white px-3 text-[12px] font-medium text-koraku-ink shadow-sm"
+                          title={fileRel}
+                        >
+                          <FileText className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+                          <span className="truncate">
+                            {fileBaseName(fileRel)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="px-2 pb-2 text-[11px] font-medium text-neutral-400">
+                          No file open
+                        </span>
+                      )}
+                    </div>
 
-                {!fileRel ? (
-                  <p className="m-auto max-w-[14rem] text-center text-[11px] leading-relaxed text-neutral-400">
-                    Select a file from the explorer to preview it here.
-                  </p>
-                ) : loadingFile ? (
-                  <div className="m-auto flex items-center gap-2 text-xs text-neutral-400">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Loading…
-                  </div>
-                ) : filePreview ? (
-                  <div className="flex min-h-0 flex-1 flex-col">
-                    {"truncated" in filePreview && filePreview.truncated ? (
-                      <p className="shrink-0 border-b border-amber-100 bg-amber-50/90 px-3 py-1 text-[10px] font-medium text-amber-800">
-                        Preview truncated — open in chat or download for the full file.
+                    {error && tree ? (
+                      <p className="shrink-0 border-b border-red-100 bg-red-50 px-3 py-1.5 text-xs text-red-700">
+                        {error}
                       </p>
                     ) : null}
-                    {filePreview.kind === "markdown" ? (
-                      <div className="koraku-md min-h-0 flex-1 overflow-auto px-4 py-3">
-                        <MarkdownBody source={filePreview.content} />
+
+                    {!fileRel ? (
+                      <p className="m-auto max-w-[14rem] text-center text-[11px] leading-relaxed text-neutral-400">
+                        Select a file from the explorer to preview it here.
+                      </p>
+                    ) : loadingFile ? (
+                      <div className="m-auto flex items-center gap-2 text-xs text-neutral-400">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading…
                       </div>
-                    ) : null}
-                    {filePreview.kind === "text" ? (
-                      <pre className="min-h-0 flex-1 overflow-auto bg-neutral-50/50 p-3 font-mono text-[11px] leading-relaxed text-neutral-800">
-                        {filePreview.content}
-                      </pre>
-                    ) : null}
-                    {filePreview.kind === "pdf" ? (
-                      <iframe
-                        title="PDF preview"
-                        src={filePreview.blobUrl}
-                        sandbox=""
-                        className="min-h-0 w-full flex-1 border-0 bg-neutral-100"
-                      />
-                    ) : null}
-                    {filePreview.kind === "image" ? (
-                      <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-neutral-50 p-3">
-                        <Image
-                          src={filePreview.blobUrl}
-                          alt=""
-                          width={800}
-                          height={600}
-                          unoptimized
-                          className="max-h-[min(85dvh,48rem)] max-w-full object-contain shadow-sm ring-1 ring-neutral-200/60"
-                        />
+                    ) : filePreview ? (
+                      <div className="flex min-h-0 flex-1 flex-col">
+                        {"truncated" in filePreview && filePreview.truncated ? (
+                          <p className="shrink-0 border-b border-amber-100 bg-amber-50/90 px-3 py-1 text-[10px] font-medium text-amber-800">
+                            Preview truncated — open in chat or download for the
+                            full file.
+                          </p>
+                        ) : null}
+                        {filePreview.kind === "markdown" ? (
+                          <div className="koraku-md min-h-0 flex-1 overflow-auto px-4 py-3">
+                            <MarkdownBody source={filePreview.content} />
+                          </div>
+                        ) : null}
+                        {filePreview.kind === "text" ? (
+                          <pre className="min-h-0 flex-1 overflow-auto bg-neutral-50/50 p-3 font-mono text-[11px] leading-relaxed text-neutral-800">
+                            {filePreview.content}
+                          </pre>
+                        ) : null}
+                        {filePreview.kind === "pdf" ? (
+                          <iframe
+                            title="PDF preview"
+                            src={filePreview.blobUrl}
+                            sandbox=""
+                            className="min-h-0 w-full flex-1 border-0 bg-neutral-100"
+                          />
+                        ) : null}
+                        {filePreview.kind === "image" ? (
+                          <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-neutral-50 p-3">
+                            <Image
+                              src={filePreview.blobUrl}
+                              alt=""
+                              width={800}
+                              height={600}
+                              unoptimized
+                              className="max-h-[min(85dvh,48rem)] max-w-full object-contain shadow-sm ring-1 ring-neutral-200/60"
+                            />
+                          </div>
+                        ) : null}
+                        {filePreview.kind === "docx" ? (
+                          <iframe
+                            title="Document preview"
+                            sandbox=""
+                            srcDoc={filePreview.html}
+                            className="koraku-md min-h-0 w-full flex-1 border-0 bg-white"
+                          />
+                        ) : null}
+                        {filePreview.kind === "pptx" ? (
+                          <PptxSlidePreview buffer={filePreview.buffer} />
+                        ) : null}
                       </div>
-                    ) : null}
-                    {filePreview.kind === "docx" ? (
-                      <iframe
-                        title="Document preview"
-                        sandbox=""
-                        srcDoc={filePreview.html}
-                        className="koraku-md min-h-0 w-full flex-1 border-0 bg-white"
-                      />
-                    ) : null}
-                    {filePreview.kind === "pptx" ? (
-                      <PptxSlidePreview buffer={filePreview.buffer} />
                     ) : null}
                   </div>
-                ) : null}
-              </div>
-            </div>
+                </div>
 
-            <footer className="flex h-6 shrink-0 items-center border-t border-neutral-200/70 bg-koraku-ink px-2.5 text-[10px] font-medium text-white/90">
-              <span className="min-w-0 truncate">
-                {fileRel ?? (relPath ? relPath : "workspace")}
-              </span>
-            </footer>
-          </>
+                <footer className="flex h-6 shrink-0 items-center border-t border-neutral-200/70 bg-koraku-ink px-2.5 text-[10px] font-medium text-white/90">
+                  <span className="min-w-0 truncate">
+                    {fileRel ?? (relPath ? relPath : "workspace")}
+                  </span>
+                </footer>
+              </>
+            )}
+          </div>
+        ) : (
+          <div
+            className="flex h-full min-h-0 w-full min-w-0 flex-col opacity-0 pointer-events-none"
+            aria-hidden
+          />
         )}
-      </div>
-      ) : (
-        <div className="flex h-full min-h-0 w-full min-w-0 flex-col opacity-0 pointer-events-none" aria-hidden />
-      )}
-    </aside>
+      </aside>
     </>
   );
 }
