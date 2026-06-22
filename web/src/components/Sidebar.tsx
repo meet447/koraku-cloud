@@ -79,7 +79,9 @@ export function Sidebar({
         "flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[28px] border border-neutral-200/80 bg-koraku-panel transition-[width] duration-200 ease-out",
         // Layered “pill input” border: hairline edge + white halo gap + soft outer stroke + float shadow
         "shadow-[0_0_0_3px_rgb(255_255_255),0_0_0_4px_rgb(229_229_229_/_0.55),0_14px_40px_-14px_rgb(0_0_0_/_0.09)]",
-        collapsed ? "w-[14rem] md:w-[3.75rem] p-3 md:px-1.5 md:py-2.5" : "w-[14rem] p-3",
+        collapsed
+          ? "w-[14rem] md:w-[3.75rem] p-3 md:px-1.5 md:py-2.5"
+          : "w-[14rem] p-3",
       )}
     >
       <div
@@ -92,13 +94,18 @@ export function Sidebar({
       >
         <div className="flex min-w-0 items-center gap-2.5">
           <BrandMark size={48} priority />
-          <div className={clsx("min-w-0 flex-1", collapsed ? "block md:hidden" : "block")}>
+          <div
+            className={clsx(
+              "min-w-0 flex-1",
+              collapsed ? "block md:hidden" : "block",
+            )}
+          >
             <p className="truncate text-[15px] font-semibold leading-tight text-neutral-900">
               Koraku
             </p>
           </div>
         </div>
-        
+
         {/* Mobile close button */}
         {onCloseMobile && (
           <button
@@ -117,7 +124,7 @@ export function Sidebar({
           onClick={onToggleCollapse}
           className={clsx(
             "h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-500 transition hover:bg-white/90 hover:text-neutral-900",
-            onCloseMobile ? "hidden md:flex" : "flex"
+            onCloseMobile ? "hidden md:flex" : "flex",
           )}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -142,8 +149,11 @@ export function Sidebar({
                 onClick={onNewChat}
                 className={clsx(
                   "flex items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold text-neutral-800 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent",
-                  collapsed ? "justify-start px-2.5 md:justify-center md:px-0" : "",
+                  collapsed
+                    ? "justify-start px-2.5 md:justify-center md:px-0"
+                    : "",
                 )}
+                aria-label="New chat"
                 title="New chat"
               >
                 <Icon
@@ -158,8 +168,7 @@ export function Sidebar({
           }
           if (!("href" in item)) return null;
           const { href } = item as { href: string };
-          const active =
-            pathname === href || pathname.startsWith(`${href}/`);
+          const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link
               key={href}
@@ -183,7 +192,12 @@ export function Sidebar({
       </nav>
 
       {!collapsed || true ? (
-        <div className={clsx(collapsed ? "block md:hidden" : "block", "min-h-0 flex-1 flex flex-col")}>
+        <div
+          className={clsx(
+            collapsed ? "block md:hidden" : "block",
+            "min-h-0 flex-1 flex flex-col",
+          )}
+        >
           <SidebarChatList
             chatsLoading={chatsLoading}
             sessions={sessions}
@@ -210,7 +224,8 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => {
-              const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+              const isMobile =
+                typeof window !== "undefined" && window.innerWidth < 768;
               if (collapsed && !isMobile) {
                 router.push(SETTINGS_PANEL_HREF.profile);
                 return;
@@ -236,7 +251,9 @@ export function Sidebar({
         <div
           className={clsx(
             "min-w-0",
-            collapsed ? "flex justify-start px-0.5 pb-0.5 md:justify-center md:px-0 md:pb-0" : "w-full px-0.5 pb-0.5",
+            collapsed
+              ? "flex justify-start px-0.5 pb-0.5 md:justify-center md:px-0 md:pb-0"
+              : "w-full px-0.5 pb-0.5",
           )}
         >
           <AccountMenu collapsed={collapsed} />

@@ -48,7 +48,10 @@ export function RunWorkspaceAttachments({
   timeline: TimelineRow[];
   serverSessionId: string | null;
 }) {
-  const items = useMemo(() => collectRunWorkspaceFileTouches(timeline), [timeline]);
+  const items = useMemo(
+    () => collectRunWorkspaceFileTouches(timeline),
+    [timeline],
+  );
   const [busyPath, setBusyPath] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -62,7 +65,9 @@ export function RunWorkspaceAttachments({
           session_id: serverSessionId,
           path: relPath,
         });
-        const res = await korakuFetch(`/koraku-api/api/workspace/file/blob?${q}`);
+        const res = await korakuFetch(
+          `/koraku-api/api/workspace/file/blob?${q}`,
+        );
         if (!res.ok) {
           setDownloadError("Could not download this file.");
           return;
@@ -95,7 +100,10 @@ export function RunWorkspaceAttachments({
           const canDl = Boolean(serverSessionId);
           const loading = busyPath === path;
           return (
-            <li key={path} className="flex items-center gap-2.5 py-2.5 first:pt-1 last:pb-1">
+            <li
+              key={path}
+              className="flex items-center gap-2.5 py-2.5 first:pt-1 last:pb-1"
+            >
               <FileKindIcon path={path} />
               <p
                 className="min-w-0 flex-1 truncate text-[13px] font-medium text-neutral-800"
@@ -106,7 +114,16 @@ export function RunWorkspaceAttachments({
               <button
                 type="button"
                 disabled={!canDl || loading}
-                title={canDl ? "Download" : "Sandbox session required to download files"}
+                aria-label={
+                  canDl
+                    ? "Download"
+                    : "Sandbox session required to download files"
+                }
+                title={
+                  canDl
+                    ? "Download"
+                    : "Sandbox session required to download files"
+                }
                 onClick={() => void download(path)}
                 className={clsx(
                   "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-600 transition",
@@ -128,7 +145,8 @@ export function RunWorkspaceAttachments({
       </ul>
       {!serverSessionId ? (
         <p className="border-t border-neutral-200/60 px-0.5 pb-0.5 pt-2 text-center text-[11px] leading-snug text-neutral-500">
-          Sign in and send a message so this thread can download files from your session folder.
+          Sign in and send a message so this thread can download files from your
+          session folder.
         </p>
       ) : downloadError ? (
         <p className="border-t border-neutral-200/60 px-0.5 pb-0.5 pt-2 text-center text-[11px] text-red-600">
