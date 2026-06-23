@@ -76,9 +76,14 @@ export function Composer({
         }
       }
       if (docFiles.length) {
-        const rows = await readComposerAttachmentsFromFiles(docFiles, MAX_ATTACHMENTS);
+        const rows = await readComposerAttachmentsFromFiles(
+          docFiles,
+          MAX_ATTACHMENTS,
+        );
         if (rows.length) {
-          setAttachments((prev) => [...prev, ...rows].slice(0, MAX_ATTACHMENTS));
+          setAttachments((prev) =>
+            [...prev, ...rows].slice(0, MAX_ATTACHMENTS),
+          );
         }
       }
     })();
@@ -91,7 +96,14 @@ export function Composer({
     const readyAttachments = attachments.filter((a) => a.data.length > 0);
     if (!t && readyImages.length === 0 && readyAttachments.length === 0) return;
     const { provider, model, dropdownModelLabel } = modelRef.current;
-    onSend(t, provider, model, dropdownModelLabel, readyImages, readyAttachments);
+    onSend(
+      t,
+      provider,
+      model,
+      dropdownModelLabel,
+      readyImages,
+      readyAttachments,
+    );
     setText("");
     for (const row of images) URL.revokeObjectURL(row.previewUrl);
     setImages([]);
@@ -179,6 +191,7 @@ export function Composer({
                   onClick={() => removeAttachment(att.id)}
                   className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-50"
                   aria-label={`Remove ${att.filename}`}
+                  title={`Remove ${att.filename}`}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -210,7 +223,9 @@ export function Composer({
               onClick={() => fileRef.current?.click()}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Add images or documents"
-              title={atFileLimit ? "File limit reached" : "Add images or documents"}
+              title={
+                atFileLimit ? "File limit reached" : "Add images or documents"
+              }
             >
               <Plus className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -228,7 +243,13 @@ export function Composer({
               disabled={disabled || !canSend}
               className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-white shadow-sm transition hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:bg-neutral-300"
               aria-label="Send"
-              title={disabled ? "Please wait..." : !canSend ? "Type a message to send" : "Send (Enter)"}
+              title={
+                disabled
+                  ? "Please wait..."
+                  : !canSend
+                    ? "Type a message to send"
+                    : "Send (Enter)"
+              }
             >
               <ArrowUp className="h-4 w-4" aria-hidden="true" />
             </button>
