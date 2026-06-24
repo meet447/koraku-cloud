@@ -83,6 +83,7 @@ export function AppChrome({
               onClick={() => setMobileOpen(true)}
               className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900 active:bg-neutral-100"
               aria-label="Open sidebar"
+              title="Open sidebar"
             >
               <Menu className="h-5 w-5" strokeWidth={1.5} />
             </button>

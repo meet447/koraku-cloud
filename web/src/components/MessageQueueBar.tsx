@@ -57,6 +57,7 @@ export function MessageQueueBar({
                   onClick={() => onRemove(it.id)}
                   className="shrink-0 rounded-full p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
                   aria-label="Remove from queue"
+                  title="Remove from queue"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>

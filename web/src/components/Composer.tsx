@@ -179,6 +179,7 @@ export function Composer({
                   onClick={() => removeAttachment(att.id)}
                   className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-50"
                   aria-label={`Remove ${att.filename}`}
+                  title={`Remove ${att.filename}`}
                 >
                   <X className="h-3 w-3" />
                 </button>
