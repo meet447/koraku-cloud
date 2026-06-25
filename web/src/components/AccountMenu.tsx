@@ -143,6 +143,7 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-neutral-200 text-neutral-700 transition hover:bg-white/80"
           onClick={signOut}
           aria-label="Sign out"
+          title="Sign out"
         >
           <LogOut className="h-3.5 w-3.5" strokeWidth={iconStroke} aria-hidden />
         </button>

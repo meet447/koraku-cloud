@@ -145,6 +145,7 @@ export function Sidebar({
                   collapsed ? "justify-start px-2.5 md:justify-center md:px-0" : "",
                 )}
                 title="New chat"
+                aria-label="New chat"
               >
                 <Icon
                   className="h-4 w-4 shrink-0 text-neutral-600"
@@ -172,6 +173,7 @@ export function Sidebar({
                   : "text-neutral-600 hover:bg-white/80 hover:text-neutral-900",
               )}
               title={item.label}
+              aria-label={item.label}
             >
               <Icon className="h-4 w-4 shrink-0" strokeWidth={iconStroke} />
               <span className={clsx(collapsed ? "block md:hidden" : "block")}>
@@ -219,6 +221,8 @@ export function Sidebar({
               setSettingsMenuOpen(true);
             }}
             aria-expanded={false}
+            aria-label="Settings"
+            title="Settings"
             className={clsx(
               "flex w-full shrink-0 items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold transition",
               !collapsed && onSettingsRoute
