@@ -1,1 +1,4 @@
 ## 2025-02-28 - Tooltips for icon-only buttons\n**Learning:** Sighted users benefit greatly from native tooltips (`title` attributes) on icon-only buttons, as they may not immediately recognize the meaning of an icon. This is a very simple yet impactful micro-UX improvement.\n**Action:** When adding `aria-label` attributes to icon-only buttons for screen readers, also add `title` attributes with the same text to provide tooltips for mouse users.
+## 2025-02-28 - Hidden labels on responsive design
+**Learning:** When using responsive classes like 'md:hidden' to hide text labels inside buttons or links on smaller screens, those elements effectively become icon-only. They lose their accessible name if it was only provided by the visible text.
+**Action:** Always ensure that buttons and links have explicit 'aria-label' and 'title' attributes if their visible text might be hidden at certain breakpoints.
