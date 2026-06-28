@@ -12,6 +12,11 @@ async def test_web_fetch_uses_jina_when_available(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(reg.settings, "exa_api_key", "exa-test")
     monkeypatch.setattr(reg.settings, "firecrawl_api_key", "fc-test")
 
+    import socket
+    def mock_getaddrinfo(*args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]
+    monkeypatch.setattr(socket, "getaddrinfo", mock_getaddrinfo)
+
     async def jina_ok(url: str, **kwargs: object) -> tuple[bool, str]:
         _ = kwargs
         return True, f"URL: {url}\n(source: Jina Reader)\n\n--- Content ---\nSchedule here"
@@ -35,6 +40,11 @@ async def test_web_fetch_uses_jina_when_available(monkeypatch: pytest.MonkeyPatc
 async def test_web_fetch_falls_back_to_exa(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(reg.settings, "exa_api_key", "exa-test")
     monkeypatch.setattr(reg.settings, "firecrawl_api_key", "fc-test")
+
+    import socket
+    def mock_getaddrinfo(*args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]
+    monkeypatch.setattr(socket, "getaddrinfo", mock_getaddrinfo)
 
     async def jina_fail(url: str, **kwargs: object) -> tuple[bool, str]:
         _ = url, kwargs
@@ -77,6 +87,13 @@ async def test_web_fetch_falls_back_to_firecrawl(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(reg, "_exa_fetch_page", exa_fail)
     monkeypatch.setattr(reg, "_firecrawl_fetch_page", firecrawl_ok)
 
+    # Mock socket.getaddrinfo to prevent assert_public_fetch_url from failing DNS resolution
+    import socket
+    def mock_getaddrinfo(*args, **kwargs):
+        # Return a mock IPv4 address tuple for the public host
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]
+    monkeypatch.setattr(socket, "getaddrinfo", mock_getaddrinfo)
+
     out = await reg._web_page("https://sportstar.example/article")
     assert "Firecrawl" in out
     assert "Full article" in out
@@ -88,6 +105,11 @@ async def test_web_fetch_falls_back_to_firecrawl(monkeypatch: pytest.MonkeyPatch
 async def test_web_fetch_jina_only_without_premium_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(reg.settings, "exa_api_key", "")
     monkeypatch.setattr(reg.settings, "firecrawl_api_key", "")
+
+    import socket
+    def mock_getaddrinfo(*args, **kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', 443))]
+    monkeypatch.setattr(socket, "getaddrinfo", mock_getaddrinfo)
 
     async def jina_ok(url: str, **kwargs: object) -> tuple[bool, str]:
         _ = kwargs

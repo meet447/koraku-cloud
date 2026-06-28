@@ -827,6 +827,13 @@ async def _web_page(
     if not page_url:
         return "Error: URL is required."
 
+    from koraku.integrations.safe_url import assert_public_fetch_url
+
+    try:
+        page_url = assert_public_fetch_url(page_url)
+    except ValueError as e:
+        return f"Error: {e}"
+
     if include_html and not settings.firecrawl_api_key:
         return "Error: Web page fetching requires FIRECRAWL_API_KEY when include_html=true."
 
