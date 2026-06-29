@@ -144,6 +144,7 @@ export function Sidebar({
                   "flex items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold text-neutral-800 transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent",
                   collapsed ? "justify-start px-2.5 md:justify-center md:px-0" : "",
                 )}
+                aria-label="New chat"
                 title="New chat"
               >
                 <Icon
@@ -171,6 +172,7 @@ export function Sidebar({
                   ? "bg-white text-neutral-900 shadow-sm ring-1 ring-neutral-200/70"
                   : "text-neutral-600 hover:bg-white/80 hover:text-neutral-900",
               )}
+              aria-label={item.label}
               title={item.label}
             >
               <Icon className="h-4 w-4 shrink-0" strokeWidth={iconStroke} />
@@ -219,6 +221,8 @@ export function Sidebar({
               setSettingsMenuOpen(true);
             }}
             aria-expanded={false}
+            aria-label="Settings"
+            title="Settings"
             className={clsx(
               "flex w-full shrink-0 items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left text-[13px] font-semibold transition",
               !collapsed && onSettingsRoute
