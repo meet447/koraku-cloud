@@ -16,9 +16,19 @@ def test_sdk_app_has_stream_not_product_routes() -> None:
 
 def test_cloud_app_has_product_routes() -> None:
     cloud = create_cloud_app()
-    paths = {getattr(r, "path", "") for r in cloud.routes}
+
+    # Do a deep search for paths on routers mounted using include_router
+    paths = {
+        r.path
+        for router in cloud.routes
+        if not hasattr(router, "path")
+        for r in getattr(router, "original_router", router).routes
+        if hasattr(r, "path")
+    }
+
     assert "/health" in paths
     assert "/runs" in paths
     assert "/api/personalization" in paths
+
     client = TestClient(cloud)
     assert client.get("/health").status_code == 200
