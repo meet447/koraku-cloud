@@ -67,7 +67,9 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
     return (
       <span
         className={
-          actuallyCollapsed ? "flex justify-center text-xs text-neutral-400" : "text-xs text-neutral-400"
+          actuallyCollapsed
+            ? "flex justify-center text-xs text-neutral-400"
+            : "text-xs text-neutral-400"
         }
         aria-live="polite"
       >
@@ -93,7 +95,11 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
             title="Sign up"
             className="flex h-8 w-8 items-center justify-center rounded-xl text-neutral-600 transition hover:bg-white/80 hover:text-neutral-900"
           >
-            <UserPlus className="h-4 w-4" strokeWidth={iconStroke} aria-hidden />
+            <UserPlus
+              className="h-4 w-4"
+              strokeWidth={iconStroke}
+              aria-hidden
+            />
             <span className="sr-only">Sign up</span>
           </Link>
         </div>
@@ -133,18 +139,20 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
 
   if (actuallyCollapsed) {
     return (
-      <div
-        className="flex flex-col items-center gap-1.5 py-0.5"
-        title={label}
-      >
+      <div className="flex flex-col items-center gap-1.5 py-0.5" title={label}>
         <UserAvatar user={user} size={32} />
         <button
           type="button"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-neutral-200 text-neutral-700 transition hover:bg-white/80"
           onClick={signOut}
           aria-label="Sign out"
+          title="Sign out"
         >
-          <LogOut className="h-3.5 w-3.5" strokeWidth={iconStroke} aria-hidden />
+          <LogOut
+            className="h-3.5 w-3.5"
+            strokeWidth={iconStroke}
+            aria-hidden
+          />
         </button>
       </div>
     );
