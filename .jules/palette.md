@@ -1,0 +1,3 @@
+## 2025-05-15 - [Added aria-labels and titles to functionally icon-only elements]
+**Learning:** Responsive classes like `md:hidden` make elements effectively icon-only on certain screen sizes. The text visually disappears but might still be read by screen readers depending on the implementation. However, sighted users navigating by mouse (who expect native tooltips via `title`) and keyboard users navigating visually need these cues when the text label is hidden.
+**Action:** When inspecting elements that become icon-only at specific breakpoints (e.g. using `md:hidden`), ensure `aria-label` and `title` attributes are present to maintain accessibility across all states.
